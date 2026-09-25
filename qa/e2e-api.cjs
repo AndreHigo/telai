@@ -262,9 +262,18 @@ async function main() {
     assert.equal(presence.body.groupId, groupId);
     assert.ok(presence.body.members.some((item) => item.id === member.user.id && item.online === true));
     assert.ok(presence.body.members.every((item) => Object.keys(item).sort().join(",") === "id,online"));
-    assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "mensagem QA" })).response.status, 201);
+    const sentGroupMessage = await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "mensagem QA" });
+    assert.equal(sentGroupMessage.response.status, 201);
+    const editedGroupMessage = await api(member, `/api/groups/${groupId}/messages/${sentGroupMessage.body.message.id}`, "PATCH", { body: "mensagem QA editada" });
+    assert.equal(editedGroupMessage.response.status, 200);
+    assert.equal(editedGroupMessage.body.message.body, "mensagem QA editada");
+    assert.ok(editedGroupMessage.body.message.editedAt);
     const overview = await api(owner, `/api/groups/${groupId}/overview`);
-    assert.ok(overview.body.messages.some((message) => message.body === "mensagem QA"));
+    assert.ok(overview.body.messages.some((message) => message.id === sentGroupMessage.body.message.id && message.body === "mensagem QA editada"));
+    const deletedGroupMessage = await api(owner, `/api/groups/${groupId}/messages/${sentGroupMessage.body.message.id}`, "DELETE");
+    assert.equal(deletedGroupMessage.response.status, 200);
+    const afterMessageDelete = await api(owner, `/api/groups/${groupId}/overview`);
+    assert.equal(afterMessageDelete.body.messages.some((message) => message.id === sentGroupMessage.body.message.id), false);
     assert.ok(overview.body.members.some((item) => item.id === member.user.id));
   });
   await check("permissions deny and restore", async () => {

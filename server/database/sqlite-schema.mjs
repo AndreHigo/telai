@@ -246,7 +246,8 @@ export const SQLITE_SCHEMA = `
     room_id TEXT REFERENCES group_rooms(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     body TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    edited_at TEXT
   );
   CREATE INDEX IF NOT EXISTS group_messages_recent_idx ON group_messages(group_id, created_at DESC);
   CREATE TABLE IF NOT EXISTS direct_conversations (

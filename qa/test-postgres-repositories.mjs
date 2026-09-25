@@ -154,6 +154,11 @@ try {
   const generalRoom = (await client.query("SELECT id FROM group_rooms WHERE group_id = $1 AND slug = 'geral'", [ids.group])).rows[0];
   const groupMessage = await groupMessages.createMessage({ groupId: ids.group, roomId: generalRoom.id, userId: ids.owner, body: "Mensagem de grupo PostgreSQL", displayName: "PG Owner", username: ownerUsername, createdAt: now });
   assert.equal((await groupMessages.listMessages(ids.group))[0].id, groupMessage.id);
+  const updatedGroupMessage = await groupMessages.updateMessage({ groupId: ids.group, messageId: groupMessage.id, body: "Mensagem editada PostgreSQL", editedAt: now });
+  assert.equal(updatedGroupMessage.body, "Mensagem editada PostgreSQL");
+  assert.equal(updatedGroupMessage.editedAt, now);
+  assert.equal(await groupMessages.deleteMessage(ids.group, groupMessage.id), true);
+  assert.equal(await groupMessages.findMessage(ids.group, groupMessage.id), null);
   assert.equal(await groups.isGroupMember(ids.member, ids.group), true);
   assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canViewVoiceMembers: true });
   assert.equal(await groups.canGroupAction(ids.member, ids.group, "canChat"), true);

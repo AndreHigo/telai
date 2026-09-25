@@ -36,6 +36,56 @@ export function createGroupContentRoutes({
       return true;
     }
 
+    const groupMessageMutationMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages\/([\w-]{1,128})$/);
+    if (groupMessageMutationMatch && ["PATCH", "DELETE"].includes(request.method)) {
+      const user = requireUser(request, response);
+      if (!user) return true;
+      const groupId = groupMessageMutationMatch[1];
+      const messageId = groupMessageMutationMatch[2];
+      if (!isGroupMember(user.id, groupId)) {
+        json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      const message = groupMessageRepository.findMessage(groupId, messageId);
+      if (!message) {
+        json(response, 404, { error: "Mensagem não encontrada." });
+        return true;
+      }
+      const membership = groupPermissionRepository.member(groupId, user.id);
+      const canModerate = membership?.role === "owner";
+      if (message.userId !== user.id && !canModerate) {
+        json(response, 403, { error: "Você só pode alterar suas próprias mensagens." });
+        return true;
+      }
+      if (request.method === "DELETE") {
+        if (!groupMessageRepository.deleteMessage(groupId, messageId)) {
+          json(response, 404, { error: "Mensagem não encontrada." });
+          return true;
+        }
+        publishGroupEvent(groupId, { type: "group-message-deleted", messageId });
+        json(response, 200, { ok: true, messageId });
+        return true;
+      }
+      try {
+        const body = await readJson(request, 12 * 1024);
+        const nextBody = String(body.body || "").trim().slice(0, 1000);
+        if (!nextBody) {
+          json(response, 400, { error: "A mensagem não pode ficar vazia." });
+          return true;
+        }
+        const updated = groupMessageRepository.updateMessage({ groupId, messageId, body: nextBody });
+        if (!updated) {
+          json(response, 404, { error: "Mensagem não encontrada." });
+          return true;
+        }
+        publishGroupEvent(groupId, { type: "group-message-updated", message: updated });
+        json(response, 200, { message: updated });
+      } catch {
+        json(response, 400, { error: "Não foi possível editar a mensagem." });
+      }
+      return true;
+    }
+
     const groupPermissionsMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/permissions$/);
     if (groupPermissionsMatch && request.method === "PATCH") {
       const user = requireUser(request, response);

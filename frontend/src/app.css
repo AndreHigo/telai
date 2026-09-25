@@ -2137,6 +2137,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   font-size: 12px;
 }
 
+.message-content { min-width: 0; }
+.message-actions, .message-edit-actions { display: flex; gap: 6px; margin-top: 5px; }
+.message-actions { opacity: 0; transition: opacity .15s ease; }
+.message-item:hover .message-actions, .message-item:focus-within .message-actions { opacity: 1; }
+.message-actions button { border: 0; padding: 0; color: #8298be; background: transparent; font-size: 9px; font-weight: 800; cursor: pointer; }
+.message-actions button:hover { color: #b9c9ea; }
+.message-edit-input { width: min(100%, 600px); min-height: 52px; resize: vertical; border: 1px solid #40598a; border-radius: 9px; padding: 8px; color: #eef3ff; background: #0d192e; outline: none; font: inherit; font-size: 12px; line-height: 1.45; }
+.message-edit-input:focus { border-color: #6878e8; box-shadow: 0 0 0 3px rgba(104, 120, 232, .14); }
+.mirante-shell.light .message-actions button { color: #617697; }
+.mirante-shell.light .message-actions button:hover { color: #30466b; }
+.mirante-shell.light .message-edit-input { border-color: #c6d3e5; color: #1d2b45; background: #fff; }
+
 .message-composer {
   margin: 0 22px 22px;
   border-color: #304b77;

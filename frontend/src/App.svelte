@@ -189,6 +189,8 @@
   let registerPassword = "";
   let registerLegalAccepted = false;
   let messageDraft = "";
+  let editingMessageId = "";
+  let editingMessageDraft = "";
   let messageComposerInput;
   let mentionSuggestions = [];
   let mentionStartIndex = -1;
@@ -887,6 +889,15 @@
     if (!message?.groupId || message.groupId !== selectedGroupId) return;
     if (message.type === "group-subscribed" || message.type === "group-presence") {
       applyGroupEventPresence(message.groupId, message.members);
+      return;
+    }
+    if (message.type === "group-message-updated" && message.message && groupOverview) {
+      groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).map((item) => item.id === message.message.id ? message.message : item) };
+      return;
+    }
+    if (message.type === "group-message-deleted" && message.messageId && groupOverview) {
+      knownGroupMessageIds = new Set([...knownGroupMessageIds].filter((id) => id !== message.messageId));
+      groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).filter((item) => item.id !== message.messageId) };
       return;
     }
     if (message.type !== "group-message" || !message.message || !groupOverview) return;
@@ -6193,6 +6204,41 @@
     }
   }
 
+  function startEditMessage(message) {
+    editingMessageId = message.id;
+    editingMessageDraft = message.body;
+  }
+
+  function cancelEditMessage() {
+    editingMessageId = "";
+    editingMessageDraft = "";
+  }
+
+  async function saveEditMessage(message) {
+    const body = editingMessageDraft.trim();
+    if (!body || !selectedGroupId) return;
+    try {
+      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/messages/${encodeURIComponent(message.id)}`, { method: "PATCH", body: JSON.stringify({ body }) });
+      if (result.message && groupOverview?.group?.id === selectedGroupId) {
+        groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).map((item) => item.id === message.id ? result.message : item) };
+      }
+      cancelEditMessage();
+    } catch (error) {
+      notice = error.message;
+    }
+  }
+
+  async function deleteMessage(message) {
+    if (!selectedGroupId || !window.confirm("Excluir esta mensagem?")) return;
+    try {
+      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/messages/${encodeURIComponent(message.id)}`, { method: "DELETE" });
+      groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).filter((item) => item.id !== message.id) };
+      knownGroupMessageIds = new Set([...knownGroupMessageIds].filter((id) => id !== message.id));
+    } catch (error) {
+      notice = error.message;
+    }
+  }
+
   function clearMentionSuggestions() {
     mentionSuggestions = [];
     mentionStartIndex = -1;
@@ -7105,7 +7151,7 @@
           onOpenVoiceSettings={openVoiceSettings}
           onLeaveVoiceRoom={leaveVoiceRoom}
         />
-        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else}<GroupTextChatWorkspace bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} {mentionSuggestions} {mentionActiveIndex} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} />{/if}</section>
+        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else}<GroupTextChatWorkspace bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} />{/if}</section>
         <GroupMemberRail
           {user}
           {memberRoleGroups}

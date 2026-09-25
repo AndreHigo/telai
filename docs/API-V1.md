@@ -20,6 +20,10 @@ O cliente HTTP interno do frontend já usa `/api/v1` automaticamente para as
 rotas `/api/*`; os componentes continuam usando seus caminhos lógicos atuais,
 sem alteração visual ou duplicação de URLs.
 
+Mensagens de grupo podem ser editadas ou excluídas pelo autor; o dono do grupo
+também pode excluir mensagens para moderação. As alterações são publicadas no
+gateway `/events` como `group-message-updated` e `group-message-deleted`.
+
 O namespace ainda não representa uma promessa de compatibilidade eterna para
 cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
 incompatíveis devem ser introduzidas em outra versão e documentadas aqui.

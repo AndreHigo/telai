@@ -4,13 +4,13 @@ export function createGroupMessageRepository(database, { createId = randomUUID }
   function listMessages(groupId) {
     return database.prepare(`
       WITH ranked_messages AS (
-        SELECT group_messages.id, group_messages.room_id AS roomId, group_messages.user_id AS userId, group_messages.body, group_messages.created_at AS createdAt,
+        SELECT group_messages.id, group_messages.room_id AS roomId, group_messages.user_id AS userId, group_messages.body, group_messages.created_at AS createdAt, group_messages.edited_at AS editedAt,
           users.display_name AS displayName, users.username,
           ROW_NUMBER() OVER (PARTITION BY COALESCE(group_messages.room_id, '__general__') ORDER BY group_messages.created_at DESC) AS messageRank
         FROM group_messages JOIN users ON users.id = group_messages.user_id
         WHERE group_messages.group_id = ?
       )
-      SELECT id, roomId, userId, body, createdAt, displayName, username
+      SELECT id, roomId, userId, body, createdAt, editedAt, displayName, username
       FROM ranked_messages WHERE messageRank <= 80 ORDER BY createdAt ASC
     `).all(groupId);
   }
@@ -27,14 +27,35 @@ export function createGroupMessageRepository(database, { createId = randomUUID }
     return message;
   }
 
-  return { listMessages, findTextRoom, createMessage };
+  function findMessage(groupId, messageId) {
+    return database.prepare(`
+      SELECT group_messages.id, group_messages.group_id AS groupId, group_messages.room_id AS roomId,
+        group_messages.user_id AS userId, group_messages.body, group_messages.created_at AS createdAt,
+        group_messages.edited_at AS editedAt,
+        users.display_name AS displayName, users.username
+      FROM group_messages JOIN users ON users.id = group_messages.user_id
+      WHERE group_messages.group_id = ? AND group_messages.id = ?
+    `).get(groupId, messageId) || null;
+  }
+
+  function updateMessage({ groupId, messageId, body, editedAt = new Date().toISOString() }) {
+    const result = database.prepare("UPDATE group_messages SET body = ?, edited_at = ? WHERE group_id = ? AND id = ?")
+      .run(body, editedAt, groupId, messageId);
+    return result.changes ? findMessage(groupId, messageId) : null;
+  }
+
+  function deleteMessage(groupId, messageId) {
+    return database.prepare("DELETE FROM group_messages WHERE group_id = ? AND id = ?").run(groupId, messageId).changes > 0;
+  }
+
+  return { listMessages, findTextRoom, createMessage, findMessage, updateMessage, deleteMessage };
 }
 
 export function createPostgresGroupMessageRepository(database, { createId = randomUUID } = {}) {
   async function listMessages(groupId) {
     const result = await database.query(`
       WITH ranked_messages AS (
-        SELECT group_messages.id, group_messages.room_id AS "roomId", group_messages.user_id AS "userId", group_messages.body, group_messages.created_at AS "createdAt",
+          SELECT group_messages.id, group_messages.room_id AS "roomId", group_messages.user_id AS "userId", group_messages.body, group_messages.created_at AS "createdAt", group_messages.edited_at AS "editedAt",
           users.display_name AS "displayName", users.username,
           ROW_NUMBER() OVER (PARTITION BY COALESCE(group_messages.room_id, '__general__') ORDER BY group_messages.created_at DESC) AS "messageRank"
         FROM group_messages JOIN users ON users.id = group_messages.user_id
@@ -58,5 +79,26 @@ export function createPostgresGroupMessageRepository(database, { createId = rand
     return message;
   }
 
-  return { listMessages, findTextRoom, createMessage };
+  async function findMessage(groupId, messageId) {
+    const result = await database.query(`
+      SELECT group_messages.id, group_messages.group_id AS "groupId", group_messages.room_id AS "roomId",
+        group_messages.user_id AS "userId", group_messages.body, group_messages.created_at AS "createdAt",
+        group_messages.edited_at AS "editedAt", users.display_name AS "displayName", users.username
+      FROM group_messages JOIN users ON users.id = group_messages.user_id
+      WHERE group_messages.group_id = $1 AND group_messages.id = $2
+    `, [groupId, messageId]);
+    return result.rows[0] || null;
+  }
+
+  async function updateMessage({ groupId, messageId, body, editedAt = new Date().toISOString() }) {
+    const result = await database.query("UPDATE group_messages SET body = $1, edited_at = $2 WHERE group_id = $3 AND id = $4 RETURNING id", [body, editedAt, groupId, messageId]);
+    return result.rowCount ? findMessage(groupId, messageId) : null;
+  }
+
+  async function deleteMessage(groupId, messageId) {
+    const result = await database.query("DELETE FROM group_messages WHERE group_id = $1 AND id = $2", [groupId, messageId]);
+    return result.rowCount > 0;
+  }
+
+  return { listMessages, findTextRoom, createMessage, findMessage, updateMessage, deleteMessage };
 }

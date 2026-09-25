@@ -4,6 +4,7 @@ import { ensureColumn } from "../repositories/sqlite.mjs";
 // criados por versões anteriores do Telai.
 export function ensureCompatibilityColumns(database) {
   ensureColumn(database, "group_messages", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE CASCADE");
+  ensureColumn(database, "group_messages", "edited_at", "TEXT");
   ensureColumn(database, "streams", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE SET NULL");
   // Salas de voz ficam em uma tabela separada dos canais de transmissão.
   // Guardamos o vínculo em uma coluna própria para manter compatibilidade com

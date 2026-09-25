@@ -99,6 +99,23 @@ async function main() {
     const eventMessage = await waitFor(memberEvents, (message) => message.type === "group-message" && message.message?.id === createdMessage.body.message.id);
     assert.equal(eventMessage.message.body, "evento de grupo");
 
+    const updatedMessage = await request(baseUrl, `/api/groups/${groupId}/messages/${createdMessage.body.message.id}`, {
+      method: "PATCH",
+      headers: { cookie: owner.cookie },
+      body: JSON.stringify({ body: "evento de grupo editado" }),
+    });
+    assert.equal(updatedMessage.response.status, 200, JSON.stringify(updatedMessage.body));
+    const eventUpdate = await waitFor(memberEvents, (message) => message.type === "group-message-updated" && message.message?.id === createdMessage.body.message.id);
+    assert.equal(eventUpdate.message.body, "evento de grupo editado");
+
+    const deletedMessage = await request(baseUrl, `/api/groups/${groupId}/messages/${createdMessage.body.message.id}`, {
+      method: "DELETE",
+      headers: { cookie: owner.cookie },
+    });
+    assert.equal(deletedMessage.response.status, 200, JSON.stringify(deletedMessage.body));
+    const eventDelete = await waitFor(memberEvents, (message) => message.type === "group-message-deleted" && message.messageId === createdMessage.body.message.id);
+    assert.equal(eventDelete.messageId, createdMessage.body.message.id);
+
     memberEvents.socket.send(JSON.stringify({ type: "group-presence", groupId }));
     const presence = await waitFor(ownerEvents, (message) => message.type === "group-presence" && message.groupId === groupId && message.members?.some((item) => item.id === member.user.id && item.online));
     assert.equal(presence.members.find((item) => item.id === member.user.id).online, true);
@@ -106,7 +123,7 @@ async function main() {
     const reducedOverview = await request(baseUrl, `/api/groups/${groupId}/overview?includeMessages=0`, { headers: { cookie: owner.cookie } });
     assert.equal(reducedOverview.response.status, 200);
     assert.equal(Object.hasOwn(reducedOverview.body, "messages"), false, "overview reduzido ainda transportou mensagens");
-    console.log(JSON.stringify({ ok: true, separateEventsGateway: true, groupMessageDelivered: true, presenceDelivered: true, overviewWithoutMessages: true }));
+    console.log(JSON.stringify({ ok: true, separateEventsGateway: true, groupMessageDelivered: true, groupMessageMutationsDelivered: true, presenceDelivered: true, overviewWithoutMessages: true }));
   } finally {
     for (const socket of sockets) if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close();
     await new Promise((resolve) => server.close(resolve));
