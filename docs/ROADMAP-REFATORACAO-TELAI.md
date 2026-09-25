@@ -179,6 +179,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair o controle do breakpoint responsivo e fechamento da sidebar para `frontend/src/features/shell/viewport-controller.js`, preservando o layout.
     - [x] Extrair polling condicionado por visibilidade, manutenção e countdown para `frontend/src/services/client-polling.js`, preservando frequências e condições do shell.
     - [x] Extrair submissão de login/cadastro e início de OAuth para `frontend/src/features/auth/controller.js`, preservando payloads e navegação existentes.
+    - [x] Extrair o estado do formulário de autenticação para `frontend/src/features/auth/auth-state.js`, mantendo o `AuthPage` controlado sem alterar o layout.
     - [x] Extrair abertura e navegação da tela de configurações para `frontend/src/features/settings/navigation-controller.js`, preservando bindings e carregamentos existentes.
     - [x] Extrair o pós-carregamento, seleção de salas e inscrição em eventos para `frontend/src/features/groups/controller.js`.
     - [x] Centralizar grupos, overview, sala selecionada e flags de carregamento em `frontend/src/features/groups/group-state.js`, preservando os contratos do shell.

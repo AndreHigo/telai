@@ -3,6 +3,7 @@
   import Viewer from "./Viewer.svelte";
   import AuthPage from "./features/auth/AuthPage.svelte";
   import { createAuthController } from "./features/auth/controller.js";
+  import { createAuthStateStore } from "./features/auth/auth-state.js";
   import NotificationsPage from "./features/notifications/NotificationsPage.svelte";
   import { createNotificationController } from "./features/notifications/controller.js";
   import FriendsPage from "./features/social/FriendsPage.svelte";
@@ -136,6 +137,7 @@
   const messageState = createMessageStateStore();
   const directState = createDirectStateStore();
   const settingsState = createSettingsStateStore();
+  const authState = createAuthStateStore();
   let groups = groupState.getState().groups;
   let streams = [];
   const navigationState = createNavigationStateStore();
@@ -168,16 +170,16 @@
   let maintenanceNotice = null;
   let maintenanceRemainingSeconds = 0;
   let maintenanceReloadKey = "";
-  let providers = { google: false, discord: false };
-  let authMode = "login";
-  let authBusy = false;
-  let authError = "";
-  let loginUsername = "";
-  let loginPassword = "";
-  let registerDisplayName = "";
-  let registerUsername = "";
-  let registerPassword = "";
-  let registerLegalAccepted = false;
+  let providers = authState.getState().providers;
+  let authMode = authState.getState().authMode;
+  let authBusy = authState.getState().authBusy;
+  let authError = authState.getState().authError;
+  let loginUsername = authState.getState().loginUsername;
+  let loginPassword = authState.getState().loginPassword;
+  let registerDisplayName = authState.getState().registerDisplayName;
+  let registerUsername = authState.getState().registerUsername;
+  let registerPassword = authState.getState().registerPassword;
+  let registerLegalAccepted = authState.getState().registerLegalAccepted;
   let messageDraft = messageState.getState().messageDraft;
   let messageAttachments = messageState.getState().messageAttachments;
   let editingMessageId = messageState.getState().editingMessageId;
@@ -343,6 +345,10 @@
     settingsState.setState(next);
   }
 
+  function setAuthState(next) {
+    authState.setState(next);
+  }
+
   const unsubscribeNavigationState = navigationState.subscribe((next) => {
     view = next.view;
     groupsWorkspaceOpen = next.groupsWorkspaceOpen;
@@ -353,6 +359,19 @@
     multistreamOpen = next.multistreamOpen;
     showMobileChannels = next.showMobileChannels;
     showMobileMembers = next.showMobileMembers;
+  });
+
+  const unsubscribeAuthState = authState.subscribe((next) => {
+    providers = next.providers;
+    authMode = next.authMode;
+    authBusy = next.authBusy;
+    authError = next.authError;
+    loginUsername = next.loginUsername;
+    loginPassword = next.loginPassword;
+    registerDisplayName = next.registerDisplayName;
+    registerUsername = next.registerUsername;
+    registerPassword = next.registerPassword;
+    registerLegalAccepted = next.registerLegalAccepted;
   });
 
   const viewportController = createViewportController({
@@ -952,7 +971,7 @@
   const routeController = createRouteController({
     getState: () => ({ isViewer }),
     setState: (next) => {
-      if ("authError" in next) authError = next.authError;
+      if ("authError" in next) setAuthState({ authError: next.authError });
       if ("isViewer" in next) isViewer = next.isViewer;
       if ("pendingInviteToken" in next) pendingInviteToken = next.pendingInviteToken;
       if ("pendingGroupRouteId" in next) pendingGroupRouteId = next.pendingGroupRouteId;
@@ -1228,11 +1247,8 @@
   function selectSettingsSection(...args) { return settingsNavigationController.selectSettingsSection(...args); }
   const authController = createAuthController({
     api,
-    getState: () => ({ authMode, loginUsername, loginPassword, registerDisplayName, registerUsername, registerPassword, registerLegalAccepted }),
-    setState: (next) => {
-      if ("authBusy" in next) authBusy = next.authBusy;
-      if ("authError" in next) authError = next.authError;
-    },
+    getState: () => authState.getState(),
+    setState: setAuthState,
     onAuthenticated: async (nextUser) => {
       user = nextUser;
       canonicalizeAuthenticatedRoute();
@@ -5659,7 +5675,7 @@
         api("/api/auth/providers"),
         loadIceConfiguration(),
       ]);
-      providers = availableProviders;
+      setAuthState({ providers: availableProviders });
       user = session.user || null;
       if (user) canonicalizeAuthenticatedRoute();
       if (user && !isViewer && view !== "viewer") maybeShowReleaseNotes(user);
@@ -5686,6 +5702,7 @@
   clientPollingController.start();
   onDestroy(() => {
     unsubscribeNavigationState();
+    unsubscribeAuthState();
     unsubscribeSettingsState();
     unsubscribeGroupState();
     unsubscribeMessageState();
@@ -5765,17 +5782,18 @@
     </div>
   {:else if !user}
     <AuthPage
-      bind:authMode
-      bind:authError
-      bind:loginUsername
-      bind:loginPassword
-      bind:registerDisplayName
-      bind:registerUsername
-      bind:registerPassword
-      bind:registerLegalAccepted
+      {authMode}
+      {authError}
+      {loginUsername}
+      {loginPassword}
+      {registerDisplayName}
+      {registerUsername}
+      {registerPassword}
+      {registerLegalAccepted}
       {isDark}
       {providers}
       {authBusy}
+      onStateChange={setAuthState}
       onSubmit={submitAuth}
       onStartOAuth={startOAuth}
     />

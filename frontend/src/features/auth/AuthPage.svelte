@@ -14,12 +14,17 @@
   export let registerUsername = "";
   export let registerPassword = "";
   export let registerLegalAccepted = false;
+  export let onStateChange = () => {};
   export let onSubmit = () => {};
   export let onStartOAuth = () => {};
 
   function toggleAuthMode() {
-    authMode = authMode === "login" ? "register" : "login";
-    authError = "";
+    onStateChange({ authMode: authMode === "login" ? "register" : "login", authError: "" });
+  }
+
+  function updateField(name, event) {
+    const target = event.currentTarget;
+    onStateChange({ [name]: target.type === "checkbox" ? target.checked : target.value });
   }
 </script>
 
@@ -40,11 +45,11 @@
 
     <form class="auth-form grid gap-4" on:submit|preventDefault={onSubmit}>
       {#if authMode === "register"}
-        <label class="auth-label">Nome de exibição<input bind:value={registerDisplayName} class="auth-input" autocomplete="name" maxlength="48" required placeholder="Como os outros vão chamar você?" /></label>
+        <label class="auth-label">Nome de exibição<input value={registerDisplayName} on:input={(event) => updateField("registerDisplayName", event)} class="auth-input" autocomplete="name" maxlength="48" required placeholder="Como os outros vão chamar você?" /></label>
       {/if}
-      <label class="auth-label">Usuário<input bind:value={loginUsername} class:auth-hidden={authMode !== "login"} class="auth-input" autocomplete="username" maxlength="32" required={authMode === "login"} placeholder="seu usuário" /><input bind:value={registerUsername} class:auth-hidden={authMode === "login"} class="auth-input" autocomplete="username" maxlength="32" required={authMode === "register"} placeholder="ex.: andre.higo" /></label>
-      <label class="auth-label">Senha<input bind:value={loginPassword} class:auth-hidden={authMode !== "login"} class="auth-input" type="password" autocomplete="current-password" maxlength="128" required={authMode === "login"} placeholder="sua senha" /><input bind:value={registerPassword} class:auth-hidden={authMode === "login"} class="auth-input" type="password" autocomplete="new-password" minlength="8" maxlength="128" required={authMode === "register"} placeholder="mínimo de 8 caracteres" /></label>
-      {#if authMode === "register"}<label class="auth-legal-consent"><input type="checkbox" bind:checked={registerLegalAccepted} required /><span>Li e aceito a <a href="/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a> e os <a href="/termos-de-uso" target="_blank" rel="noreferrer">Termos de Uso</a>.</span></label>{/if}
+      <label class="auth-label">Usuário<input value={loginUsername} on:input={(event) => updateField("loginUsername", event)} class:auth-hidden={authMode !== "login"} class="auth-input" autocomplete="username" maxlength="32" required={authMode === "login"} placeholder="seu usuário" /><input value={registerUsername} on:input={(event) => updateField("registerUsername", event)} class:auth-hidden={authMode === "login"} class="auth-input" autocomplete="username" maxlength="32" required={authMode === "register"} placeholder="ex.: andre.higo" /></label>
+      <label class="auth-label">Senha<input value={loginPassword} on:input={(event) => updateField("loginPassword", event)} class:auth-hidden={authMode !== "login"} class="auth-input" type="password" autocomplete="current-password" maxlength="128" required={authMode === "login"} placeholder="sua senha" /><input value={registerPassword} on:input={(event) => updateField("registerPassword", event)} class:auth-hidden={authMode === "login"} class="auth-input" type="password" autocomplete="new-password" minlength="8" maxlength="128" required={authMode === "register"} placeholder="mínimo de 8 caracteres" /></label>
+      {#if authMode === "register"}<label class="auth-legal-consent"><input type="checkbox" checked={registerLegalAccepted} on:change={(event) => updateField("registerLegalAccepted", event)} required /><span>Li e aceito a <a href="/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a> e os <a href="/termos-de-uso" target="_blank" rel="noreferrer">Termos de Uso</a>.</span></label>{/if}
       {#if authError}<p class="auth-error rounded-lg px-3 py-2 text-xs" role="alert">{authError}</p>{/if}
       <button class="primary mt-1 rounded-xl px-4 py-3 text-sm font-extrabold" type="submit" disabled={authBusy}>{authBusy ? "Aguarde…" : authMode === "login" ? "Entrar" : "Criar conta"} <HugeiconsIcon icon={iconFor("arrowRight")} size={16} strokeWidth={1.8} /></button>
     </form>
