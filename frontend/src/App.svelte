@@ -1676,18 +1676,8 @@
   async function searchGroupMessages(...args) { return (await getGroupMessageController()).searchGroupMessages(...args); }
   async function sendMessage(...args) { return (await getGroupMessageController()).sendMessage(...args); }
   async function startEditMessage(...args) { return (await getGroupMessageController()).startEditMessage(...args); }
-  async function submitBotComponent({ interactionId, customId, values = [] }) {
-    return api(`/api/interactions/${encodeURIComponent(interactionId)}/components`, {
-      method: "POST",
-      body: JSON.stringify({ customId, values }),
-    });
-  }
-  async function submitBotModal({ interactionId, customId, fields = {} }) {
-    return api(`/api/interactions/${encodeURIComponent(interactionId)}/modal`, {
-      method: "POST",
-      body: JSON.stringify({ customId, fields }),
-    });
-  }
+  async function submitBotComponent(...args) { return applicationCommandController.submitComponent(...args); }
+  async function submitBotModal(...args) { return applicationCommandController.submitModal(...args); }
   function cancelEditMessage(...args) { void getGroupMessageController().then((controller) => controller.cancelEditMessage(...args)); }
   function openGroupMessageSearch(...args) { void getGroupMessageController().then((controller) => controller.openGroupMessageSearch(...args)); }
   function removeMessageAttachment(...args) { void getGroupMessageController().then((controller) => controller.removeMessageAttachment(...args)); }

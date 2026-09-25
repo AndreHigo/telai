@@ -26,8 +26,24 @@ export function createApplicationCommandController({ api, getState, setState, se
       body: JSON.stringify({ roomId, commandName, options }),
     });
     setNotice?.("Comando enviado ao bot.");
-    return result.interaction;
+    return result;
   }
 
-  return { invoke, loadForGroup };
+  async function submitComponent({ interactionId, customId, values = [] }) {
+    const result = await api(`/api/interactions/${encodeURIComponent(interactionId)}/components`, {
+      method: "POST",
+      body: JSON.stringify({ customId, values }),
+    });
+    return result;
+  }
+
+  async function submitModal({ interactionId, customId, fields = {} }) {
+    const result = await api(`/api/interactions/${encodeURIComponent(interactionId)}/modal`, {
+      method: "POST",
+      body: JSON.stringify({ customId, fields }),
+    });
+    return result;
+  }
+
+  return { invoke, loadForGroup, submitComponent, submitModal };
 }
