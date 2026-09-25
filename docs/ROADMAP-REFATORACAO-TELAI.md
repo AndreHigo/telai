@@ -81,7 +81,8 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Definir `/api/v1` e envelope de erros consistente.
 - [ ] Gerar OpenAPI e cliente TypeScript interno.
 - [ ] Criar Gateway de eventos separado da sinalização WebRTC.
-- [ ] Adicionar heartbeat, reconexão, sequência e descarte seguro de eventos antigos.
+- [x] Adicionar heartbeat nativo ao WebSocket para detectar conexões mortas.
+- [ ] Adicionar reconexão, sequência e descarte seguro de eventos antigos.
 - [ ] Trocar polling de chat/presença por eventos onde isso reduzir carga sem prejudicar simplicidade.
 
 ### Fase 3 — Núcleo funcional de comunidade

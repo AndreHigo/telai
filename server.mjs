@@ -6,6 +6,7 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash, creat
 import { WebSocketServer } from "ws";
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
+import { installWebsocketHeartbeat } from "./server/gateway/heartbeat.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
@@ -4622,6 +4623,7 @@ const websocketServer = new WebSocketServer({
     return done(true);
   },
 });
+installWebsocketHeartbeat(websocketServer);
 websocketServer.on("connection", (socket, request) => {
   socket.clientId = randomUUID();
   socket.clientIpAddress = clientIp(request);
