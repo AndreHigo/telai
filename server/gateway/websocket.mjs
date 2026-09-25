@@ -71,6 +71,9 @@ export function createWebsocketGateway({
 
   installWebsocketHeartbeat(websocketServer);
   websocketServer.on("connection", (socket, request) => {
+    const earlyMessages = [];
+    const collectEarlyMessage = (raw, isBinary) => earlyMessages.push([raw, isBinary]);
+    socket.on("message", collectEarlyMessage);
     Promise.resolve().then(async () => {
     socket.clientId = randomUUID();
     socket.clientIpAddress = clientIp(request);
@@ -128,7 +131,10 @@ export function createWebsocketGateway({
       leave(socket);
       leaveVoiceRoom(socket);
     });
+    socket.off("message", collectEarlyMessage);
+    for (const [raw, isBinary] of earlyMessages.splice(0)) socket.emit("message", raw, isBinary);
     }).catch((error) => {
+      socket.off("message", collectEarlyMessage);
       removeWebsocketActive(socket.clientIpAddress || clientIp(request));
       errorLog("ws_authentication_error", { clientId: socket.clientId, error: error.message });
       try { socket.close(1011, "authentication unavailable"); } catch {}

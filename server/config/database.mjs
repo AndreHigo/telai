@@ -2,7 +2,7 @@ export function createDatabaseConfig({ env = process.env } = {}) {
   const driver = String(env.TELAI_DATABASE_DRIVER || "sqlite").trim().toLowerCase();
   if (!['sqlite', 'postgres'].includes(driver)) throw new Error(`Unsupported database driver: ${driver}`);
 
-  const maintenanceDriver = String(env.TELAI_MAINTENANCE_DATABASE_DRIVER || "sqlite").trim().toLowerCase();
+  const maintenanceDriver = String(env.TELAI_MAINTENANCE_DATABASE_DRIVER || driver).trim().toLowerCase();
   if (!['sqlite', 'postgres'].includes(maintenanceDriver)) {
     throw new Error(`Unsupported maintenance database driver: ${maintenanceDriver}`);
   }

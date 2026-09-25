@@ -259,8 +259,8 @@ export function createPostgresGroupRepository(database, { createId, groupSetupRe
     return withPostgresTransaction(database, async (client) => {
       await client.query("INSERT INTO groups (id, name, slug, owner_id, created_at) VALUES ($1, $2, $3, $4, $5)", [group.id, name, slug, ownerId, createdAt]);
       await client.query("INSERT INTO group_members (group_id, user_id, role, created_at) VALUES ($1, $2, 'owner', $3)", [group.id, ownerId, createdAt]);
-      await groupSetupRepository.ensureDefaultGroupRooms(group.id, ownerId);
-      await groupSetupRepository.ensureDefaultGroupRoles(group.id, ownerId);
+      await groupSetupRepository.ensureDefaultGroupRooms(group.id, ownerId, client);
+      await groupSetupRepository.ensureDefaultGroupRoles(group.id, ownerId, client);
       return group;
     }, transactionClient);
   }

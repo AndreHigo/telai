@@ -20,38 +20,39 @@ import { createAuthRuntime } from "./server/auth/runtime.mjs";
 import { hashPassword, hashSessionToken } from "./server/auth/crypto.mjs";
 import { createStreamRuntime } from "./server/domain/streams/runtime.mjs";
 import { createVoiceRuntime } from "./server/domain/voice/runtime.mjs";
-import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
-import { createGroupAccessRepository, createGroupRepository } from "./server/repositories/groups.mjs";
-import { createNotificationRepository } from "./server/repositories/notifications.mjs";
-import { createChannelProfileRepository } from "./server/repositories/channel-profiles.mjs";
-import { createUserPreferenceRepository } from "./server/repositories/user-preferences.mjs";
+import { createDirectConversationRepository, createPostgresDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
+import { createGroupAccessRepository, createPostgresGroupAccessRepository, createGroupRepository, createPostgresGroupRepository } from "./server/repositories/groups.mjs";
+import { createNotificationRepository, createPostgresNotificationRepository } from "./server/repositories/notifications.mjs";
+import { createChannelProfileRepository, createPostgresChannelProfileRepository } from "./server/repositories/channel-profiles.mjs";
+import { createUserPreferenceRepository, createPostgresUserPreferenceRepository } from "./server/repositories/user-preferences.mjs";
 import { createNotificationSyncService } from "./server/services/notification-sync.mjs";
+import { createPostgresNotificationSyncService } from "./server/services/postgres-notification-sync.mjs";
 import { createNotificationRuntime, liveNotificationContext } from "./server/notifications/runtime.mjs";
 import { openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { SQLITE_SCHEMA } from "./server/database/sqlite-schema.mjs";
 import { ensureCompatibilityColumns, ensureCompatibilityIndexes } from "./server/database/sqlite-compatibility.mjs";
-import { createSessionRepository } from "./server/repositories/sessions.mjs";
-import { createAuthRepository } from "./server/repositories/auth.mjs";
-import { createOAuthRepository } from "./server/repositories/oauth.mjs";
-import { createAccountRepository } from "./server/repositories/accounts.mjs";
-import { createSocialRepository } from "./server/repositories/social.mjs";
-import { createGroupSetupRepository } from "./server/repositories/group-setup.mjs";
-import { createGroupMessageRepository } from "./server/repositories/group-messages.mjs";
-import { createGroupInviteRepository } from "./server/repositories/group-invites.mjs";
-import { createGroupJoinRequestRepository } from "./server/repositories/group-join-requests.mjs";
-import { createGroupRoleRepository } from "./server/repositories/group-roles.mjs";
-import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs";
-import { createGroupRoomPermissionRepository } from "./server/repositories/group-room-permissions.mjs";
-import { createGroupAuditRepository } from "./server/repositories/group-audit.mjs";
-import { createGroupModerationRepository } from "./server/repositories/group-moderation.mjs";
-import { createGroupAttachmentRepository } from "./server/repositories/group-attachments.mjs";
-import { createGroupRoomReadRepository } from "./server/repositories/group-room-reads.mjs";
-import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
-import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
-import { createStreamRepository } from "./server/repositories/streams.mjs";
-import { createGroupSettingsRepository } from "./server/repositories/group-settings.mjs";
-import { createUserProfileRepository } from "./server/repositories/user-profile.mjs";
-import { createSiteAdminRepository } from "./server/repositories/site-admin.mjs";
+import { createSessionRepository, createPostgresSessionRepository } from "./server/repositories/sessions.mjs";
+import { createAuthRepository, createPostgresAuthRepository } from "./server/repositories/auth.mjs";
+import { createOAuthRepository, createPostgresOAuthRepository } from "./server/repositories/oauth.mjs";
+import { createAccountRepository, createPostgresAccountRepository } from "./server/repositories/accounts.mjs";
+import { createSocialRepository, createPostgresSocialRepository } from "./server/repositories/social.mjs";
+import { createGroupSetupRepository, createPostgresGroupSetupRepository } from "./server/repositories/group-setup.mjs";
+import { createGroupMessageRepository, createPostgresGroupMessageRepository } from "./server/repositories/group-messages.mjs";
+import { createGroupInviteRepository, createPostgresGroupInviteRepository } from "./server/repositories/group-invites.mjs";
+import { createGroupJoinRequestRepository, createPostgresGroupJoinRequestRepository } from "./server/repositories/group-join-requests.mjs";
+import { createGroupRoleRepository, createPostgresGroupRoleRepository } from "./server/repositories/group-roles.mjs";
+import { createGroupRoomRepository, createPostgresGroupRoomRepository } from "./server/repositories/group-rooms.mjs";
+import { createGroupRoomPermissionRepository, createPostgresGroupRoomPermissionRepository } from "./server/repositories/group-room-permissions.mjs";
+import { createGroupAuditRepository, createPostgresGroupAuditRepository } from "./server/repositories/group-audit.mjs";
+import { createGroupModerationRepository, createPostgresGroupModerationRepository } from "./server/repositories/group-moderation.mjs";
+import { createGroupAttachmentRepository, createPostgresGroupAttachmentRepository } from "./server/repositories/group-attachments.mjs";
+import { createGroupRoomReadRepository, createPostgresGroupRoomReadRepository } from "./server/repositories/group-room-reads.mjs";
+import { createGroupPermissionRepository, createPostgresGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
+import { createGroupMemberRepository, createPostgresGroupMemberRepository } from "./server/repositories/group-members.mjs";
+import { createStreamRepository, createPostgresStreamRepository } from "./server/repositories/streams.mjs";
+import { createGroupSettingsRepository, createPostgresGroupSettingsRepository } from "./server/repositories/group-settings.mjs";
+import { createUserProfileRepository, createPostgresUserProfileRepository } from "./server/repositories/user-profile.mjs";
+import { createSiteAdminRepository, createPostgresSiteAdminRepository } from "./server/repositories/site-admin.mjs";
 import { createMaintenanceRepository, createPostgresMaintenanceRepository } from "./server/repositories/maintenance.mjs";
 import { createPostgresPool } from "./server/repositories/postgres.mjs";
 import { json, readJson } from "./server/http/body.mjs";
@@ -113,9 +114,6 @@ const {
 } = createRuntimeConfig({ rootDir: __dirname, packageVersion: packageMetadata.version });
 const databaseConfig = createDatabaseConfig();
 const databaseDriver = databaseConfig.driver;
-if (databaseDriver !== "sqlite") {
-  throw new Error("PostgreSQL ainda não está ligado ao runtime HTTP do Telai. Mantenha TELAI_DATABASE_DRIVER=sqlite até concluir o cutover validado.");
-}
 const siteAdminUserIds = new Set(String(process.env.TELAI_ADMIN_USER_IDS || "")
   .split(",").map((value) => value.trim()).filter(Boolean));
 const siteAdminUsernames = new Set(String(process.env.TELAI_ADMIN_USERNAMES || "")
@@ -418,22 +416,42 @@ setInterval(() => {
   }
 }, loginRateWindowMs).unref();
 
-const database = openSqliteDatabase(databasePath, SQLITE_SCHEMA);
+const database = databaseDriver === "postgres"
+  ? createPostgresPool(databaseConfig)
+  : openSqliteDatabase(databasePath, SQLITE_SCHEMA);
 let maintenanceDatabasePool = null;
 
-ensureCompatibilityColumns(database);
-ensureCompatibilityIndexes(database);
-const groupRoomPermissionRepository = createGroupRoomPermissionRepository(database);
-const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction, canGroupRoomAction } = createGroupAccessRepository(database, { roomPermissionRepository: groupRoomPermissionRepository });
-const directConversationRepository = createDirectConversationRepository(database, { compactUserSummary, createId: randomUUID });
+if (databaseDriver === "sqlite") {
+  ensureCompatibilityColumns(database);
+  ensureCompatibilityIndexes(database);
+}
+const groupRoomPermissionRepository = databaseDriver === "postgres"
+  ? createPostgresGroupRoomPermissionRepository(database)
+  : createGroupRoomPermissionRepository(database);
+const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction, canGroupRoomAction } = databaseDriver === "postgres"
+  ? createPostgresGroupAccessRepository(database, { roomPermissionRepository: groupRoomPermissionRepository })
+  : createGroupAccessRepository(database, { roomPermissionRepository: groupRoomPermissionRepository });
+const directConversationRepository = databaseDriver === "postgres"
+  ? createPostgresDirectConversationRepository(database, { compactUserSummary, createId: randomUUID })
+  : createDirectConversationRepository(database, { compactUserSummary, createId: randomUUID });
 const { directConversationForUser, directConversationPayload } = directConversationRepository;
-const sessionRepository = createSessionRepository(database, { hashSessionToken });
-const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents, createUserWithConsents } = createAuthRepository(database, {
-  compactAvatarData,
-  legalPolicyVersion,
-  createId: randomUUID,
-});
-const notificationRepository = createNotificationRepository(database);
+const sessionRepository = databaseDriver === "postgres"
+  ? createPostgresSessionRepository(database, { hashSessionToken })
+  : createSessionRepository(database, { hashSessionToken });
+const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents, createUserWithConsents } = databaseDriver === "postgres"
+  ? createPostgresAuthRepository(database, {
+    compactAvatarData,
+    legalPolicyVersion,
+    createId: randomUUID,
+  })
+  : createAuthRepository(database, {
+    compactAvatarData,
+    legalPolicyVersion,
+    createId: randomUUID,
+  });
+const notificationRepository = databaseDriver === "postgres"
+  ? createPostgresNotificationRepository(database)
+  : createNotificationRepository(database);
 const { createNotification: persistNotification } = notificationRepository;
 function createNotification(notification) {
   const publish = (result) => {
@@ -457,7 +475,9 @@ function createNotification(notification) {
   const result = persistNotification(notification);
   return result && typeof result.then === "function" ? result.then(publish) : publish(result);
 }
-const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
+const socialRepository = databaseDriver === "postgres"
+  ? createPostgresSocialRepository(database, { compactAvatarData, createId: randomUUID })
+  : createSocialRepository(database, { compactAvatarData, createId: randomUUID });
 const handleDirectRoutes = createDirectRoutes({
   json,
   readJson,
@@ -469,10 +489,16 @@ const handleDirectRoutes = createDirectRoutes({
   createNotification,
   errorLog,
 });
-const channelProfileRepository = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
+const channelProfileRepository = databaseDriver === "postgres"
+  ? createPostgresChannelProfileRepository(database, { compactAvatarData, parseChannelGames })
+  : createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
 const { channelProfileForUser } = channelProfileRepository;
-const userPreferenceRepository = createUserPreferenceRepository(database, { normalizePreferenceVolume });
-const streamRepository = createStreamRepository(database, { createId: randomUUID });
+const userPreferenceRepository = databaseDriver === "postgres"
+  ? createPostgresUserPreferenceRepository(database, { normalizePreferenceVolume })
+  : createUserPreferenceRepository(database, { normalizePreferenceVolume });
+const streamRepository = databaseDriver === "postgres"
+  ? createPostgresStreamRepository(database, { createId: randomUUID })
+  : createStreamRepository(database, { createId: randomUUID });
 const {
   canAccessStream,
   decorateRuntimeStream,
@@ -495,8 +521,9 @@ const {
   slugFor,
   requireLogin,
 });
-const notificationSyncService = createNotificationSyncService(database, {
-  getNotificationScope: (userId) => userPreferenceRepository.getPreferences(userId).liveNotificationScope,
+const notificationSyncServiceFactory = databaseDriver === "postgres" ? createPostgresNotificationSyncService : createNotificationSyncService;
+const notificationSyncService = notificationSyncServiceFactory(database, {
+  getNotificationScope: async (userId) => (await userPreferenceRepository.getPreferences(userId)).liveNotificationScope,
   isStreamLive: runtimeStreamIsLive,
   createLiveContext: liveNotificationContext,
   createNotification,
@@ -505,17 +532,32 @@ const { liveNotificationPresentation, syncNotificationsForUser } = createNotific
   notificationSyncService,
   canAccessStream,
 });
-const accountRepository = createAccountRepository(database, { legalPolicyVersion, createId: randomUUID });
+const accountRepository = databaseDriver === "postgres"
+  ? createPostgresAccountRepository(database, { legalPolicyVersion, createId: randomUUID })
+  : createAccountRepository(database, { legalPolicyVersion, createId: randomUUID });
 const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialRepository, createNotification });
-const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
-const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });
-const groupAttachmentRepository = createGroupAttachmentRepository(database, { createId: randomUUID });
-const groupRoomReadRepository = createGroupRoomReadRepository(database);
+const groupSetupRepository = databaseDriver === "postgres"
+  ? createPostgresGroupSetupRepository(database, { createId: randomUUID })
+  : createGroupSetupRepository(database, { createId: randomUUID });
+const groupMessageRepository = databaseDriver === "postgres"
+  ? createPostgresGroupMessageRepository(database, { createId: randomUUID })
+  : createGroupMessageRepository(database, { createId: randomUUID });
+const groupAttachmentRepository = databaseDriver === "postgres"
+  ? createPostgresGroupAttachmentRepository(database, { createId: randomUUID })
+  : createGroupAttachmentRepository(database, { createId: randomUUID });
+const groupRoomReadRepository = databaseDriver === "postgres"
+  ? createPostgresGroupRoomReadRepository(database)
+  : createGroupRoomReadRepository(database);
 const attachmentStorage = createLocalAttachmentStorage(process.env.TELAI_ATTACHMENT_DIR || path.join(dataDir, "attachments"));
 const attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${encodeURIComponent(groupId)}/attachments/${encodeURIComponent(attachmentId)}`;
-const groupRepository = createGroupRepository(database, { createId: randomUUID, groupSetupRepository });
-const groupModerationRepository = createGroupModerationRepository(database, { createId: randomUUID });
-const groupInviteRepository = createGroupInviteRepository(database, {
+const groupRepository = databaseDriver === "postgres"
+  ? createPostgresGroupRepository(database, { createId: randomUUID, groupSetupRepository })
+  : createGroupRepository(database, { createId: randomUUID, groupSetupRepository });
+const groupModerationRepository = databaseDriver === "postgres"
+  ? createPostgresGroupModerationRepository(database, { createId: randomUUID })
+  : createGroupModerationRepository(database, { createId: randomUUID });
+const groupInviteRepositoryFactory = databaseDriver === "postgres" ? createPostgresGroupInviteRepository : createGroupInviteRepository;
+const groupInviteRepository = groupInviteRepositoryFactory(database, {
   createId: randomUUID,
   hashToken: hashSessionToken,
   groupSetupRepository,
@@ -532,15 +574,22 @@ const handleNotificationRoutes = createNotificationRoutes({
   streamPublicPath,
 });
 const handleMemberInviteRoutes = createMemberInviteRoutes({ json, requireUser, groupInviteRepository });
-const groupJoinRequestRepository = createGroupJoinRequestRepository(database, {
+const groupJoinRequestRepositoryFactory = databaseDriver === "postgres" ? createPostgresGroupJoinRequestRepository : createGroupJoinRequestRepository;
+const groupJoinRequestRepository = groupJoinRequestRepositoryFactory(database, {
   createId: randomUUID,
   groupSetupRepository,
   ensureGroupPermissionRow,
   compactAvatarData,
 });
-const groupRoleRepository = createGroupRoleRepository(database, { createId: randomUUID });
-const groupRoomRepository = createGroupRoomRepository(database, { createId: randomUUID });
-const groupAuditRepository = createGroupAuditRepository(database, { createId: randomUUID });
+const groupRoleRepository = databaseDriver === "postgres"
+  ? createPostgresGroupRoleRepository(database, { createId: randomUUID })
+  : createGroupRoleRepository(database, { createId: randomUUID });
+const groupRoomRepository = databaseDriver === "postgres"
+  ? createPostgresGroupRoomRepository(database, { createId: randomUUID })
+  : createGroupRoomRepository(database, { createId: randomUUID });
+const groupAuditRepository = databaseDriver === "postgres"
+  ? createPostgresGroupAuditRepository(database, { createId: randomUUID })
+  : createGroupAuditRepository(database, { createId: randomUUID });
 const {
   authorizeVoiceRoomJoin,
   broadcastVoice,
@@ -573,9 +622,15 @@ async function disconnectGroupUser(groupId, userId, reason) {
   eventGateway?.disconnectUserFromGroup(groupId, userId, reason);
   await eventGateway?.publishGroupPresence(groupId);
 }
-const groupPermissionRepository = createGroupPermissionRepository(database);
-const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
-const groupSettingsRepository = createGroupSettingsRepository(database);
+const groupPermissionRepository = databaseDriver === "postgres"
+  ? createPostgresGroupPermissionRepository(database)
+  : createGroupPermissionRepository(database);
+const groupMemberRepository = databaseDriver === "postgres"
+  ? createPostgresGroupMemberRepository(database, { compactAvatarData })
+  : createGroupMemberRepository(database, { compactAvatarData });
+const groupSettingsRepository = databaseDriver === "postgres"
+  ? createPostgresGroupSettingsRepository(database)
+  : createGroupSettingsRepository(database);
 const handleGroupDiscoveryRoutes = createGroupDiscoveryRoutes({
   json,
   readJson,
@@ -784,7 +839,9 @@ const {
   voiceSpeakingRateLimit,
   warnLog,
 });
-const userProfileRepository = createUserProfileRepository(database);
+const userProfileRepository = databaseDriver === "postgres"
+  ? createPostgresUserProfileRepository(database)
+  : createUserProfileRepository(database);
 const handleUserSettingsRoutes = createUserSettingsRoutes({
   json,
   readJson,
@@ -801,13 +858,20 @@ const handleUserSettingsRoutes = createUserSettingsRoutes({
   normalizePreferenceDeviceId,
   maxAvatarUploadLength,
 });
-const siteAdminRepository = createSiteAdminRepository(database);
+const siteAdminRepository = databaseDriver === "postgres"
+  ? createPostgresSiteAdminRepository(database)
+  : createSiteAdminRepository(database);
+let maintenanceSqliteDatabase = null;
 const maintenanceRepository = databaseConfig.maintenanceDriver === "postgres"
   ? (() => {
-    maintenanceDatabasePool = createPostgresPool(databaseConfig);
-    return createPostgresMaintenanceRepository(maintenanceDatabasePool);
+    const maintenanceDatabase = databaseDriver === "postgres"
+      ? database
+      : (maintenanceDatabasePool = createPostgresPool(databaseConfig));
+    return createPostgresMaintenanceRepository(maintenanceDatabase);
   })()
-  : createMaintenanceRepository(database);
+  : createMaintenanceRepository(databaseDriver === "sqlite"
+    ? database
+    : (maintenanceSqliteDatabase = openSqliteDatabase(path.join(dataDir, "maintenance.sqlite"), SQLITE_SCHEMA)));
 const {
   activeMaintenanceNotice,
   requireMaintenanceOperator,
@@ -854,7 +918,7 @@ const handleAdminRoutes = createAdminRoutes({
   siteAdminGroupMembersPage,
   siteAdminOverview,
 });
-const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
+const { upsertOAuthUser, linkOAuthAccount } = (databaseDriver === "postgres" ? createPostgresOAuthRepository : createOAuthRepository)(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
   createId: randomUUID,
@@ -957,7 +1021,7 @@ async function requireUser(request, response) {
   return user;
 }
 
-groupSetupRepository.initializeExistingGroups();
+await groupSetupRepository.initializeExistingGroups();
 
 function send(socket, message) {
   if (socket?.readyState !== 1) return false;
@@ -1187,10 +1251,13 @@ export function getEventGatewayForTests() {
   return eventGateway;
 }
 
-export function closeDatabaseForTests() {
-  if (database?.open) database.close();
-  if (maintenanceDatabasePool) return maintenanceDatabasePool.end();
-  return undefined;
+export async function closeDatabaseForTests() {
+  const closers = [];
+  if (databaseDriver === "postgres") closers.push(database.end());
+  else if (database?.open) database.close();
+  if (maintenanceSqliteDatabase?.open) maintenanceSqliteDatabase.close();
+  if (maintenanceDatabasePool) closers.push(maintenanceDatabasePool.end());
+  await Promise.all(closers);
 }
 
 export function startServer({ host = defaultHost, port = defaultPort } = {}) {

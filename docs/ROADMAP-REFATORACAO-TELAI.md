@@ -227,7 +227,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.
 - [x] Criar migration baseline e importador offline SQLite → PostgreSQL.
 - [x] Subir PostgreSQL local em Docker e aplicar/validar a migration baseline sem cutover.
-- [x] Impedir que `TELAI_DATABASE_DRIVER=postgres` seja aceito silenciosamente pelo runtime SQLite antes do cutover validado.
+- [x] Impedir fallback silencioso entre drivers e selecionar explicitamente o conjunto de repositórios conforme `TELAI_DATABASE_DRIVER`.
 - [x] Validar o primeiro domínio PostgreSQL opt-in (manutenção administrativa) com agendamento, leitura e limpeza contra o container local.
 - [x] Tornar as rotas HTTP de social e mensagens diretas explicitamente compatíveis com repositórios síncronos e assíncronos, sem alterar o comportamento SQLite.
 - [x] Tornar descoberta, gestão, salas, permissões, auditoria e convites de grupos compatíveis com repositórios síncronos e assíncronos.
@@ -239,7 +239,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Migrar autorização de voz e filtragem do gateway de eventos para consultas assíncronas de salas, membros e permissões.
 - [x] Migrar autorização privada, histórico/chat e encerramento de transmissões para o runtime assíncrono de streams.
 - [x] Migrar o painel administrativo, paginação e overview para consultas assíncronas de contas, grupos, membros e streams.
-- [ ] Completar a fronteira assíncrona das demais rotas HTTP e gateways antes de selecionar os repositórios PostgreSQL no runtime.
+- [x] Completar a fronteira assíncrona das rotas HTTP e gateways cobertas pelo runtime atual antes de selecionar os repositórios PostgreSQL.
+- [x] Selecionar os repositórios PostgreSQL no runtime e validar API, gateways, segurança, administração, observabilidade, reconexão de voz e mídia contra PostgreSQL local.
 - [ ] Executar migration, importar dados e ativar PostgreSQL após validação real.
 - [ ] Adicionar Redis/event bus somente quando houver mais de uma instância ou necessidade de filas.
 

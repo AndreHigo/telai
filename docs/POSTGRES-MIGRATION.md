@@ -17,16 +17,16 @@ etapa.
 - A migration baseline e o importador SQLite → PostgreSQL já existem.
 - O comando `pnpm run db:import:postgres -- --plan` inspeciona o SQLite sem conectar no PostgreSQL.
 - O importador é idempotente e o relatório conta somente linhas realmente inseridas; `pnpm run db:test:postgres-import` valida uma fonte SQLite temporária em duas execuções e remove o fixture ao final.
-- A migration baseline já foi executada e validada no PostgreSQL local via Docker; o cutover continua adiado e SQLite permanece sendo o driver ativo.
+- A migration baseline já foi executada e validada no PostgreSQL local via Docker; o cutover de produção continua adiado e SQLite permanece como padrão quando `TELAI_DATABASE_DRIVER` não é definido.
 - A migration incremental `003_group_room_permissions.sql` adiciona overrides de acesso por cargo/canal; ela foi aplicada e validada no PostgreSQL local junto com as migrations anteriores.
 - A migration incremental `004_group_audit_logs.sql` adiciona o histórico administrativo enxuto por grupo; ela foi aplicada e validada no PostgreSQL local.
 - A migration incremental `005_group_moderation.sql` adiciona banimentos e silêncios persistentes por grupo; ela é validada junto com o contrato dos repositórios.
 - A migration incremental `006_role_moderation_permission.sql` adiciona a permissão de moderação por cargo; a hierarquia usa a ordenação persistente já existente e foi validada com moderação delegada.
 - A migration incremental `007_group_message_attachments.sql` adiciona metadados de anexos de mensagens; o repositório PostgreSQL foi validado com rollback e o conteúdo continua fora do banco, no storage local controlado.
 - A migration incremental `008_group_room_reads.sql` adiciona cursores persistentes de leitura por membro/canal; a contagem de não lidas usa a data de entrada no grupo como fallback inicial.
-- O runtime HTTP falha explicitamente se `TELAI_DATABASE_DRIVER=postgres` for configurado antes do cutover; isso evita que uma configuração PostgreSQL seja ignorada e o processo use SQLite sem aviso.
-- O primeiro domínio com cutover opt-in é manutenção administrativa: `TELAI_MAINTENANCE_DATABASE_DRIVER=postgres` usa o repositório PostgreSQL somente para `/api/maintenance` e `/api/admin/maintenance`, enquanto o restante do runtime permanece no SQLite. Essa flag é uma etapa de validação, não o cutover global.
-- Os repositórios já extraídos, incluindo autenticação, consentimentos, OAuth, contas, perfil local, administração, manutenção, social, descoberta/criação, configuração e exclusão de grupos, setup, cargos, salas, permissões, membros, streams, chat da transmissão, convites, solicitações de entrada, mensagens de grupo, anexos de mensagens, cursores de leitura por canal e conversas diretas, agora possuem implementações PostgreSQL assíncronas paralelas, validadas em uma transação com rollback; manutenção é a primeira exceção, ligada somente por flag opt-in.
+- O runtime seleciona explicitamente os repositórios conforme `TELAI_DATABASE_DRIVER`; `postgres` não cai silenciosamente para SQLite. A ausência da variável mantém SQLite como padrão.
+- Com `TELAI_DATABASE_DRIVER=postgres`, o runtime completo usa o pool PostgreSQL local para os domínios extraídos. `TELAI_MAINTENANCE_DATABASE_DRIVER` pode ser usado para escolher explicitamente outro driver de manutenção durante testes; por padrão, a manutenção acompanha o driver principal.
+- Os repositórios já extraídos, incluindo autenticação, consentimentos, OAuth, contas, perfil local, administração, manutenção, social, descoberta/criação, configuração e exclusão de grupos, setup, cargos, salas, permissões, membros, streams, chat da transmissão, convites, solicitações de entrada, mensagens de grupo, anexos de mensagens, cursores de leitura por canal e conversas diretas, possuem implementações PostgreSQL assíncronas paralelas. O runtime foi validado localmente contra PostgreSQL em API, gateways, segurança, administração, observabilidade, reconexão de voz e mídia.
 - Não existe um banco SQLite de aplicação válido neste checkout para importar; nenhum dado de teste foi tratado como dado real.
 - Nenhum ambiente de produção foi apontado para PostgreSQL.
 - Nenhum banco SQLite foi apagado ou alterado por esta preparação.
@@ -37,7 +37,7 @@ etapa.
 2. Implementar repositórios assíncronos por domínio.
 3. Converter rotas e tarefas de limpeza para `async/await`.
 4. Criar importador SQLite → PostgreSQL com contagem por tabela e modo de validação.
-5. Repetir API, segurança, autenticação, permissões, mensagens e mídia contra PostgreSQL.
+5. Repetir API, segurança, autenticação, permissões, mensagens, gateways e mídia contra PostgreSQL.
 6. Executar teste de concorrência e validar índices, transações e recuperação.
 7. Fazer cutover somente com backup, janela de manutenção, health check e rollback documentado.
 

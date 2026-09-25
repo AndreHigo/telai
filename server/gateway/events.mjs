@@ -140,6 +140,9 @@ export function createEventGateway({
   }
 
   eventServer.on("connection", (socket, request) => {
+    const earlyMessages = [];
+    const collectEarlyMessage = (raw, isBinary) => earlyMessages.push([raw, isBinary]);
+    socket.on("message", collectEarlyMessage);
     Promise.resolve().then(async () => {
     socket.clientId = randomUUID();
     socket.clientIpAddress = clientIp(request);
@@ -179,7 +182,10 @@ export function createEventGateway({
         send(socket, { type: "events-error", code: "invalid_message", message: "Mensagem inválida." });
       });
     });
+    socket.off("message", collectEarlyMessage);
+    for (const [raw, isBinary] of earlyMessages.splice(0)) socket.emit("message", raw, isBinary);
     }).catch((error) => {
+      socket.off("message", collectEarlyMessage);
       errorLog("events_authentication_error", { clientId: socket.clientId, error: error.message });
       try { socket.close(1011, "authentication unavailable"); } catch {}
     });

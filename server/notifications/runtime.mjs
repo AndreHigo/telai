@@ -43,8 +43,8 @@ export function createNotificationRuntime({ notificationSyncService, canAccessSt
     };
   }
 
-  function syncNotificationsForUser(userId) {
-    notificationSyncService.sync(userId);
+  async function syncNotificationsForUser(userId) {
+    return await notificationSyncService.sync(userId);
   }
 
   return { liveNotificationPresentation, syncNotificationsForUser };
