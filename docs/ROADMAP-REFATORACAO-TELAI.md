@@ -138,8 +138,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair o dispatcher de mensagens WebSocket para `server/gateway/message-dispatcher.mjs`.
 - [x] Extrair runtime de salas, reconexão do host, relay e presença para `server/gateway/broadcast-runtime.mjs`.
 - [x] Extrair a configuração ICE/STUN/TURN para `server/media/ice-configuration.mjs`, mantendo credenciais TURN temporárias.
-- [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
-- [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
+- [x] Separar consultas/repositórios restantes de domínio das rotas HTTP.
+- [x] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
 - [x] Extrair configuração de ícones e navegação global do `App.svelte`.
 - [x] Extrair a feature de autenticação para `frontend/src/features/auth`.
