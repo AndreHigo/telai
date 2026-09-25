@@ -113,6 +113,7 @@ async function inspectSettingsCategoryContent(window, label) {
       const channel = document.querySelector(".channel-profile-card");
       const voice = document.querySelector(".voice-settings-card");
       const notifications = document.querySelector(".notification-preferences-card");
+      const applications = document.querySelector(".applications-settings");
       const settingsLayout = document.querySelector(".settings-layout");
       const heading = document.querySelector(".settings-heading");
       const visible = (element) => {
@@ -128,6 +129,7 @@ async function inspectSettingsCategoryContent(window, label) {
         channelVisible: visible(channel),
         voiceVisible: visible(voice),
         notificationsVisible: visible(notifications),
+        applicationsVisible: visible(applications),
       };
     })),
   };
@@ -235,7 +237,7 @@ async function main() {
     await waitFor("viewport desktop das configurações", () => evaluate(authenticatedWindow, () => window.innerWidth >= 1200));
     const settingsCategoryLayouts = [];
     const settingsCategoryContents = [];
-    for (const category of ["Perfil", "Canal", "Áudio e voz", "Notificações"]) {
+    for (const category of ["Perfil", "Canal", "Áudio e voz", "Notificações", "Aplicações"]) {
       await clickSettingsCategory(authenticatedWindow, category);
       settingsCategoryLayouts.push(await inspectSettingsCategoryNav(authenticatedWindow, category));
       settingsCategoryContents.push(await inspectSettingsCategoryContent(authenticatedWindow, category));
@@ -251,10 +253,11 @@ async function main() {
       Canal: "channel",
       "Áudio e voz": "voice",
       Notificações: "notifications",
+      Aplicações: "applications",
     };
     for (const [label, panel] of Object.entries(expectedSettingsPanels)) {
       const content = settingsCategoryContents.find((item) => item.label === label);
-      assert.ok(content?.headingVisible && content[`${panel}Visible`] && ["channel", "voice", "notifications"].filter((item) => item !== panel).every((item) => !content[`${item}Visible`]), `conteúdo da categoria ${label} não apareceu corretamente: ${JSON.stringify(content)}`);
+      assert.ok(content?.headingVisible && content[`${panel}Visible`] && ["channel", "voice", "notifications", "applications"].filter((item) => item !== panel).every((item) => !content[`${item}Visible`]), `conteúdo da categoria ${label} não apareceu corretamente: ${JSON.stringify(content)}`);
     }
     await clickSettingsCategory(authenticatedWindow, "Áudio e voz");
     await waitFor("controles de volume de áudio", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".voice-settings-card .voice-volume-grid"))));
@@ -294,6 +297,9 @@ async function main() {
     });
     assert.equal(await evaluate(authenticatedWindow, () => localStorage.getItem("mirante-voice-sensitivity")), "68", "sensibilidade manual não persistiu");
     for (const [width, height] of [[1024, 768], [640, 800]]) layouts.push(await inspectLayout(authenticatedWindow, "Áudio e voz", width, height));
+    await clickSettingsCategory(authenticatedWindow, "Aplicações");
+    await waitFor("painel de aplicações", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".applications-settings"))));
+    for (const [width, height] of [[1440, 900], [1024, 768], [900, 650], [640, 800]]) layouts.push(await inspectLayout(authenticatedWindow, "Configurações · Aplicações", width, height));
     const viewerStream = await request(baseUrl, "/api/streams", {
       method: "POST", headers: { cookie: directTargetCookie },
       body: JSON.stringify({ roomName: `qa-viewer-${Date.now()}`.slice(0, 40), title: "QA Viewer Offline" }),

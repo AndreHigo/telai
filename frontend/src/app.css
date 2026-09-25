@@ -1129,7 +1129,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .settings-page > * { order: 3; }
 .settings-page > .settings-heading { order: 1; }
 .settings-page > .settings-category-nav { order: 2; }
-.settings-category-nav { display: grid; align-self: start; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 8px; border: 1px solid #273d62; border-radius: 16px; background: #101c33; }
+.settings-category-nav { display: grid; align-self: start; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 8px; border: 1px solid #273d62; border-radius: 16px; background: #101c33; }
 .settings-category-nav button { display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px; align-items: center; min-width: 0; padding: 11px 12px; border: 1px solid #293f66; border-radius: 11px; color: #9aabd0; background: #0e192d; text-align: left; }
 .settings-category-nav button:hover, .settings-category-nav button.active { border-color: #3e5787; color: #f0f4ff; background: #1b2d4f; }
 .settings-category-nav button:disabled { cursor: not-allowed; opacity: .45; }
@@ -1137,7 +1137,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .settings-category-nav button strong, .settings-category-nav button small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-category-nav button strong { font-size: 11px; }
 .settings-category-nav button small { margin-top: 2px; color: #758ab4; font-size: 9px; }
-.settings-page:not(.settings-group) .settings-admin-grid, .settings-page.settings-channel .settings-layout, .settings-page.settings-voice .settings-layout, .settings-page.settings-notifications .settings-layout { display: none; }
+.settings-page:not(.settings-group) .settings-admin-grid, .settings-page.settings-channel .settings-layout, .settings-page.settings-voice .settings-layout, .settings-page.settings-notifications .settings-layout, .settings-page.settings-applications .settings-layout { display: none; }
 .settings-page .settings-layout { grid-template-columns: 1fr; }
 .settings-page .settings-layout > .settings-nav { display: none; }
 .settings-heading { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding-bottom: 4px; }
@@ -1151,6 +1151,42 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .settings-nav strong { font-size: 11px; }
 .settings-nav small { margin-top: 2px; color: #758ab4; font-size: 9px; }
 .settings-content { display: grid; gap: 16px; min-width: 0; }
+.settings-page.settings-applications { gap: 18px; }
+.settings-page.settings-applications > .applications-settings { display: grid; gap: 16px; }
+.applications-intro .settings-card-heading { align-items: start; }
+.applications-intro .settings-card-heading > button { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.applications-layout { display: grid; grid-template-columns: minmax(230px, .72fr) minmax(0, 1.55fr); gap: 16px; align-items: start; }
+.applications-sidebar, .applications-details, .application-detail-grid { display: grid; gap: 16px; min-width: 0; }
+.application-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.application-list { display: grid; gap: 6px; }
+.application-list-item { display: flex; align-items: center; gap: 10px; min-width: 0; border: 1px solid transparent; border-radius: 10px; padding: 9px; color: #9aabd0; background: transparent; text-align: left; }
+.application-list-item:hover, .application-list-item.active { border-color: #3e5787; color: #f0f4ff; background: #1b2d4f; }
+.application-list-item > span:last-child, .application-bot-identity > span:last-child, .application-row > span { display: grid; min-width: 0; }
+.application-list-item strong, .application-list-item small, .application-bot-identity strong, .application-bot-identity small, .application-row strong, .application-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.application-list-item strong, .application-bot-identity strong, .application-row strong { font-size: 11px; }
+.application-list-item small, .application-bot-identity small, .application-row small { margin-top: 3px; color: #758ab4; font-size: 9px; }
+.application-list-icon { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; border-radius: 9px; color: #b2b9ff; background: #1d3157; }
+.settings-count { display: inline-grid; min-width: 26px; min-height: 24px; place-items: center; border-radius: 999px; color: #b9c5ff; background: #1b2d4f; font-size: 10px; font-weight: 800; }
+.application-form { display: grid; gap: 11px; }
+.application-identity-card .settings-card-heading { align-items: start; }
+.application-identity-card .danger-outline { flex: 0 0 auto; }
+.application-bot-identity { display: flex; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid #263b5d; }
+.inline-settings-form { display: flex; align-items: end; gap: 8px; }
+.inline-settings-form > .settings-input { min-width: 0; flex: 1 1 auto; }
+.inline-settings-form > button { flex: 0 0 auto; white-space: nowrap; }
+.application-token-reveal { display: flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid #80652e; border-radius: 10px; background: #332912; }
+.application-token-reveal code { min-width: 0; overflow: auto; color: #ffe4a0; font-size: 10px; }
+.application-token-list { display: grid; gap: 5px; padding-top: 10px; border-top: 1px solid #263b5d; }
+.application-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 8px 0; }
+.application-row > button { flex: 0 0 auto; padding: 6px 9px; font-size: 9px; }
+.application-empty-state { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
+.mirante-shell.light .application-list-item { color: #61728e; }
+.mirante-shell.light .application-list-item:hover, .mirante-shell.light .application-list-item.active { border-color: #b4c5e7; color: #1d2b45; background: #e9effb; }
+.mirante-shell.light .application-list-icon { color: #4055aa; background: #edf2fb; }
+.mirante-shell.light .application-list-item small, .mirante-shell.light .application-bot-identity small, .mirante-shell.light .application-row small { color: #657792; }
+.mirante-shell.light .application-bot-identity, .mirante-shell.light .application-token-list { border-color: #d1dbea; }
+.mirante-shell.light .application-token-reveal { border-color: #d8b966; background: #fff9e8; }
+.mirante-shell.light .application-token-reveal code { color: #6f5100; }
 .settings-card { display: grid; gap: 20px; padding: 23px; border: 1px solid #293f66; border-radius: 18px; background: #111e37; }
 .desktop-startup-card { gap: 14px; }
 .desktop-startup-toggle { flex: 0 0 auto; margin-top: 4px; cursor: pointer; }
@@ -1535,6 +1571,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .settings-layout { grid-template-columns: 1fr; }
   .settings-nav { display: flex; overflow-x: auto; }
   .settings-nav button { min-width: 190px; }
+  .applications-layout, .application-detail-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {

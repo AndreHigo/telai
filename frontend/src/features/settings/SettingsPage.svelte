@@ -11,6 +11,7 @@
   import GroupRolePermissionsPanel from "./GroupRolePermissionsPanel.svelte";
   import GroupAccessSettingsPanel from "./GroupAccessSettingsPanel.svelte";
   import NotificationPreferencesSettings from "./NotificationPreferencesSettings.svelte";
+  import ApplicationsSettings from "./ApplicationsSettings.svelte";
   import AccountPrivacy from "../../AccountPrivacy.svelte";
 
   const dispatch = createEventDispatcher();
@@ -181,7 +182,7 @@
   export let onModerationComplete = () => {};
 </script>
 
-<section bind:this={settingsPageElement} class="settings-page window-page" class:settings-profile={settingsSection === "profile"} class:settings-channel={settingsSection === "channel"} class:settings-voice={settingsSection === "voice"} class:settings-group={settingsSection === "group"} class:settings-notifications={settingsSection === "notifications"}>
+<section bind:this={settingsPageElement} class="settings-page window-page" class:settings-profile={settingsSection === "profile"} class:settings-channel={settingsSection === "channel"} class:settings-voice={settingsSection === "voice"} class:settings-group={settingsSection === "group"} class:settings-notifications={settingsSection === "notifications"} class:settings-applications={settingsSection === "applications"}>
   <SettingsCategoryNav
     {settingsSection}
     {selectedGroupId}
@@ -322,6 +323,10 @@
 
   {#if settingsSection === "notifications"}
     <NotificationPreferencesSettings {settingsBusy} {liveNotificationScopes} onSave={onSavePreferences} onSetScope={onSetNotificationScope} />
+  {/if}
+
+  {#if settingsSection === "applications"}
+    <ApplicationsSettings {api} />
   {/if}
 
   {#if settingsTab === "group" && selectedGroupId}
