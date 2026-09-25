@@ -964,6 +964,7 @@
     loadNotifications,
     markAllNotificationsRead,
     markNotificationRead,
+    receiveNotification,
     setHideReadNotifications,
     syncNotificationHideReadPreference,
   } = notificationController;
@@ -1024,6 +1025,10 @@
   }
 
   function handleGroupEvent(message) {
+    if (message?.type === "notification-created") {
+      receiveNotification(message.notification);
+      return;
+    }
     void getGroupEventHandler().then((handler) => handler(message)).catch((error) => reportClientError("group_event_handler_error", error));
   }
 

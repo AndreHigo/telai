@@ -89,6 +89,10 @@ async function main() {
     memberEvents.socket.send(JSON.stringify({ type: "subscribe-group", groupId }));
     await waitFor(ownerEvents, (message) => message.type === "group-subscribed" && message.groupId === groupId);
     await waitFor(memberEvents, (message) => message.type === "group-subscribed" && message.groupId === groupId);
+    const friendRequest = await request(baseUrl, `/api/friends/${owner.user.id}`, { method: "POST", headers: { cookie: member.cookie } });
+    assert.equal(friendRequest.response.status, 201, JSON.stringify(friendRequest.body));
+    const notificationEvent = await waitFor(ownerEvents, (message) => message.type === "notification-created" && message.notification?.entityId === friendRequest.body.requestId);
+    assert.equal(notificationEvent.notification.unread, true);
 
     const admin = await request(baseUrl, `/api/groups/${groupId}/admin`, { headers: { cookie: owner.cookie } });
     const defaultRole = admin.body.roles.find((role) => role.isDefault);
@@ -159,7 +163,7 @@ async function main() {
     assert.equal(kicked.response.status, 200, JSON.stringify(kicked.body));
     const unsubscribed = await waitFor(memberEvents, (message) => message.type === "group-unsubscribed" && message.groupId === groupId);
     assert.equal(unsubscribed.reason, "kick");
-    console.log(JSON.stringify({ ok: true, separateEventsGateway: true, groupMessageDelivered: true, groupMessageMutationsDelivered: true, presenceDelivered: true, overviewWithoutMessages: true, moderationDisconnectDelivered: true }));
+    console.log(JSON.stringify({ ok: true, separateEventsGateway: true, groupMessageDelivered: true, groupMessageMutationsDelivered: true, presenceDelivered: true, notificationDelivered: true, overviewWithoutMessages: true, moderationDisconnectDelivered: true }));
   } finally {
     for (const socket of sockets) if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close();
     await new Promise((resolve) => server.close(resolve));

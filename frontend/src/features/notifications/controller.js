@@ -87,10 +87,25 @@ export function createNotificationController({ api, getUser, getState, setState,
     }
   }
 
+  function receiveNotification(notification) {
+    if (!notification?.id || notification.userId && notification.userId !== getUser()?.id) return;
+    const state = getState();
+    if (state.notifications.some((item) => item.id === notification.id)) return;
+    const nextNotification = { ...notification, readAt: notification.readAt || null, unread: true };
+    setState({
+      notifications: [nextNotification, ...state.notifications].slice(0, 100),
+      knownNotificationIds: new Set([...state.knownNotificationIds, notification.id]),
+      notificationUnreadCount: state.notificationUnreadCount + 1,
+      notificationSoundInitialized: true,
+    });
+    playVoiceSound("notification");
+  }
+
   return {
     loadNotifications,
     markAllNotificationsRead,
     markNotificationRead,
+    receiveNotification,
     setHideReadNotifications,
     syncNotificationHideReadPreference,
   };

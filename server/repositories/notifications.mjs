@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 
 export function createNotificationRepository(database, { createId = randomUUID } = {}) {
   function createNotification({ userId, type, entityId, groupId = null, title, body, createdAt = new Date().toISOString() }) {
+    const id = createId();
     database.prepare(`
       INSERT OR IGNORE INTO notifications (id, user_id, type, entity_id, group_id, title, body, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(createId(), userId, type, entityId, groupId, title, body, createdAt);
+    `).run(id, userId, type, entityId, groupId, title, body, createdAt);
+    return { id, created: Boolean(database.prepare("SELECT id FROM notifications WHERE id = ? AND user_id = ?").get(id, userId)) };
   }
 
   function listNotifications(userId, now) {
@@ -64,11 +66,14 @@ export function createNotificationRepository(database, { createId = randomUUID }
 
 export function createPostgresNotificationRepository(database, { createId = randomUUID } = {}) {
   async function createNotification({ userId, type, entityId, groupId = null, title, body, createdAt = new Date().toISOString() }) {
+    const id = createId();
     await database.query(`
       INSERT INTO notifications (id, user_id, type, entity_id, group_id, title, body, created_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (user_id, type, entity_id) DO NOTHING
-    `, [createId(), userId, type, entityId, groupId, title, body, createdAt]);
+    `, [id, userId, type, entityId, groupId, title, body, createdAt]);
+    const result = await database.query("SELECT id FROM notifications WHERE id = $1 AND user_id = $2", [id, userId]);
+    return { id, created: result.rowCount > 0 };
   }
 
   async function listNotifications(userId, now) {

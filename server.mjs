@@ -434,7 +434,29 @@ const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents, createU
   createId: randomUUID,
 });
 const notificationRepository = createNotificationRepository(database);
-const { createNotification } = notificationRepository;
+const { createNotification: persistNotification } = notificationRepository;
+function createNotification(notification) {
+  const publish = (result) => {
+    if (!result?.created || !eventGateway) return result;
+    eventGateway.publishUserEvent(notification.userId, {
+      type: "notification-created",
+      notification: {
+        id: result.id,
+        type: notification.type,
+        entityId: notification.entityId,
+        groupId: notification.groupId || null,
+        title: notification.title,
+        body: notification.body,
+        createdAt: notification.createdAt || new Date().toISOString(),
+        readAt: null,
+        unread: true,
+      },
+    });
+    return result;
+  };
+  const result = persistNotification(notification);
+  return result && typeof result.then === "function" ? result.then(publish) : publish(result);
+}
 const handleDirectRoutes = createDirectRoutes({
   json,
   readJson,

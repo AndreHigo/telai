@@ -103,6 +103,17 @@ export function createEventGateway({
     return publishGroupEvent(groupId, { type: "group-presence", members: membersFor(groupId) });
   }
 
+  function publishUserEvent(userId, message) {
+    const normalizedUserId = String(userId || "");
+    if (!normalizedUserId || !message || typeof message !== "object") return 0;
+    let delivered = 0;
+    for (const socket of clients) {
+      if (socket.user?.id !== normalizedUserId) continue;
+      if (send(socket, message)) delivered += 1;
+    }
+    return delivered;
+  }
+
   function disconnectUserFromGroup(groupId, userId, reason = "kick") {
     let disconnected = 0;
     for (const socket of clients) {
@@ -168,5 +179,5 @@ export function createEventGateway({
     });
   });
 
-  return { server: eventServer, clients, publishGroupEvent, publishGroupPresence, disconnectUserFromGroup };
+  return { server: eventServer, clients, publishGroupEvent, publishGroupPresence, publishUserEvent, disconnectUserFromGroup };
 }
