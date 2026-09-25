@@ -39,6 +39,15 @@
   } from "./services/media/voice-input.js";
   import { createVoiceCaptureService } from "./services/media/voice-capture.js";
   import { createVoiceTrackSyncService } from "./services/media/voice-track-sync.js";
+  import {
+    audioDeviceDisplayLabel,
+    isUnavailableVoiceInputError,
+    normalizeAudioDeviceLabel,
+    normalizeAudioVolume,
+    rawAudioDeviceLabel,
+    readStoredVoiceDeviceId,
+    readStoredVoiceDeviceLabel,
+  } from "./services/media/voice-device-utils.js";
   import { createClientDiagnostics } from "./services/client-diagnostics.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
@@ -366,34 +375,6 @@
   // deixou de existir. A marca evita que uma troca automática seja tratada
   // como uma seleção manual concorrente.
   let voiceInputFallbackStreams = new WeakSet();
-  function audioDeviceDisplayLabel(device, index, kind = "input") {
-    const fallback = kind === "input" ? `Microfone ${index + 1}` : kind === "camera" ? `Câmera ${index + 1}` : `Saída de áudio ${index + 1}`;
-    const rawLabel = String(device?.label || "").replace(/\s+/g, " ").trim();
-    const role = /^(default)\s*[-:]\s*/i.test(rawLabel)
-      ? "padrão"
-      : /^communications?\s*[-:]\s*/i.test(rawLabel)
-        ? "comunicações"
-        : "";
-    const cleanLabel = rawLabel.replace(/^(default|communications?)\s*[-:]\s*/i, "").trim() || fallback;
-    return role ? `${cleanLabel} · ${role}` : cleanLabel;
-  }
-  function normalizeAudioDeviceLabel(value) {
-    return String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
-  }
-  function rawAudioDeviceLabel(device) {
-    return String(device?.rawLabel || device?.label || "").replace(/\s+/g, " ").trim();
-  }
-  function readStoredVoiceDeviceId(key) {
-    try { return localStorage.getItem(key) || ""; } catch { return ""; }
-  }
-  function readStoredVoiceDeviceLabel(key) {
-    try { return localStorage.getItem(key) || ""; } catch { return ""; }
-  }
-
-  function isUnavailableVoiceInputError(error) {
-    return ["NotFoundError", "OverconstrainedError"].includes(error?.name);
-  }
-
   function persistPreferredInputDeviceId(deviceId) {
     if (!user) return;
     api("/api/auth/preferences", {
@@ -422,11 +403,6 @@
   let selectedInputDeviceId = readStoredVoiceDeviceId("mirante-voice-input");
   let selectedInputDeviceLabel = readStoredVoiceDeviceLabel("mirante-voice-input-label");
   let selectedOutputDeviceId = readStoredVoiceDeviceId("mirante-voice-output");
-  function normalizeAudioVolume(value, fallback = 1) {
-    const numericValue = Number(value);
-    return Number.isFinite(numericValue) ? Math.min(1, Math.max(0, numericValue)) : fallback;
-  }
-
   function voicePreferenceTargetId(participantOrId) {
     const participant = participantOrId && typeof participantOrId === "object"
       ? participantOrId
