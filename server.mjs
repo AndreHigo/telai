@@ -6,6 +6,7 @@ import { randomBytes, randomUUID, timingSafeEqual, createHmac } from "node:crypt
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { createDatabaseConfig } from "./server/config/database.mjs";
+import { createRuntimeLimits } from "./server/config/limits.mjs";
 import { createWebsocketGateway } from "./server/gateway/websocket.mjs";
 import { createSocketSender } from "./server/gateway/socket-sender.mjs";
 import { createEventGateway } from "./server/gateway/events.mjs";
@@ -149,62 +150,53 @@ const {
   isLocalObservabilityRequest,
 } = observabilityRuntime;
 const send = createSocketSender({ errorLog });
-const downloadRateLimitPerMinute = Math.max(1, Number(process.env.MIRANTE_DOWNLOAD_RATE_LIMIT_PER_MIN || 20));
-const downloadRateWindowMs = 60_000;
-const downloadRate = new Map();
-const clientErrorRateLimitPerMinute = Math.max(1, Number(process.env.MIRANTE_CLIENT_ERROR_RATE_LIMIT_PER_MIN || 60));
-const clientErrorRate = new Map();
-const routineClientDiagnosticKinds = new Set(["voice_activity_sample", "voice_activity_state", "voice_activity_analyzer_ready", "voice_rtc_quality"]);
-const loginRateLimitPerMinute = Math.max(1, Number(process.env.MIRANTE_LOGIN_RATE_LIMIT_PER_MIN || 12));
-const loginRateWindowMs = 60_000;
-const loginRate = new Map();
-// Limites de aplicação: o Telai roda como uma única instância atrás do Caddy,
-// então um bucket em memória protege o processo sem adicionar uma dependência
-// externa. O limite do proxy continua sendo recomendado para múltiplas réplicas.
-const apiRateLimitPerMinute = Math.max(30, Number(process.env.MIRANTE_API_RATE_LIMIT_PER_MIN || 240));
-const apiWriteRateLimitPerMinute = Math.max(15, Number(process.env.MIRANTE_API_WRITE_RATE_LIMIT_PER_MIN || 90));
-// O overview do grupo inclui mensagens, avatares e salas. Ele não deve ser
-// usado como heartbeat: um cliente preso pode transformar poucos GETs em
-// dezenas de megabytes por minuto. A presença tem uma rota própria e leve.
-const groupOverviewRateLimitPerMinute = Math.max(2, Number(process.env.MIRANTE_GROUP_OVERVIEW_RATE_LIMIT_PER_MIN || 12));
-// O limite por rota evita que uma ação comum consuma o orçamento de outra.
-// Este teto agregado continua impedindo abuso distribuído entre muitas rotas.
-const apiGlobalRateLimitPerMinute = Math.max(120, Number(process.env.MIRANTE_API_GLOBAL_RATE_LIMIT_PER_MIN || 900));
-const apiRegisterRateLimit = Math.max(1, Number(process.env.MIRANTE_REGISTER_RATE_LIMIT || 5));
-const apiRegisterRateWindowMs = 15 * 60_000;
-const apiOAuthRateLimit = Math.max(1, Number(process.env.MIRANTE_OAUTH_RATE_LIMIT || 20));
-const apiOAuthRateWindowMs = 10 * 60_000;
-const apiRateWindowMs = 60_000;
-const maxRateLimitEntries = Math.max(1000, Number(process.env.MIRANTE_RATE_LIMIT_MAX_KEYS || 10_000));
-const apiRate = new Map();
-const apiWriteRate = new Map();
-const apiGlobalRate = new Map();
-const registerRate = new Map();
-const oauthRate = new Map();
-const loginFailureLimit = Math.max(1, Number(process.env.MIRANTE_LOGIN_FAILURE_LIMIT || 5));
-const loginFailureIpLimit = Math.max(loginFailureLimit, Number(process.env.MIRANTE_LOGIN_FAILURE_IP_LIMIT || 30));
-const loginFailureWindowMs = 15 * 60_000;
-const loginFailures = new Map();
-const websocketConnectionRateLimit = Math.max(5, Number(process.env.MIRANTE_WS_CONNECTION_RATE_LIMIT || 30));
-const websocketConnectionRateWindowMs = 60_000;
-const websocketActiveConnectionLimit = Math.max(2, Number(process.env.MIRANTE_WS_ACTIVE_CONNECTION_LIMIT || 20));
-const websocketConnectionRate = new Map();
-const websocketActiveByIp = new Map();
-const websocketTextMessageMaxBytes = 256 * 1024;
-const relayChunkMaxBytes = 2 * 1024 * 1024;
-const relayRecentBytesMax = 8 * 1024 * 1024;
-const rtcSignalPayloadMaxBytes = 64 * 1024;
-const rtcSignalRateWindowMs = 10_000;
-const rtcSignalRateLimit = 120;
-const voiceSpeakingRateWindowMs = 10_000;
-const voiceSpeakingRateLimit = 40;
-const voiceRoomMinParticipants = 1;
-const voiceRoomMaxParticipants = 50;
-const maxOAuthStates = 1000;
-// O upload aceita até 5 MB, mas uma imagem grande não deve ser repetida em
-// listas e mensagens. O limite de resposta é separado e considera o aumento
-// aproximado de 4/3 causado pela codificação base64.
-const maxAvatarUploadLength = 7 * 1024 * 1024;
+const {
+  downloadRateLimitPerMinute,
+  downloadRateWindowMs,
+  downloadRate,
+  clientErrorRateLimitPerMinute,
+  clientErrorRate,
+  routineClientDiagnosticKinds,
+  loginRateLimitPerMinute,
+  loginRateWindowMs,
+  loginRate,
+  apiRateLimitPerMinute,
+  apiWriteRateLimitPerMinute,
+  groupOverviewRateLimitPerMinute,
+  apiGlobalRateLimitPerMinute,
+  apiRegisterRateLimit,
+  apiRegisterRateWindowMs,
+  apiOAuthRateLimit,
+  apiOAuthRateWindowMs,
+  apiRateWindowMs,
+  maxRateLimitEntries,
+  apiRate,
+  apiWriteRate,
+  apiGlobalRate,
+  registerRate,
+  oauthRate,
+  loginFailureLimit,
+  loginFailureIpLimit,
+  loginFailureWindowMs,
+  loginFailures,
+  websocketConnectionRateLimit,
+  websocketConnectionRateWindowMs,
+  websocketActiveConnectionLimit,
+  websocketConnectionRate,
+  websocketActiveByIp,
+  websocketTextMessageMaxBytes,
+  relayChunkMaxBytes,
+  relayRecentBytesMax,
+  rtcSignalPayloadMaxBytes,
+  rtcSignalRateWindowMs,
+  rtcSignalRateLimit,
+  voiceSpeakingRateWindowMs,
+  voiceSpeakingRateLimit,
+  voiceRoomMinParticipants,
+  voiceRoomMaxParticipants,
+  maxOAuthStates,
+  maxAvatarUploadLength,
+} = createRuntimeLimits();
 
 const {
   allowClientErrorRequest,
