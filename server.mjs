@@ -31,6 +31,7 @@ import { createStreamRepository } from "./server/repositories/streams.mjs";
 import { createGroupSettingsRepository } from "./server/repositories/group-settings.mjs";
 import { createUserProfileRepository } from "./server/repositories/user-profile.mjs";
 import { createSiteAdminRepository } from "./server/repositories/site-admin.mjs";
+import { createMaintenanceRepository } from "./server/repositories/maintenance.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -810,6 +811,7 @@ const streamRepository = createStreamRepository(database, { createId: randomUUID
 const groupSettingsRepository = createGroupSettingsRepository(database);
 const userProfileRepository = createUserProfileRepository(database);
 const siteAdminRepository = createSiteAdminRepository(database);
+const maintenanceRepository = createMaintenanceRepository(database);
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -1156,13 +1158,7 @@ function requireMaintenanceOperator(request, response) {
 }
 
 function activeMaintenanceNotice() {
-  const row = database.prepare(`
-    SELECT id, message, starts_at AS startsAt, expires_at AS expiresAt
-    FROM maintenance_notices
-    WHERE expires_at > ?
-    ORDER BY created_at DESC
-    LIMIT 1
-  `).get(new Date().toISOString());
+  const row = maintenanceRepository.active(new Date().toISOString());
   if (!row) return null;
   return {
     ...row,
@@ -2172,11 +2168,7 @@ async function handleHttpRequest(request, response) {
       const now = Date.now();
       const startsAt = new Date(now + delaySeconds * 1000).toISOString();
       const expiresAt = new Date(now + (delaySeconds + durationSeconds) * 1000).toISOString();
-      database.prepare("UPDATE maintenance_notices SET expires_at = ? WHERE expires_at > ?").run(new Date(now).toISOString(), new Date(now).toISOString());
-      database.prepare(`
-        INSERT INTO maintenance_notices (id, message, starts_at, expires_at, created_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(randomUUID(), message, startsAt, expiresAt, operator.user?.id || null, new Date(now).toISOString());
+      maintenanceRepository.schedule({ message, startsAt, expiresAt, createdBy: operator.user?.id || null, createdAt: new Date(now).toISOString() }, new Date(now).toISOString());
       return json(response, 201, { notice: activeMaintenanceNotice() });
     }).catch(() => json(response, 400, { error: "Não foi possível programar a manutenção." }));
     return;
@@ -2184,7 +2176,7 @@ async function handleHttpRequest(request, response) {
   if (requestUrl.pathname === "/api/admin/maintenance" && request.method === "DELETE") {
     const operator = requireMaintenanceOperator(request, response);
     if (!operator) return;
-    database.prepare("UPDATE maintenance_notices SET expires_at = ? WHERE expires_at > ?").run(new Date().toISOString(), new Date().toISOString());
+    maintenanceRepository.clear(new Date().toISOString());
     return json(response, 200, { ok: true });
   }
   if (requestUrl.pathname === "/api/admin/email/status" && request.method === "GET") {
