@@ -194,6 +194,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair mixagem de áudio da transmissão e liberação das trilhas compostas para `frontend/src/features/broadcast/audio-mixer-controller.js` em chunk lazy, preservando o fast path de trilha única.
     - [x] Extrair `replaceTrack`, remoção de duplicatas e renegociação de áudio dos peers para `frontend/src/features/broadcast/track-controller.js` em chunk lazy.
     - [x] Extrair carregamento, visualização pública, seleção e multistream para `frontend/src/features/live/controller.js` em chunk lazy, preservando rotas e layout.
+    - [x] Extrair a tela “Ao vivo agora” para `frontend/src/features/live/LivePage.svelte`, preservando classes, ações, seleção e multistream.
     - [x] Extrair operações de mensagens, anexos, edição, exclusão e busca para `frontend/src/features/groups/message-controller.js` em chunk lazy.
     - [x] Extrair descoberta de grupos, convites e solicitações de entrada para `frontend/src/features/groups/membership-controller.js` em chunk lazy.
     - [x] Extrair administração de cargos, ordenação e permissões de canal para `frontend/src/features/groups/administration-controller.js` em chunk lazy.
