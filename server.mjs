@@ -22,6 +22,7 @@ import { createSocialRepository } from "./server/repositories/social.mjs";
 import { createGroupSetupRepository } from "./server/repositories/group-setup.mjs";
 import { createGroupMessageRepository } from "./server/repositories/group-messages.mjs";
 import { createGroupInviteRepository } from "./server/repositories/group-invites.mjs";
+import { createGroupJoinRequestRepository } from "./server/repositories/group-join-requests.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -785,6 +786,12 @@ const groupInviteRepository = createGroupInviteRepository(database, {
   hashToken: hashSessionToken,
   groupSetupRepository,
   ensureGroupPermissionRow,
+});
+const groupJoinRequestRepository = createGroupJoinRequestRepository(database, {
+  createId: randomUUID,
+  groupSetupRepository,
+  ensureGroupPermissionRow,
+  compactAvatarData,
 });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
@@ -2814,7 +2821,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = groupMembershipMatch[1];
-    const group = database.prepare("SELECT id, name, owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
+    const group = groupJoinRequestRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     const membership = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
     if (!membership) return json(response, 404, { error: "Você não participa deste grupo." });
@@ -2837,7 +2844,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = groupDeleteMatch[1];
-    const group = database.prepare("SELECT id, name, owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
+    const group = groupJoinRequestRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o dono pode excluir este grupo." });
     for (const [voiceRoomId, voiceRoom] of voiceRooms) {
@@ -2860,28 +2867,19 @@ async function handleHttpRequest(request, response) {
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     if (request.method === "GET") {
       if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o administrador pode ver as solicitações." });
-      const requests = database.prepare(`
-        SELECT group_join_requests.id, group_join_requests.status, group_join_requests.created_at AS createdAt,
-          group_join_requests.updated_at AS updatedAt, users.id AS userId, users.display_name AS displayName,
-          users.username, users.avatar_data AS avatarData
-        FROM group_join_requests JOIN users ON users.id = group_join_requests.user_id
-        WHERE group_join_requests.group_id = ? AND group_join_requests.status = 'pending'
-        ORDER BY group_join_requests.created_at ASC
-      `).all(groupId).map((item) => ({ ...item, avatarData: compactAvatarData(item.avatarData) }));
+      const requests = groupJoinRequestRepository.listPending(groupId);
       return json(response, 200, { requests });
     }
     if (isGroupMember(user.id, groupId)) return json(response, 409, { error: "Você já participa deste grupo." });
     const now = new Date().toISOString();
-    const existing = database.prepare("SELECT id, status FROM group_join_requests WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const existing = groupJoinRequestRepository.findForUser(groupId, user.id);
     if (existing?.status === "pending") return json(response, 409, { error: "Sua solicitação já está pendente." });
     if (existing) {
-      database.prepare("UPDATE group_join_requests SET status = 'pending', updated_at = ?, decided_at = NULL, decided_by = NULL WHERE id = ?").run(now, existing.id);
+      groupJoinRequestRepository.reopen(existing.id, groupId, now);
       createNotification({ userId: group.ownerId, type: "group_join_request", entityId: existing.id, groupId, title: `Solicitação para ${group.name}`, body: `${user.displayName} pediu para entrar no grupo.`, createdAt: now });
       return json(response, 200, { request: { id: existing.id, groupId, status: "pending", createdAt: now, updatedAt: now } });
     }
-    const joinRequest = { id: randomUUID(), groupId, userId: user.id, status: "pending", createdAt: now, updatedAt: now };
-    database.prepare("INSERT INTO group_join_requests (id, group_id, user_id, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?)")
-      .run(joinRequest.id, joinRequest.groupId, joinRequest.userId, joinRequest.createdAt, joinRequest.updatedAt);
+    const joinRequest = groupJoinRequestRepository.create({ groupId, userId: user.id, createdAt: now });
     createNotification({ userId: group.ownerId, type: "group_join_request", entityId: joinRequest.id, groupId, title: `Solicitação para ${group.name}`, body: `${user.displayName} pediu para entrar no grupo.`, createdAt: now });
     return json(response, 201, { request: joinRequest });
   }
@@ -2890,32 +2888,21 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const [, groupId, requestId] = groupJoinRequestActionMatch;
-    const group = database.prepare("SELECT id, owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
+    const group = groupJoinRequestRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o administrador pode responder solicitações." });
     readJson(request).then((body) => {
       const status = body.status === "approved" ? "approved" : body.status === "rejected" ? "rejected" : "";
       if (!status) return json(response, 400, { error: "Escolha aprovar ou recusar a solicitação." });
-      const joinRequest = database.prepare("SELECT id, group_id AS groupId, user_id AS userId, status FROM group_join_requests WHERE id = ? AND group_id = ?").get(requestId, groupId);
+      const joinRequest = groupJoinRequestRepository.find(requestId, groupId);
       if (!joinRequest) return json(response, 404, { error: "Solicitação não encontrada." });
       if (joinRequest.status !== "pending") return json(response, 409, { error: "Essa solicitação já foi respondida." });
       const now = new Date().toISOString();
       try {
-        database.exec("BEGIN");
-        if (status === "approved") {
-          const roleId = groupSetupRepository.ensureDefaultGroupRoles(groupId, group.ownerId);
-          database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, role_id, created_at) VALUES (?, ?, 'member', ?, ?)")
-            .run(groupId, joinRequest.userId, roleId, now);
-          ensureGroupPermissionRow(groupId, joinRequest.userId);
-        }
-        database.prepare("UPDATE group_join_requests SET status = ?, updated_at = ?, decided_at = ?, decided_by = ? WHERE id = ?")
-          .run(status, now, now, user.id, requestId);
-        const groupName = database.prepare("SELECT name FROM groups WHERE id = ?").get(groupId)?.name || "o grupo";
-        createNotification({ userId: joinRequest.userId, type: "group_join_decision", entityId: requestId, groupId, title: status === "approved" ? `Entrada aprovada em ${groupName}` : `Solicitação recusada em ${groupName}`, body: status === "approved" ? "Agora você já pode acessar este grupo." : "O administrador recusou sua solicitação de entrada.", createdAt: now });
-        database.exec("COMMIT");
-        return json(response, 200, { request: { ...joinRequest, status, updatedAt: now, decidedAt: now, decidedBy: user.id } });
+        const result = groupJoinRequestRepository.decide({ groupId, requestId, decidedBy: user.id, status, groupOwnerId: group.ownerId, now, createNotification });
+        if (result.kind === "already-answered") return json(response, 409, { error: "Essa solicitação já foi respondida." });
+        return json(response, 200, { request: result.request });
       } catch (error) {
-        try { database.exec("ROLLBACK"); } catch {}
         return json(response, 400, { error: status === "approved" ? "Não foi possível aprovar a entrada." : "Não foi possível recusar a solicitação." });
       }
     }).catch(() => json(response, 400, { error: "Não foi possível responder a solicitação." }));

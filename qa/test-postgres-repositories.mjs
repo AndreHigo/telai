@@ -16,6 +16,7 @@ import { createPostgresSocialRepository } from "../server/repositories/social.mj
 import { createPostgresGroupSetupRepository } from "../server/repositories/group-setup.mjs";
 import { createPostgresGroupMessageRepository } from "../server/repositories/group-messages.mjs";
 import { createPostgresGroupInviteRepository } from "../server/repositories/group-invites.mjs";
+import { createPostgresGroupJoinRequestRepository } from "../server/repositories/group-join-requests.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -119,6 +120,19 @@ try {
   assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canViewVoiceMembers: true });
   assert.equal(await groups.canGroupAction(ids.member, ids.group, "canChat"), true);
 
+  const groupJoinRequests = createPostgresGroupJoinRequestRepository(client, {
+    createId: randomUUID,
+    groupSetupRepository: groupSetup,
+    ensureGroupPermissionRow: (groupId, userId, queryDatabase = client) => groups.ensureGroupPermissionRow(groupId, userId, queryDatabase),
+    compactAvatarData: (value) => value,
+    transactionClient: true,
+  });
+  const joinRequest = await groupJoinRequests.create({ groupId: createdGroup.id, userId: ids.invitee, createdAt: now });
+  assert.equal((await groupJoinRequests.findForUser(createdGroup.id, ids.invitee))?.id, joinRequest.id);
+  assert.equal((await groupJoinRequests.listPending(createdGroup.id))[0].userId, ids.invitee);
+  assert.equal((await groupJoinRequests.decide({ groupId: createdGroup.id, requestId: joinRequest.id, decidedBy: ids.owner, status: "approved", groupOwnerId: ids.owner, now, createNotification: async () => {} })).kind, "decided");
+  assert.equal((await client.query("SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2", [createdGroup.id, ids.invitee])).rowCount, 1);
+
   const groupInvites = createPostgresGroupInviteRepository(client, {
     createId: randomUUID,
     hashToken: (token) => `hash:${token}`,
@@ -179,7 +193,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);
