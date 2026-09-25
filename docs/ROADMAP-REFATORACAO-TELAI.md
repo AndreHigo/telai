@@ -175,7 +175,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Definir `/api/v1` como namespace compatível inicial e envelope de erros consistente.
 - [x] Gerar documento OpenAPI versionado em `/api/v1/openapi.json`.
 - [x] Migrar o cliente HTTP interno para o namespace `/api/v1`.
-- [ ] Criar tipos TypeScript para o cliente interno.
+- [x] Criar tipos TypeScript para o cliente interno e validá-los com `tsc --noEmit` sem converter o shell Svelte inteiro.
 - [x] Criar Gateway de eventos separado da sinalização WebRTC em `/events`, mantendo voz, transmissão e relay em `/signal`.
 - [x] Adicionar heartbeat nativo ao WebSocket para detectar conexões mortas.
 - [x] Adicionar sequência monotônica por conexão e descarte de eventos de controle antigos no cliente.

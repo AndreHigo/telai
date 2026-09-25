@@ -13,6 +13,7 @@
     "build:frontend": "vite build --config vite.config.js",
     "test:api": "node qa/run-api.cjs",
     "test:api-client": "node qa/test-api-client.mjs",
+    "test:api-types": "tsc -p frontend/tsconfig.json --noEmit",
     "test:events": "node qa/e2e-events.cjs",
     "test:events-ui": "electron --no-sandbox qa/e2e-events-ui.cjs",
     "test:voice-activity": "node qa/test-voice-activity.cjs",
@@ -50,6 +51,7 @@
     "electron-builder": "^26.0.12",
     "svelte": "^5.57.0",
     "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
     "vite": "^8.2.2"
   },
   "build": {
