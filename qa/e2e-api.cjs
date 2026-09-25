@@ -340,6 +340,25 @@ async function main() {
     assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, attachments: [{ name: "bad.exe", type: "application/x-msdownload", data: "data:application/x-msdownload;base64,QQ==" }] })).response.status, 400);
     assert.equal((await api(owner, `/api/groups/${groupId}/messages/${attachmentMessage.body.message.id}`, "DELETE")).response.status, 200);
     assert.equal((await api(member, attachmentUrl)).response.status, 404);
+    const deniedWebhook = await api(member, `/api/groups/${groupId}/webhooks`, "POST", { roomId: group.textRoomId, name: "Membro" });
+    assert.equal(deniedWebhook.response.status, 403);
+    const webhookCreation = await api(owner, `/api/groups/${groupId}/webhooks`, "POST", { roomId: group.textRoomId, name: "CI Telai" });
+    assert.equal(webhookCreation.response.status, 201);
+    assert.match(webhookCreation.body.webhook.url, /\/api\/webhooks\//);
+    assert.ok(webhookCreation.body.webhook.token);
+    assert.equal(Object.prototype.hasOwnProperty.call(webhookCreation.body.webhook, "tokenHash"), false);
+    const webhookPath = new URL(webhookCreation.body.webhook.url).pathname;
+    const webhookList = await api(owner, `/api/groups/${groupId}/webhooks`);
+    assert.equal(webhookList.response.status, 200);
+    assert.equal(webhookList.body.webhooks.length, 1);
+    assert.equal(Object.prototype.hasOwnProperty.call(webhookList.body.webhooks[0], "token"), false);
+    const webhookMessage = await request(webhookPath, { method: "POST", body: JSON.stringify({ content: "build concluído", username: "CI Bot" }) });
+    assert.equal(webhookMessage.response.status, 201);
+    assert.equal(webhookMessage.body.message.displayName, "CI Bot");
+    const webhookOverview = await api(owner, `/api/groups/${groupId}/overview`);
+    assert.ok(webhookOverview.body.messages.some((message) => message.body === "build concluído" && message.displayName === "CI Bot"));
+    assert.equal((await api(owner, `/api/groups/${groupId}/webhooks/${webhookCreation.body.webhook.id}`, "DELETE")).response.status, 200);
+    assert.equal((await request(webhookPath, { method: "POST", body: JSON.stringify({ content: "não deve publicar" }) })).response.status, 404);
     assert.ok(overview.body.members.some((item) => item.id === member.user.id));
   });
   await check("permissions deny and restore", async () => {

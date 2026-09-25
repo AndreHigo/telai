@@ -6,6 +6,8 @@ export function ensureCompatibilityColumns(database) {
   ensureColumn(database, "group_messages", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE CASCADE");
   ensureColumn(database, "group_messages", "parent_message_id", "TEXT REFERENCES group_messages(id) ON DELETE CASCADE");
   ensureColumn(database, "group_messages", "edited_at", "TEXT");
+  ensureColumn(database, "group_messages", "author_display_name", "TEXT");
+  ensureColumn(database, "group_messages", "author_username", "TEXT");
   ensureColumn(database, "streams", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE SET NULL");
   // Salas de voz ficam em uma tabela separada dos canais de transmissão.
   // Guardamos o vínculo em uma coluna própria para manter compatibilidade com
@@ -54,6 +56,17 @@ export function ensureCompatibilityColumns(database) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS group_message_attachments_message_idx ON group_message_attachments(group_id, message_id, created_at, id);
+    CREATE TABLE IF NOT EXISTS group_webhooks (
+      id TEXT PRIMARY KEY,
+      group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+      room_id TEXT NOT NULL REFERENCES group_rooms(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      last_used_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS group_webhooks_group_idx ON group_webhooks(group_id, created_at DESC);
   `);
 }
 

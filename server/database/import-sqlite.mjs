@@ -34,6 +34,7 @@ export const IMPORT_ORDER = [
   ["group_messages", ["id"]],
   ["group_room_reads", ["group_id", "user_id", "room_key"]],
   ["group_message_attachments", ["id"]],
+  ["group_webhooks", ["id"]],
   ["direct_conversations", ["id"]],
   ["direct_conversation_members", ["conversation_id", "user_id"]],
   ["direct_messages", ["id"]],

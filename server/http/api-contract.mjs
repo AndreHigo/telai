@@ -124,6 +124,12 @@ const paths = {
     patch: ["editGroupMessage", "Edita uma mensagem do grupo"],
     delete: ["deleteGroupMessage", "Exclui uma mensagem do grupo"],
   }),
+  "/groups/{groupId}/webhooks": pathItem("Webhooks", {
+    get: ["listGroupWebhooks", "Lista webhooks do grupo"],
+    post: ["createGroupWebhook", "Cria um webhook de entrada", { methods: ["201"] }],
+  }),
+  "/groups/{groupId}/webhooks/{webhookId}": pathItem("Webhooks", { delete: ["deleteGroupWebhook", "Exclui um webhook do grupo"] }),
+  "/webhooks/{webhookId}/{token}": pathItem("Webhooks", { post: ["executeWebhook", "Publica uma mensagem por webhook", { auth: false, methods: ["201"] }] }),
   "/groups/{groupId}/attachments/{attachmentId}": pathItem("Mensagens", { get: ["getGroupMessageAttachment", "Baixa um anexo protegido da mensagem"] }),
   "/direct/conversations": pathItem("Mensagens", {
     get: ["listDirectConversations", "Lista conversas diretas"],

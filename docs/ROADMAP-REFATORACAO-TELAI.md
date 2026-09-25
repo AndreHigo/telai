@@ -280,7 +280,9 @@ enviada ao GitHub nem publicada em produção.
 
 ### Fase 5 — Plataforma e escala sob demanda
 
-- [ ] Webhooks de entrada.
+- [x] Webhooks de entrada.
+  - [x] Persistir webhooks por grupo/canal com token armazenado somente como hash e gestão restrita ao dono do grupo.
+  - [x] Executar mensagens sem sessão, publicar evento em tempo real e preservar autoria no histórico SQLite/PostgreSQL.
 - [ ] Tokens de aplicação e bots.
 - [ ] Comandos, componentes e modais.
 - [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.

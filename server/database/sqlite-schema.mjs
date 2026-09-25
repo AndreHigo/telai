@@ -292,7 +292,9 @@ export const SQLITE_SCHEMA = `
     parent_message_id TEXT REFERENCES group_messages(id) ON DELETE CASCADE,
     body TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    edited_at TEXT
+    edited_at TEXT,
+    author_display_name TEXT,
+    author_username TEXT
   );
   CREATE INDEX IF NOT EXISTS group_messages_recent_idx ON group_messages(group_id, created_at DESC);
   CREATE TABLE IF NOT EXISTS group_room_reads (
@@ -315,6 +317,18 @@ export const SQLITE_SCHEMA = `
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS group_message_attachments_message_idx ON group_message_attachments(group_id, message_id, created_at, id);
+
+  CREATE TABLE IF NOT EXISTS group_webhooks (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    room_id TEXT NOT NULL REFERENCES group_rooms(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS group_webhooks_group_idx ON group_webhooks(group_id, created_at DESC);
   CREATE TABLE IF NOT EXISTS direct_conversations (
     id TEXT PRIMARY KEY,
     created_at TEXT NOT NULL,

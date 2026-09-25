@@ -8,6 +8,7 @@ import { createGroupModerationRoutes } from "./group-moderation-routes.mjs";
 import { createGroupContentRoutes } from "./group-content-routes.mjs";
 import { createGroupInviteRoutes } from "./group-invite-routes.mjs";
 import { createGroupRuntimeRoutes } from "./group-runtime-routes.mjs";
+import { createGroupWebhookRoutes } from "./group-webhook-routes.mjs";
 
 export function createGroupRoutesRuntime({
   json,
@@ -25,6 +26,7 @@ export function createGroupRoutesRuntime({
   groupInviteRepository,
   groupMessageRepository,
   groupAttachmentRepository,
+  groupWebhookRepository,
   groupRoomPermissionRepository,
   groupRoomRepository,
   groupRoomReadRepository,
@@ -48,6 +50,8 @@ export function createGroupRoutesRuntime({
   publicOriginForRequest,
   warnLog,
   randomBytes,
+  hashToken,
+  createToken,
   groupPresence,
   voiceRooms,
   send,
@@ -134,6 +138,19 @@ export function createGroupRoutesRuntime({
     groupModerationRepository,
     publishGroupEvent,
   });
+  const handleGroupWebhookRoutes = createGroupWebhookRoutes({
+    json,
+    readJson,
+    requireUser,
+    groupSettingsRepository,
+    groupRoomRepository,
+    groupMessageRepository,
+    groupWebhookRepository,
+    hashToken,
+    createToken,
+    publishGroupEvent,
+    publicOriginForRequest,
+  });
   const handleGroupInviteRoutes = createGroupInviteRoutes({
     json,
     readJson,
@@ -187,6 +204,7 @@ export function createGroupRoutesRuntime({
     handleGroupAuditRoutes,
     handleGroupModerationRoutes,
     handleGroupContentRoutes,
+    handleGroupWebhookRoutes,
     handleGroupInviteRoutes,
     handleGroupRuntimeRoutes,
   };

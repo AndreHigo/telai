@@ -23,6 +23,7 @@ import { createGroupRoomPermissionRepository, createPostgresGroupRoomPermissionR
 import { createGroupAuditRepository, createPostgresGroupAuditRepository } from "../repositories/group-audit.mjs";
 import { createGroupModerationRepository, createPostgresGroupModerationRepository } from "../repositories/group-moderation.mjs";
 import { createGroupAttachmentRepository, createPostgresGroupAttachmentRepository } from "../repositories/group-attachments.mjs";
+import { createGroupWebhookRepository, createPostgresGroupWebhookRepository } from "../repositories/group-webhooks.mjs";
 import { createGroupRoomReadRepository, createPostgresGroupRoomReadRepository } from "../repositories/group-room-reads.mjs";
 import { createGroupPermissionRepository, createPostgresGroupPermissionRepository } from "../repositories/group-permissions.mjs";
 import { createGroupMemberRepository, createPostgresGroupMemberRepository } from "../repositories/group-members.mjs";
@@ -99,6 +100,9 @@ export function createRuntimeRepositories({
   const groupAttachmentRepository = databaseDriver === "postgres"
     ? createPostgresGroupAttachmentRepository(database, { createId: randomUUID })
     : createGroupAttachmentRepository(database, { createId: randomUUID });
+  const groupWebhookRepository = databaseDriver === "postgres"
+    ? createPostgresGroupWebhookRepository(database, { createId: randomUUID })
+    : createGroupWebhookRepository(database, { createId: randomUUID });
   const groupRoomReadRepository = databaseDriver === "postgres"
     ? createPostgresGroupRoomReadRepository(database)
     : createGroupRoomReadRepository(database);
@@ -191,6 +195,7 @@ export function createRuntimeRepositories({
     groupSetupRepository,
     groupMessageRepository,
     groupAttachmentRepository,
+    groupWebhookRepository,
     groupRoomReadRepository,
     groupRepository,
     groupModerationRepository,
