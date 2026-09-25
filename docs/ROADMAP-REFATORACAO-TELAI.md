@@ -290,6 +290,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Selecionar os repositórios PostgreSQL no runtime e validar API, gateways, segurança, administração, observabilidade, reconexão de voz e mídia contra PostgreSQL local.
 - [x] Validar a smoke test da API HTTP completa com o runtime PostgreSQL em banco temporário isolado.
 - [ ] Executar migration, importar dados e ativar PostgreSQL após validação real.
+  - [x] Executar as migrations e o importador real no banco PostgreSQL local; as 33 tabelas importáveis tinham zero registros na SQLite de origem.
+  - [x] Ativar uma instância opt-in do runtime PostgreSQL em `127.0.0.1:8788`, mantendo a prévia SQLite em `127.0.0.1:8787` e sem alterar produção.
 - [ ] Adicionar Redis/event bus somente quando houver mais de uma instância ou necessidade de filas.
 
 ## Critérios de conclusão
