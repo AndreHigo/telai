@@ -35,6 +35,7 @@ export function createEventGateway({
   groupMemberRepository,
   isPresent,
   touchGroupPresence,
+  canGroupRoomAction = () => true,
   randomUUID,
   infoLog,
   warnLog,
@@ -91,6 +92,8 @@ export function createEventGateway({
     let delivered = 0;
     for (const socket of clients) {
       if (!socket.eventGroups?.has(normalizedGroupId)) continue;
+      const roomId = message.roomId || message.message?.roomId || null;
+      if (roomId && !canGroupRoomAction(socket.user?.id, normalizedGroupId, roomId, "canView")) continue;
       if (send(socket, { ...message, groupId: normalizedGroupId })) delivered += 1;
     }
     return delivered;

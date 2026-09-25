@@ -4,6 +4,8 @@ export function createGroupRoomRoutes({
   requireUser,
   isGroupMember,
   canGroupAction,
+  groupRoleRepository,
+  groupRoomPermissionRepository,
   groupPermissionRepository,
   groupRoomRepository,
   roomSlugFor,
@@ -61,6 +63,7 @@ export function createGroupRoomRoutes({
       }
       if (request.method === "DELETE") {
         groupRoomRepository.deleteRoom(groupId, roomId, room.kind);
+        groupRoomPermissionRepository.removeForRoom(groupId, roomId);
         json(response, 200, { ok: true });
         return true;
       }
@@ -76,6 +79,53 @@ export function createGroupRoomRoutes({
         }
         return json(response, 200, { room: groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug }) });
       }).catch(() => json(response, 400, { error: "Não foi possível atualizar o canal." }));
+      return true;
+    }
+
+    const groupRoomPermissionsMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms\/([\w-]{1,64})\/permissions$/);
+    if (groupRoomPermissionsMatch && ["GET", "PATCH", "DELETE"].includes(request.method)) {
+      const user = requireUser(request, response);
+      if (!user) return true;
+      const [, groupId, roomId] = groupRoomPermissionsMatch;
+      const member = groupPermissionRepository.member(groupId, user.id);
+      if (member?.role !== "owner") {
+        json(response, 403, { error: "Somente o dono pode gerenciar permissões de canais." });
+        return true;
+      }
+      const room = groupRoomRepository.findRoom(groupId, roomId);
+      if (!room) {
+        json(response, 404, { error: "Canal não encontrado." });
+        return true;
+      }
+      if (request.method === "GET") {
+        json(response, 200, { permissions: groupRoomPermissionRepository.list(groupId, roomId) });
+        return true;
+      }
+      try {
+        const body = request.method === "DELETE" ? {} : await readJson(request, 8 * 1024);
+        const roleId = String(body.roleId || requestUrl.searchParams.get("roleId") || "").trim();
+        const role = groupRoleRepository.findRole(groupId, roleId);
+        if (!role) {
+          json(response, 404, { error: "Cargo não encontrado neste grupo." });
+          return true;
+        }
+        if (request.method === "DELETE" || body.reset === true) {
+          groupRoomPermissionRepository.remove(groupId, roomId, roleId);
+          json(response, 200, { ok: true, roleId });
+          return true;
+        }
+        const permission = groupRoomPermissionRepository.save({
+          groupId,
+          roomId,
+          roleId,
+          canView: body.canView !== false,
+          canChat: body.canChat !== false,
+          canConnect: body.canConnect !== false,
+        });
+        json(response, 200, { permission });
+      } catch {
+        json(response, 400, { error: "Não foi possível atualizar as permissões do canal." });
+      }
       return true;
     }
 

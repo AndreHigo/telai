@@ -201,6 +201,12 @@ async function main() {
     if (!openedGroup) throw new Error("nenhum grupo disponível na pré-tela de grupos");
     await waitFor("workspace de grupos", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".discord-layout"))));
     for (const [width, height] of [[1440, 900], [1024, 768], [900, 650], [640, 800]]) layouts.push(await inspectLayout(authenticatedWindow, "Grupo aberto", width, height));
+    await evaluate(authenticatedWindow, () => document.querySelector(".user-menu-chip")?.click());
+    await evaluate(authenticatedWindow, () => [...document.querySelectorAll(".account-menu-item")].find((button) => button.textContent.includes("Configurações"))?.click());
+    await waitFor("configuração do grupo", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".settings-page"))));
+    await evaluate(authenticatedWindow, () => [...document.querySelectorAll(".settings-nav button")].find((button) => button.textContent.includes("Grupo selecionado"))?.click());
+    await waitFor("permissões por canal", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".channel-permission-panel"))));
+    assert.equal(await evaluate(authenticatedWindow, () => Boolean(document.querySelector(".channel-permission-room-select select option"))), true, "seletor de canal não foi carregado");
     await clickNav(authenticatedWindow, "Ao vivo");
     for (const [width, height] of [[1440, 900], [1024, 768], [900, 650], [640, 800]]) layouts.push(await inspectLayout(authenticatedWindow, "Ao vivo", width, height));
     await clickNav(authenticatedWindow, "Seguindo");

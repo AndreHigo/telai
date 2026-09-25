@@ -97,6 +97,11 @@ const paths = {
     patch: ["updateRoom", "Atualiza uma sala"],
     delete: ["deleteRoom", "Exclui uma sala"],
   }),
+  "/groups/{groupId}/rooms/{roomId}/permissions": pathItem("Permissões", {
+    get: ["listRoomPermissions", "Lista overrides de permissão do canal"],
+    patch: ["updateRoomPermission", "Atualiza override de permissão do canal"],
+    delete: ["resetRoomPermission", "Remove override de permissão do canal"],
+  }),
   "/groups/{groupId}/roles": pathItem("Permissões", { post: ["createRole", "Cria um cargo", { methods: ["201"] }] }),
   "/groups/{groupId}/roles/order": pathItem("Permissões", { patch: ["reorderRoles", "Ordena cargos"] }),
   "/groups/{groupId}/roles/{roleId}": pathItem("Permissões", {

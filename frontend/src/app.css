@@ -2149,6 +2149,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mirante-shell.light .message-actions button:hover { color: #30466b; }
 .mirante-shell.light .message-edit-input { border-color: #c6d3e5; color: #1d2b45; background: #fff; }
 
+.channel-permission-room-select { display: grid; max-width: 360px; gap: 6px; margin-bottom: 16px; color: #9eb1d2; font-size: 10px; font-weight: 800; }
+.channel-permission-list { display: grid; gap: 8px; }
+.channel-permission-row { display: grid; grid-template-columns: minmax(160px, 1fr) auto; align-items: center; gap: 14px; border: 1px solid #263e68; border-radius: 12px; padding: 12px 14px; background: rgba(15, 30, 56, .56); }
+.channel-permission-role { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.channel-permission-role > div { display: grid; gap: 3px; min-width: 0; }
+.channel-permission-role strong { overflow: hidden; color: #edf2ff; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.channel-permission-role small { color: #7890b8; font-size: 9px; }
+.channel-permission-toggles { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.channel-permission-toggles label { display: inline-flex; align-items: center; gap: 5px; color: #aebddd; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.channel-permission-toggles input { accent-color: #6471e8; }
+.mirante-shell.light .channel-permission-row { border-color: #d0dbea; background: #f7f9fc; }
+.mirante-shell.light .channel-permission-role strong { color: #1d2b45; }
+.mirante-shell.light .channel-permission-role small, .mirante-shell.light .channel-permission-toggles label { color: #617697; }
+@media (max-width: 780px) {
+  .channel-permission-row { grid-template-columns: 1fr; }
+  .channel-permission-toggles { justify-content: flex-start; }
+}
+
 .message-composer {
   margin: 0 22px 22px;
   border-color: #304b77;

@@ -6,6 +6,7 @@ export function createVoiceRuntime({
   groupRoomRepository,
   isGroupMember,
   canGroupAction,
+  canGroupRoomAction = canGroupAction,
 }) {
   function voiceParticipantFor(socket) {
     return {
@@ -82,7 +83,7 @@ export function createVoiceRuntime({
     const room = groupRoomRepository.findRoom(groupId, voiceRoomId);
     const voiceRoom = room?.kind === "voice" ? { ...room, groupId } : null;
     if (!voiceRoom || !isGroupMember(socket.user.id, groupId)) return { ok: false, message: "Você não tem acesso a esta sala de voz." };
-    if (!canGroupAction(socket.user.id, groupId, "canChat")) return { ok: false, message: "Você não tem permissão para entrar nas salas de voz deste grupo." };
+    if (!canGroupRoomAction(socket.user.id, groupId, voiceRoomId, "canConnect")) return { ok: false, message: "Você não tem permissão para entrar nesta sala de voz." };
     return { ok: true, voiceRoom };
   }
 

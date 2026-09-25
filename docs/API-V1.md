@@ -24,6 +24,11 @@ Mensagens de grupo podem ser editadas ou excluídas pelo autor; o dono do grupo
 também pode excluir mensagens para moderação. As alterações são publicadas no
 gateway `/events` como `group-message-updated` e `group-message-deleted`.
 
+O dono também pode usar `/api/v1/groups/{groupId}/rooms/{roomId}/permissions`
+para configurar overrides por cargo (`canView`, `canChat` e `canConnect`).
+Esses overrides são aplicados no servidor ao overview, chat, voz e entrega de
+eventos; remover o override faz o cargo voltar a herdar as permissões do grupo.
+
 O namespace ainda não representa uma promessa de compatibilidade eterna para
 cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
 incompatíveis devem ser introduzidas em outra versão e documentadas aqui.

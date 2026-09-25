@@ -1,4 +1,10 @@
-export function createGroupAccessRepository(database) {
+export function createGroupAccessRepository(database, { roomPermissionRepository = null } = {}) {
+  function baseRoomPermission(permissions, action) {
+    if (action === "canView") return true;
+    if (action === "canConnect") return Boolean(permissions.canChat);
+    return Boolean(permissions[action]);
+  }
+
   function isGroupMember(userId, groupId) {
     return Boolean(database.prepare("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, userId));
   }
@@ -47,10 +53,27 @@ export function createGroupAccessRepository(database) {
     return Boolean(groupPermissions(groupId, userId)?.[action]);
   }
 
-  return { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction };
+  function canGroupRoomAction(userId, groupId, roomId, action) {
+    const permissions = groupPermissions(groupId, userId);
+    if (!permissions) return false;
+    if (!roomId || !roomPermissionRepository) return baseRoomPermission(permissions, action);
+    const member = database.prepare("SELECT role, role_id AS roleId FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, userId);
+    if (member?.role === "owner") return true;
+    const override = member?.roleId ? roomPermissionRepository.find(groupId, roomId, member.roleId) : null;
+    if (!override) return baseRoomPermission(permissions, action);
+    return Boolean(override[action]);
+  }
+
+  return { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction, canGroupRoomAction };
 }
 
-export function createPostgresGroupAccessRepository(database) {
+export function createPostgresGroupAccessRepository(database, { roomPermissionRepository = null } = {}) {
+  function baseRoomPermission(permissions, action) {
+    if (action === "canView") return true;
+    if (action === "canConnect") return Boolean(permissions.canChat);
+    return Boolean(permissions[action]);
+  }
+
   async function isGroupMember(userId, groupId, queryDatabase = database) {
     const result = await queryDatabase.query(
       "SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2",
@@ -112,7 +135,19 @@ export function createPostgresGroupAccessRepository(database) {
     return Boolean(permissions?.[action]);
   }
 
-  return { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction };
+  async function canGroupRoomAction(userId, groupId, roomId, action) {
+    const permissions = await groupPermissions(groupId, userId);
+    if (!permissions) return false;
+    if (!roomId || !roomPermissionRepository) return baseRoomPermission(permissions, action);
+    const memberResult = await database.query("SELECT role, role_id AS \"roleId\" FROM group_members WHERE group_id = $1 AND user_id = $2", [groupId, userId]);
+    const member = memberResult.rows[0];
+    if (member?.role === "owner") return true;
+    const override = member?.roleId ? await roomPermissionRepository.find(groupId, roomId, member.roleId) : null;
+    if (!override) return baseRoomPermission(permissions, action);
+    return Boolean(override[action]);
+  }
+
+  return { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction, canGroupRoomAction };
 }
 
 export function createGroupRepository(database, { createId, groupSetupRepository } = {}) {

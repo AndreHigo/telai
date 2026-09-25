@@ -5,8 +5,9 @@ import { IMPORT_ORDER } from "../server/database/import-sqlite.mjs";
 import { SQLITE_SCHEMA } from "../server/database/sqlite-schema.mjs";
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const migrationPath = path.join(rootDir, "server", "database", "migrations", "001_initial.sql");
-const sql = await fs.readFile(migrationPath, "utf8");
+const migrationsDir = path.join(rootDir, "server", "database", "migrations");
+const migrationFiles = (await fs.readdir(migrationsDir)).filter((file) => /^\d+_.+\.sql$/i.test(file)).sort();
+const sql = (await Promise.all(migrationFiles.map((file) => fs.readFile(path.join(migrationsDir, file), "utf8")))).join("\n");
 const executableSql = sql.replace(/--[^\r\n]*/g, "");
 const importTables = IMPORT_ORDER.map(([table]) => table);
 const sqliteTables = [...SQLITE_SCHEMA.matchAll(/CREATE TABLE IF NOT EXISTS\s+([a-z_]+)/gi)].map(([, table]) => table);
@@ -19,4 +20,4 @@ if (missingTables.length || missingFromSqliteSchema.length || extraInSqliteSchem
   console.error(JSON.stringify({ ok: false, missingTables, missingFromSqliteSchema, extraInSqliteSchema, forbiddenTokens }));
   process.exit(1);
 }
-console.log(JSON.stringify({ ok: true, tables: importTables.length, schemaParity: true, migration: path.relative(rootDir, migrationPath) }));
+console.log(JSON.stringify({ ok: true, tables: importTables.length, schemaParity: true, migrations: migrationFiles }));

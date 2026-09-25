@@ -19,6 +19,7 @@ export function createGroupRuntimeRoutes({
   voiceParticipantFor,
   touchGroupPresence,
   isPresent,
+  canGroupRoomAction = () => true,
 }) {
   return async function handleGroupRuntimeRoutes(request, response, requestUrl) {
     const groupDeleteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})$/);
@@ -63,8 +64,8 @@ export function createGroupRuntimeRoutes({
         json(response, 404, { error: "Grupo não encontrado." });
         return true;
       }
-      const rooms = groupRoomRepository.listTextRooms(groupId);
-      const voiceRoomsForGroup = groupRoomRepository.listVoiceRooms(groupId).map((room) => {
+      const rooms = groupRoomRepository.listTextRooms(groupId).filter((room) => canGroupRoomAction(user.id, groupId, room.id, "canView"));
+      const voiceRoomsForGroup = groupRoomRepository.listVoiceRooms(groupId).filter((room) => canGroupRoomAction(user.id, groupId, room.id, "canView")).map((room) => {
         const runtimeRoom = voiceRooms.get(room.id);
         const canView = groupPermissions(groupId, user.id)?.canViewVoiceMembers !== false;
         return { ...room, participants: canView ? [...(runtimeRoom?.participants?.values() || [])].map(voiceParticipantFor) : [] };
@@ -75,9 +76,10 @@ export function createGroupRuntimeRoutes({
         return (order[left.kind] ?? 9) - (order[right.kind] ?? 9) || String(left.name).localeCompare(String(right.name), "pt-BR");
       });
       const members = groupMemberRepository.listMembers(groupId).map((member) => ({ ...member, online: isPresent(groupId, member.id) }));
+      const visibleRoomIds = new Set(rooms.filter((room) => room.kind === "text").map((room) => room.id));
       const messages = requestUrl.searchParams.get("includeMessages") === "0"
         ? undefined
-        : groupMessageRepository.listMessages(groupId);
+        : groupMessageRepository.listMessages(groupId).filter((message) => !message.roomId || visibleRoomIds.has(message.roomId));
       const streams = streamRepository.listGroupStreams(groupId).filter(runtimeStreamIsLive);
       json(response, 200, {
         group,

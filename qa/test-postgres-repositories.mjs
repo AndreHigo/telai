@@ -19,6 +19,7 @@ import { createPostgresGroupInviteRepository } from "../server/repositories/grou
 import { createPostgresGroupJoinRequestRepository } from "../server/repositories/group-join-requests.mjs";
 import { createPostgresGroupRoleRepository } from "../server/repositories/group-roles.mjs";
 import { createPostgresGroupRoomRepository } from "../server/repositories/group-rooms.mjs";
+import { createPostgresGroupRoomPermissionRepository } from "../server/repositories/group-room-permissions.mjs";
 import { createPostgresGroupPermissionRepository } from "../server/repositories/group-permissions.mjs";
 import { createPostgresGroupMemberRepository } from "../server/repositories/group-members.mjs";
 import { createPostgresStreamRepository } from "../server/repositories/streams.mjs";
@@ -187,6 +188,16 @@ try {
   assert.equal((await groupRooms.findRoom(createdGroup.id, textRoom.id)).slug, "discussao-atualizada");
   assert.equal(await groupRooms.deleteRoom(createdGroup.id, voiceRoom.id, "voice"), true);
 
+  const roomPermissions = createPostgresGroupRoomPermissionRepository(client);
+  const roomAwareGroups = createPostgresGroupAccessRepository(client, { roomPermissionRepository: roomPermissions });
+  assert.equal(await roomAwareGroups.canGroupRoomAction(ids.member, createdGroup.id, textRoom.id, "canChat"), true);
+  const roomOverride = await roomPermissions.save({ groupId: createdGroup.id, roomId: textRoom.id, roleId: createdDefaultRole.id, canView: true, canChat: false, canConnect: true, updatedAt: now });
+  assert.equal(roomOverride.canChat, false);
+  assert.equal(await roomAwareGroups.canGroupRoomAction(ids.member, createdGroup.id, textRoom.id, "canChat"), false);
+  assert.equal((await roomPermissions.list(createdGroup.id, textRoom.id)).length, 1);
+  assert.equal(await roomPermissions.remove(createdGroup.id, textRoom.id, createdDefaultRole.id), true);
+  assert.equal(await roomAwareGroups.canGroupRoomAction(ids.member, createdGroup.id, textRoom.id, "canChat"), true);
+
   const groupPermissions = createPostgresGroupPermissionRepository(client);
   await groupPermissions.ensure(createdGroup.id, ids.member);
   assert.equal((await groupPermissions.member(createdGroup.id, ids.member))?.role, "member");
@@ -293,7 +304,7 @@ try {
   assert.equal(await groupSettings.deleteGroup(createdGroup.id), true);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "group-members", "group-settings", "user-profile", "site-admin", "maintenance", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-room-permissions", "group-permissions", "group-members", "group-settings", "user-profile", "site-admin", "maintenance", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

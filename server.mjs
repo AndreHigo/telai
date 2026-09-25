@@ -40,6 +40,7 @@ import { createGroupInviteRepository } from "./server/repositories/group-invites
 import { createGroupJoinRequestRepository } from "./server/repositories/group-join-requests.mjs";
 import { createGroupRoleRepository } from "./server/repositories/group-roles.mjs";
 import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs";
+import { createGroupRoomPermissionRepository } from "./server/repositories/group-room-permissions.mjs";
 import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
 import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
 import { createStreamRepository } from "./server/repositories/streams.mjs";
@@ -415,7 +416,8 @@ let maintenanceDatabasePool = null;
 
 ensureCompatibilityColumns(database);
 ensureCompatibilityIndexes(database);
-const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
+const groupRoomPermissionRepository = createGroupRoomPermissionRepository(database);
+const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction, canGroupRoomAction } = createGroupAccessRepository(database, { roomPermissionRepository: groupRoomPermissionRepository });
 const directConversationRepository = createDirectConversationRepository(database, { compactUserSummary, createId: randomUUID });
 const { directConversationForUser, directConversationPayload } = directConversationRepository;
 const sessionRepository = createSessionRepository(database, { hashSessionToken });
@@ -518,6 +520,7 @@ const {
   groupRoomRepository,
   isGroupMember,
   canGroupAction,
+  canGroupRoomAction,
 });
 const groupPermissionRepository = createGroupPermissionRepository(database);
 const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
@@ -552,6 +555,8 @@ const handleGroupRoomRoutes = createGroupRoomRoutes({
   requireUser,
   isGroupMember,
   canGroupAction,
+  groupRoleRepository,
+  groupRoomPermissionRepository,
   groupPermissionRepository,
   groupRoomRepository,
   roomSlugFor,
@@ -564,6 +569,7 @@ const handleGroupContentRoutes = createGroupContentRoutes({
   isGroupMember,
   canGroupAction,
   groupMessageRepository,
+  canGroupRoomAction,
   groupPermissionRepository,
   publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
 });
@@ -685,6 +691,7 @@ const handleGroupRuntimeRoutes = createGroupRuntimeRoutes({
   voiceParticipantFor,
   touchGroupPresence,
   isPresent,
+  canGroupRoomAction,
 });
 const iceConfiguration = createIceConfiguration({ randomUUID, createHmac });
 const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, requireLogin, publicOriginForRequest });
@@ -1082,6 +1089,7 @@ eventGateway = createEventGateway({
   isGroupMember,
   groupMemberRepository,
   isPresent,
+  canGroupRoomAction,
   touchGroupPresence,
   randomUUID,
   infoLog,

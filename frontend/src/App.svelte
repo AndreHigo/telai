@@ -335,6 +335,8 @@
   let voiceSpeakingSignalKnownParticipantIds = new Set();
   let GroupVoiceWorkspace = null;
   let groupVoiceWorkspaceLoad = null;
+  let GroupChannelPermissionsSettings = null;
+  let groupChannelPermissionsSettingsLoad = null;
   let groupEventGateway = null;
 
   function loadGroupVoiceWorkspace() {
@@ -347,6 +349,17 @@
   }
 
   $: if (selectedRoom?.kind === "voice" && !GroupVoiceWorkspace) void loadGroupVoiceWorkspace();
+
+  function loadGroupChannelPermissionsSettings() {
+    if (GroupChannelPermissionsSettings || groupChannelPermissionsSettingsLoad) return groupChannelPermissionsSettingsLoad;
+    groupChannelPermissionsSettingsLoad = import("./features/settings/GroupChannelPermissionsSettings.svelte")
+      .then((module) => { GroupChannelPermissionsSettings = module.default; })
+      .catch((error) => reportClientError("group_channel_permissions_load_error", error))
+      .finally(() => { groupChannelPermissionsSettingsLoad = null; });
+    return groupChannelPermissionsSettingsLoad;
+  }
+
+  $: if (settingsTab === "group" && !GroupChannelPermissionsSettings) void loadGroupChannelPermissionsSettings();
   let voiceSoundContext = null;
   let pendingNotificationSound = false;
   let voiceActivityTimer;
@@ -614,6 +627,9 @@
   let groupInviteLink = "";
   let groupInviteBusyId = "";
   let groupAdminError = "";
+  let selectedRoomPermissionId = "";
+  let groupRoomPermissions = [];
+  let roomPermissionBusyKey = "";
   const rolePermissionOptions = [
     { key: "canChat", category: "Texto", label: "Conversar", description: "Enviar mensagens e conversar nas salas." },
     { key: "canInvite", category: "Geral", label: "Convidar", description: "Adicionar pessoas ao grupo." },
@@ -2033,7 +2049,59 @@
       groupRoles = result.roles || [];
       groupInvites = result.invites || [];
       groupJoinRequests = result.joinRequests || [];
+      const firstRoom = (groupOverview?.rooms || []).find((room) => room.kind === "text" || room.kind === "voice");
+      selectedRoomPermissionId = firstRoom?.id || "";
+      if (selectedRoomPermissionId && selectedGroup?.role === "owner") await loadGroupRoomPermissions(selectedRoomPermissionId);
     } catch (error) { groupAdminError = error.message; }
+  }
+
+  async function loadGroupRoomPermissions(roomId) {
+    selectedRoomPermissionId = roomId;
+    groupRoomPermissions = [];
+    if (!selectedGroupId || !roomId || selectedGroup?.role !== "owner") return;
+    try {
+      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms/${encodeURIComponent(roomId)}/permissions`);
+      groupRoomPermissions = result.permissions || [];
+    } catch (error) {
+      groupAdminError = error.message;
+    }
+  }
+
+  async function updateGroupRoomPermission(role, key, event) {
+    if (!selectedGroupId || !selectedRoomPermissionId || selectedGroup?.role !== "owner") return;
+    roomPermissionBusyKey = `${role.id}:${key}`;
+    groupAdminError = "";
+    const current = groupRoomPermissions.find((permission) => permission.roleId === role.id);
+    const next = {
+      roleId: role.id,
+      canView: current?.canView ?? true,
+      canChat: current?.canChat ?? true,
+      canConnect: current?.canConnect ?? true,
+    };
+    next[key] = event.currentTarget.checked;
+    try {
+      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms/${encodeURIComponent(selectedRoomPermissionId)}/permissions`, { method: "PATCH", body: JSON.stringify(next) });
+      groupRoomPermissions = [...groupRoomPermissions.filter((permission) => permission.roleId !== role.id), result.permission];
+      notice = `Permissões de ${role.name} atualizadas neste canal.`;
+    } catch (error) {
+      groupAdminError = error.message;
+    } finally {
+      roomPermissionBusyKey = "";
+    }
+  }
+
+  async function resetGroupRoomPermission(role) {
+    if (!selectedGroupId || !selectedRoomPermissionId || selectedGroup?.role !== "owner") return;
+    roomPermissionBusyKey = `${role.id}:reset`;
+    try {
+      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms/${encodeURIComponent(selectedRoomPermissionId)}/permissions?roleId=${encodeURIComponent(role.id)}`, { method: "DELETE" });
+      groupRoomPermissions = groupRoomPermissions.filter((permission) => permission.roleId !== role.id);
+      notice = `O cargo ${role.name} voltou a herdar o canal.`;
+    } catch (error) {
+      groupAdminError = error.message;
+    } finally {
+      roomPermissionBusyKey = "";
+    }
   }
 
   function roleListAfterMove(roleId, targetIndex) {
@@ -7264,6 +7332,7 @@
               {/if}
             </div>
           </section>
+          {#if GroupChannelPermissionsSettings}<svelte:component this={GroupChannelPermissionsSettings} rooms={rooms} bind:selectedRoomId={selectedRoomPermissionId} {groupRoles} permissions={groupRoomPermissions} isOwner={selectedGroup?.role === "owner"} busyKey={roomPermissionBusyKey} onLoadRoom={loadGroupRoomPermissions} onUpdatePermission={updateGroupRoomPermission} onResetPermission={resetGroupRoomPermission} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}
             <section class="settings-card">
               <div class="settings-card-heading"><div><p class="eyebrow">acesso</p><h2>Convites</h2><p class="muted">Gere um link temporário para adicionar pessoas a este servidor.</p></div><button class="primary rounded-xl px-4 py-2 text-xs font-extrabold" type="button" on:click={createGroupInvite} disabled={groupInviteCreating || (selectedGroup?.role !== "owner" && !groupMembers.find((member) => member.id === user.id)?.canInvite)}>{groupInviteCreating ? "Criando…" : "Criar convite"}</button></div>
               <p class="admin-help">Cada convite vale por 72 horas e permite até 5 entradas.</p>

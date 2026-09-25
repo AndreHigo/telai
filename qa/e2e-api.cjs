@@ -292,6 +292,12 @@ async function main() {
       canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: false,
     });
     assert.equal(result.response.status, 200);
+    const restricted = await api(owner, `/api/groups/${groupId}/rooms/${group.textRoomId}/permissions`, "PATCH", { roleId: defaultRole.id, canView: true, canChat: false, canConnect: true });
+    assert.equal(restricted.response.status, 200);
+    assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "canal restrito" })).response.status, 403);
+    assert.equal((await api(owner, `/api/groups/${groupId}/rooms/${group.textRoomId}/permissions`, "GET")).body.permissions.some((item) => item.roleId === defaultRole.id && item.canChat === false), true);
+    assert.equal((await api(owner, `/api/groups/${groupId}/rooms/${group.textRoomId}/permissions?roleId=${encodeURIComponent(defaultRole.id)}`, "DELETE")).response.status, 200);
+    assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "canal liberado" })).response.status, 201);
   });
   await check("roles and member assignment", async () => {
     const roleResult = await api(owner, `/api/groups/${groupId}/roles`, "POST", { name: "QA Moderator", color: "#ff6600", canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true });

@@ -4,6 +4,7 @@ export function createGroupContentRoutes({
   requireUser,
   isGroupMember,
   canGroupAction,
+  canGroupRoomAction = canGroupAction,
   groupMessageRepository,
   groupPermissionRepository,
   publishGroupEvent = () => {},
@@ -29,6 +30,7 @@ export function createGroupContentRoutes({
         const room = groupMessageRepository.findTextRoom(groupId, requestedRoomId);
         if (requestedRoomId && !room) return json(response, 400, { error: "Essa sala não existe neste grupo." });
         if (room?.kind === "live") return json(response, 400, { error: "Salas de transmissão não recebem mensagens de chat." });
+        if (!canGroupRoomAction(user.id, groupId, room?.id || null, "canChat")) return json(response, 403, { error: "Você não tem permissão para conversar neste canal." });
         const message = groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt: new Date().toISOString() });
         publishGroupEvent(groupId, { type: "group-message", message });
         return json(response, 201, { message });
@@ -62,7 +64,7 @@ export function createGroupContentRoutes({
           json(response, 404, { error: "Mensagem não encontrada." });
           return true;
         }
-        publishGroupEvent(groupId, { type: "group-message-deleted", messageId });
+        publishGroupEvent(groupId, { type: "group-message-deleted", messageId, roomId: message.roomId || null });
         json(response, 200, { ok: true, messageId });
         return true;
       }

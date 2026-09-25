@@ -90,6 +90,34 @@ async function main() {
     await waitFor(ownerEvents, (message) => message.type === "group-subscribed" && message.groupId === groupId);
     await waitFor(memberEvents, (message) => message.type === "group-subscribed" && message.groupId === groupId);
 
+    const admin = await request(baseUrl, `/api/groups/${groupId}/admin`, { headers: { cookie: owner.cookie } });
+    const defaultRole = admin.body.roles.find((role) => role.isDefault);
+    assert.ok(defaultRole, "cargo padrão não encontrado");
+    const hiddenPermission = await request(baseUrl, `/api/groups/${groupId}/rooms/${textRoom.id}/permissions`, {
+      method: "PATCH",
+      headers: { cookie: owner.cookie },
+      body: JSON.stringify({ roleId: defaultRole.id, canView: false, canChat: false, canConnect: false }),
+    });
+    assert.equal(hiddenPermission.response.status, 200, JSON.stringify(hiddenPermission.body));
+    const hiddenMessage = await request(baseUrl, `/api/groups/${groupId}/messages`, {
+      method: "POST",
+      headers: { cookie: owner.cookie },
+      body: JSON.stringify({ roomId: textRoom.id, body: "evento privado" }),
+    });
+    assert.equal(hiddenMessage.response.status, 201);
+    await sleep(250);
+    assert.equal(memberEvents.messages.some((message) => message.message?.id === hiddenMessage.body.message.id), false, "evento de canal oculto vazou");
+    const resetHiddenPermission = await request(baseUrl, `/api/groups/${groupId}/rooms/${textRoom.id}/permissions?roleId=${encodeURIComponent(defaultRole.id)}`, {
+      method: "DELETE",
+      headers: { cookie: owner.cookie },
+    });
+    assert.equal(resetHiddenPermission.response.status, 200);
+    const permissionsAfterReset = await request(baseUrl, `/api/groups/${groupId}/rooms/${textRoom.id}/permissions`, { headers: { cookie: owner.cookie } });
+    assert.equal(permissionsAfterReset.body.permissions.length, 0, JSON.stringify(permissionsAfterReset.body));
+    const memberOverviewAfterReset = await request(baseUrl, `/api/groups/${groupId}/overview`, { headers: { cookie: member.cookie } });
+    assert.equal(memberOverviewAfterReset.response.status, 200);
+    assert.equal(memberOverviewAfterReset.body.rooms.some((room) => room.id === textRoom.id), true);
+
     const createdMessage = await request(baseUrl, `/api/groups/${groupId}/messages`, {
       method: "POST",
       headers: { cookie: owner.cookie },
