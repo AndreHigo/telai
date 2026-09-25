@@ -91,6 +91,7 @@ import { createObservabilityRuntime } from "./server/observability/runtime.mjs";
 import { createObservabilitySnapshot } from "./server/observability/snapshot.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
+import { compactAvatarData, compactUserSummary } from "./server/shared/presentation.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -204,16 +205,6 @@ const maxOAuthStates = 1000;
 // listas e mensagens. O limite de resposta é separado e considera o aumento
 // aproximado de 4/3 causado pela codificação base64.
 const maxAvatarUploadLength = 7 * 1024 * 1024;
-const maxInlineAvatarLength = 128 * 1024;
-
-function compactAvatarData(value) {
-  const avatarData = String(value || "");
-  return avatarData && avatarData.length <= maxInlineAvatarLength ? avatarData : null;
-}
-
-function compactUserSummary(user) {
-  return user ? { ...user, avatarData: compactAvatarData(user.avatarData) } : user;
-}
 
 const {
   allowClientErrorRequest,

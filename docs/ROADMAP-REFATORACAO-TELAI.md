@@ -69,6 +69,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair normalização de nomes e limites de sala para módulos de domínio.
 - [x] Extrair configuração de runtime e limites operacionais.
 - [x] Extrair validações puras de entrada e normalização de dados.
+- [x] Centralizar compactação de avatares e resumos de usuário em `server/shared/presentation.mjs`, preservando limites de payload para SQLite/PostgreSQL.
 - [x] Padronizar formato de erros HTTP sem alterar contratos existentes, mantendo `error` e adicionando `code` estável em `server/http/body.mjs`.
 - [x] Extrair abertura do SQLite e migrações genéricas para `server/repositories`.
 - [x] Isolar colunas e índices de compatibilidade SQLite do bootstrap principal.
