@@ -16,6 +16,7 @@
     createVoiceAudioConstraints,
     createVoiceInputPipeline,
   } from "./services/media/voice-input.js";
+  import { createVoiceCaptureService } from "./services/media/voice-capture.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { HugeiconsIcon } from "@hugeicons/svelte";
@@ -500,6 +501,18 @@
     onNativeProcessingDetails: (details) => { voiceNativeProcessingDetails = details; },
     onNoiseSuppressionStatus: (status) => { voiceNoiseSuppressionStatus = status; },
     onProcessingError: (error) => reportClientError("voice_input_volume_processing_error", error, { profile: voiceInputProfile }),
+  });
+  const voiceCaptureService = createVoiceCaptureService({
+    getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia({ audio: constraints, video: false }),
+    getAudioConstraints: () => voiceAudioConstraints(),
+    getSelectedInputDeviceId: () => selectedInputDeviceId,
+    getSelectionRevision: () => voiceInputSelectionRevision,
+    rememberCapturedInputDevice: (track, requestedDeviceId) => rememberCapturedInputDevice(track, requestedDeviceId),
+    processVoiceInputStream: (stream) => processVoiceInputStream(stream),
+    stopVoiceInputStream: (stream) => stopVoiceInputStream(stream),
+    isUnavailableVoiceInputError: (error) => isUnavailableVoiceInputError(error),
+    clearUnavailableInputDevice: (deviceId) => clearUnavailableInputDevice(deviceId),
+    onFallbackStream: (stream) => voiceInputFallbackStreams.add(stream),
   });
   let voiceDevicesBusy = false;
   let voiceDevicesError = "";
@@ -1760,54 +1773,9 @@
 
   async function captureVoiceInputStream({ expectedDeviceId = selectedInputDeviceId, selectionRevision = voiceInputSelectionRevision, fallbackToDefault = true } = {}) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Este navegador não permite acessar o microfone.");
-    const requestedDeviceId = expectedDeviceId || "";
-    let stream;
-    let capturedStream;
-    try {
-      const constraints = voiceAudioConstraints();
-      if (requestedDeviceId) constraints.deviceId = { exact: requestedDeviceId };
-      stream = await navigator.mediaDevices.getUserMedia({ audio: constraints, video: false });
-      const track = stream.getAudioTracks()[0];
-      if (!track) throw new Error("Nenhum microfone foi encontrado.");
-      const capturedDevice = rememberCapturedInputDevice(track, requestedDeviceId);
-      if (selectionRevision !== voiceInputSelectionRevision || requestedDeviceId !== selectedInputDeviceId) {
-        const error = new Error("A seleção do microfone mudou durante a captura.");
-        error.name = "SelectedDeviceCaptureSupersededError";
-        throw error;
-      }
-      capturedStream = await processVoiceInputStream(stream);
-      voiceInputDeviceByStream.set(capturedStream, capturedDevice);
-      if (selectionRevision !== voiceInputSelectionRevision || requestedDeviceId !== selectedInputDeviceId) {
-        const error = new Error("A seleção do microfone mudou durante o processamento.");
-        error.name = "SelectedDeviceCaptureSupersededError";
-        throw error;
-      }
-      return capturedStream;
-    } catch (error) {
-      if (capturedStream) stopVoiceInputStream(capturedStream);
-      else if (stream) stream.getTracks().forEach((track) => track.stop());
-
-      // IDs persistidos pelo Chromium/Electron podem mudar após atualização
-      // do Windows, troca de porta USB ou reinstalação do driver. Tentar uma
-      // vez sem o ID exato recupera o microfone padrão sem deixar o usuário
-      // entrar na sala marcado como "sem microfone".
-      if (fallbackToDefault && requestedDeviceId && isUnavailableVoiceInputError(error) && selectedInputDeviceId === requestedDeviceId) {
-        clearUnavailableInputDevice(requestedDeviceId);
-        try {
-          const fallbackStream = await captureVoiceInputStream({
-            expectedDeviceId: "",
-            selectionRevision,
-            fallbackToDefault: false,
-          });
-          voiceInputFallbackStreams.add(fallbackStream);
-          return fallbackStream;
-        } catch (fallbackError) {
-          fallbackError.voiceInputFallbackAttempted = true;
-          throw fallbackError;
-        }
-      }
-      throw error;
-    }
+    const captured = await voiceCaptureService.capture({ expectedDeviceId, selectionRevision, fallbackToDefault });
+    voiceInputDeviceByStream.set(captured.stream, captured.device);
+    return captured.stream;
   }
 
   function bindVoiceLocalTrack(track) {
