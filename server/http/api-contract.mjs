@@ -92,11 +92,26 @@ const paths = {
     post: ["installApplicationBot", "Instala o bot em um grupo", { methods: ["201"] }],
     delete: ["uninstallApplicationBot", "Remove o bot de um grupo"],
   }),
+  "/groups/{groupId}/applications/{applicationId}/interactions": pathItem("Aplicações", {
+    post: ["createApplicationInteraction", "Cria uma interação de comando para o bot", { methods: ["202"] }],
+  }),
+  "/interactions/{interactionId}/components": pathItem("Aplicações", {
+    post: ["createComponentInteraction", "Envia uma interação de componente", { methods: ["202"] }],
+  }),
+  "/interactions/{interactionId}/modal": pathItem("Aplicações", {
+    post: ["submitModalInteraction", "Envia o resultado de um modal", { methods: ["202"] }],
+  }),
   "/bot/groups/{groupId}/messages": pathItem("Aplicações", {
     post: ["createBotMessage", "Publica mensagem autenticada por token de bot", { auth: false, methods: ["201"] }],
   }),
   "/bot/applications/commands": pathItem("Aplicações", {
     get: ["getBotCommandManifest", "Retorna o manifesto de comandos do bot", { auth: false }],
+  }),
+  "/bot/interactions": pathItem("Aplicações", {
+    get: ["pollBotInteractions", "Obtém interações pendentes do bot", { auth: false }],
+  }),
+  "/bot/interactions/{interactionId}/respond": pathItem("Aplicações", {
+    post: ["respondBotInteraction", "Responde a uma interação de bot", { auth: false }],
   }),
   "/users/search": pathItem("Social", { get: ["searchUsers", "Busca usuários"] }),
   "/social": pathItem("Social", { get: ["getSocialGraph", "Retorna amizades, solicitações e follows"] }),

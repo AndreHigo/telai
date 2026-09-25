@@ -397,7 +397,41 @@ async function main() {
     assert.equal((await api(owner, `/api/applications/${applicationId}/commands/${commandCreation.body.command.id}`, "DELETE")).response.status, 200);
     assert.equal((await api(owner, `/api/applications/${applicationId}/commands/${commandCreation.body.command.id}`, "DELETE")).response.status, 404);
     const install = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "POST");
-    assert.equal(install.response.status, 201);
+    assert.equal(install.response.status, 201, JSON.stringify(install.body));
+    const interactionCommand = await api(owner, `/api/applications/${applicationId}/commands`, "POST", { name: "ping", description: "Responde ao ping" });
+    assert.equal(interactionCommand.response.status, 201, JSON.stringify(interactionCommand.body));
+    const createdInteraction = await api(owner, `/api/groups/${groupId}/applications/${applicationId}/interactions`, "POST", { roomId: group.textRoomId, commandName: "ping" });
+    assert.equal(createdInteraction.response.status, 202, JSON.stringify(createdInteraction.body));
+    assert.equal(createdInteraction.body.interaction.kind, "command");
+    const botPoll = await request("/api/bot/interactions", { headers: { authorization: `Bot ${tokenCreation.body.token}` } });
+    assert.equal(botPoll.response.status, 200);
+    const pendingInteraction = botPoll.body.interactions.find((item) => item.id === createdInteraction.body.interaction.id);
+    assert.ok(pendingInteraction);
+    assert.equal(pendingInteraction.status, "claimed");
+    const botInteractionResponse = await request(`/api/bot/interactions/${pendingInteraction.id}/respond`, {
+      method: "POST",
+      headers: { authorization: `Bot ${tokenCreation.body.token}` },
+      body: JSON.stringify({
+        type: "message",
+        content: "pong",
+        components: [
+          { type: "button", customId: "confirm", label: "Confirmar", style: "primary" },
+          { type: "modal", customId: "feedback", title: "Feedback", fields: [{ customId: "text", label: "Mensagem", style: "paragraph" }] },
+        ],
+      }),
+    });
+    assert.equal(botInteractionResponse.response.status, 200, JSON.stringify(botInteractionResponse.body));
+    assert.equal(botInteractionResponse.body.interaction.response.content, "pong");
+    const componentInteraction = await api(owner, `/api/interactions/${pendingInteraction.id}/components`, "POST", { customId: "confirm" });
+    assert.equal(componentInteraction.response.status, 202, JSON.stringify(componentInteraction.body));
+    assert.equal(componentInteraction.body.interaction.kind, "component");
+    const modalInteraction = await api(owner, `/api/interactions/${pendingInteraction.id}/modal`, "POST", { customId: "feedback", fields: { text: "ok" } });
+    assert.equal(modalInteraction.response.status, 202, JSON.stringify(modalInteraction.body));
+    assert.equal(modalInteraction.body.interaction.kind, "modal");
+    const childPoll = await request("/api/bot/interactions?limit=5", { headers: { authorization: `Bot ${tokenCreation.body.token}` } });
+    assert.equal(childPoll.response.status, 200);
+    assert.equal(childPoll.body.interactions.filter((item) => [componentInteraction.body.interaction.id, modalInteraction.body.interaction.id].includes(item.id)).length, 2);
+    assert.equal((await api(owner, `/api/applications/${applicationId}/commands/${interactionCommand.body.command.id}`, "DELETE")).response.status, 200);
     const botMessage = await request(`/api/bot/groups/${groupId}/messages`, {
       method: "POST",
       headers: { authorization: `Bot ${tokenCreation.body.token}` },

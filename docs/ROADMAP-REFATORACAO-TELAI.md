@@ -295,7 +295,9 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Comandos, componentes e modais.
   - [x] Registrar comandos por aplicação com validação de nome, descrição e opções em SQLite/PostgreSQL.
   - [x] Expor o manifesto de comandos ao bot autenticado sem vazar tokens ou dados internos.
-  - [ ] Implementar despacho de interações, componentes e modais com permissões e respostas persistentes.
+  - [x] Implementar fila expirada, claim exclusivo, resposta sanitizada e despacho de eventos para interações de comandos.
+  - [x] Aceitar interações de componentes e submissões de modal com validação de campos e opções.
+  - [ ] Persistir respostas no histórico visual e integrar renderização no frontend.
 - [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.
 - [x] Criar migration baseline e importador offline SQLite → PostgreSQL.
 - [x] Subir PostgreSQL local em Docker e aplicar/validar a migration baseline sem cutover.

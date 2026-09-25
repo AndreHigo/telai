@@ -25,6 +25,117 @@ function normalizeCommandOptions(value) {
   return options;
 }
 
+function normalizeInteractionOptions(definitions, value) {
+  const input = value === undefined ? {} : value;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const definitionMap = new Map((definitions || []).map((item) => [item.name, item]));
+  const output = {};
+  for (const [name, rawValue] of Object.entries(input)) {
+    const definition = definitionMap.get(name);
+    if (!definition || typeof rawValue === "object" || (typeof rawValue === "string" && rawValue.length > 1000)) return null;
+    if (definition.type === "string" && typeof rawValue !== "string") return null;
+    if (definition.type === "integer" && (!Number.isInteger(rawValue) || !Number.isSafeInteger(rawValue))) return null;
+    if (definition.type === "number" && (typeof rawValue !== "number" || !Number.isFinite(rawValue))) return null;
+    if (definition.type === "boolean" && typeof rawValue !== "boolean") return null;
+    output[name] = rawValue;
+  }
+  for (const definition of definitions || []) {
+    if (definition.required && output[definition.name] === undefined) return null;
+  }
+  return output;
+}
+
+function normalizeCustomId(value) {
+  const customId = String(value ?? "").trim();
+  return /^[A-Za-z0-9:_-]{1,100}$/.test(customId) ? customId : null;
+}
+
+function normalizeComponents(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 25) return null;
+  const seen = new Set();
+  const components = [];
+  for (const item of value) {
+    const type = String(item?.type || "").trim().toLowerCase();
+    const customId = normalizeCustomId(item?.customId);
+    if (!customId || seen.has(customId)) return null;
+    seen.add(customId);
+    if (type === "button") {
+      const label = normalizeText(item.label, 80);
+      const style = String(item.style || "secondary").trim().toLowerCase();
+      if (!label || !["primary", "secondary", "danger"].includes(style)) return null;
+      components.push({ type, customId, label, style, disabled: item.disabled === true });
+      continue;
+    }
+    if (type === "select") {
+      const options = Array.isArray(item.options) ? item.options.slice(0, 25).map((option) => ({
+        value: normalizeText(option?.value, 100),
+        label: normalizeText(option?.label, 80),
+        description: normalizeText(option?.description, 100),
+      })) : [];
+      if (!options.length || options.some((option) => !option.value || !option.label || option.value.length > 100)) return null;
+      components.push({ type, customId, placeholder: normalizeText(item.placeholder, 100), options, minValues: 1, maxValues: 1 });
+      continue;
+    }
+    if (type === "modal") {
+      const title = normalizeText(item.title, 100);
+      const fields = Array.isArray(item.fields) ? item.fields.slice(0, 5).map((field) => ({
+        customId: normalizeCustomId(field?.customId),
+        label: normalizeText(field?.label, 100),
+        style: String(field?.style || "short").trim().toLowerCase(),
+        required: field?.required !== false,
+      })) : [];
+      if (!title || !fields.length || fields.some((field) => !field.customId || !field.label || !["short", "paragraph"].includes(field.style))) return null;
+      components.push({ type, customId, title, fields });
+      continue;
+    }
+    return null;
+  }
+  return components;
+}
+
+function normalizeBotResponse(body) {
+  const response = body?.response && typeof body.response === "object" ? body.response : body;
+  const type = String(response?.type || "message").trim().toLowerCase();
+  if (type === "message") {
+    const content = normalizeText(response.content ?? response.body, 2000);
+    const components = normalizeComponents(response.components);
+    if ((!content && !components.length) || !components) return null;
+    return { type, content, components };
+  }
+  if (type === "modal") {
+    const customId = normalizeCustomId(response.customId);
+    const title = normalizeText(response.title, 100);
+    const fields = normalizeComponents([{ type, customId, title, fields: response.fields }]);
+    if (!fields) return null;
+    return fields[0];
+  }
+  return null;
+}
+
+function findComponent(response, customId, expectedType = null) {
+  if (!response || typeof response !== "object") return null;
+  if (response.customId === customId && (!expectedType || response.type === expectedType)) return response;
+  const component = Array.isArray(response.components) ? response.components.find((item) => item.customId === customId) : null;
+  if (!component || (expectedType && component.type !== expectedType)) return null;
+  return component;
+}
+
+function normalizeModalFields(component, value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const fields = {};
+  const allowed = new Map((component.fields || []).map((field) => [field.customId, field]));
+  for (const [customId, rawValue] of Object.entries(value)) {
+    const field = allowed.get(customId);
+    if (!field || typeof rawValue !== "string" || rawValue.length > 2000) return null;
+    fields[customId] = rawValue;
+  }
+  for (const field of component.fields || []) {
+    if (field.required && !fields[field.customId]) return null;
+  }
+  return fields;
+}
+
 function applicationPayload(application) {
   return application ? {
     id: application.id,
@@ -41,6 +152,7 @@ export function createApplicationRoutes({
   readJson,
   requireUser,
   applicationRepository,
+  applicationInteractionRepository,
   groupSettingsRepository,
   groupMessageRepository,
   isGroupMember,
@@ -68,6 +180,129 @@ export function createApplicationRoutes({
   }
 
   return async function handleApplicationRoutes(request, response, requestUrl) {
+    const userInteractionMatch = requestUrl.pathname.match(/^\/api\/groups\/([A-Za-z0-9-]{1,64})\/applications\/([A-Za-z0-9-]{16,64})\/interactions$/);
+    if (userInteractionMatch && request.method === "POST") {
+      const user = await requireUser(request, response);
+      if (!user) return true;
+      const [, groupId, applicationId] = userInteractionMatch;
+      if (!await isGroupMember(user.id, groupId)) {
+        json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      try {
+        const body = await readJson(request, 32 * 1024);
+        const commandName = normalizeCommandName(body.commandName || body.command);
+        const command = commandName ? await applicationRepository.findInstalledCommand(applicationId, groupId, commandName) : null;
+        if (!command) {
+          json(response, 404, { error: "Comando não encontrado ou não instalado neste grupo." });
+          return true;
+        }
+        const options = normalizeInteractionOptions(command.options, body.options);
+        if (!options) {
+          json(response, 400, { error: "As opções não correspondem ao contrato do comando." });
+          return true;
+        }
+        const roomId = String(body.roomId || "").trim() || null;
+        if (roomId && !await groupMessageRepository.findTextRoom(groupId, roomId)) {
+          json(response, 400, { error: "A sala informada não existe neste grupo." });
+          return true;
+        }
+        if (!await canGroupRoomAction(user.id, groupId, roomId, "canChat")) {
+          json(response, 403, { error: "Você não tem permissão para iniciar interações neste canal." });
+          return true;
+        }
+        const interaction = await applicationInteractionRepository.createInteraction({ applicationId, groupId, roomId, userId: user.id, commandId: command.id, kind: "command", commandName: command.name, payload: { options } });
+        json(response, 202, { interaction });
+      } catch {
+        json(response, 400, { error: "Não foi possível criar a interação." });
+      }
+      return true;
+    }
+
+    const componentInteractionMatch = requestUrl.pathname.match(/^\/api\/interactions\/([A-Za-z0-9-]{16,64})\/(components|modal)$/);
+    if (componentInteractionMatch && request.method === "POST") {
+      const user = await requireUser(request, response);
+      if (!user) return true;
+      const [, parentId, interactionType] = componentInteractionMatch;
+      const parent = await applicationInteractionRepository.findForUser(parentId, user.id);
+      if (!parent || parent.status !== "responded" || new Date(parent.expiresAt).getTime() <= Date.now()) {
+        json(response, 404, { error: "A interação não está mais disponível." });
+        return true;
+      }
+      if (!await isGroupMember(user.id, parent.groupId)) {
+        json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      try {
+        const body = await readJson(request, 32 * 1024);
+        const customId = normalizeCustomId(body.customId);
+        const expectedType = interactionType === "modal" ? "modal" : undefined;
+        const component = customId ? findComponent(parent.response, customId, expectedType) : null;
+        if (!component) {
+          json(response, 400, { error: "Componente inválido ou expirado." });
+          return true;
+        }
+        const fields = interactionType === "modal" ? normalizeModalFields(component, body.fields) : null;
+        if (interactionType === "modal" && !fields) {
+          json(response, 400, { error: "Os campos do modal são inválidos ou incompletos." });
+          return true;
+        }
+        const values = interactionType === "modal" ? null : Array.isArray(body.values) ? body.values.slice(0, 25).map((value) => normalizeText(value, 100)) : [];
+        if (component.type === "select" && values.some((value) => !component.options.some((option) => option.value === value))) {
+          json(response, 400, { error: "A seleção não pertence às opções do componente." });
+          return true;
+        }
+        const payload = interactionType === "modal" ? { fields } : { values, customId };
+        const interaction = await applicationInteractionRepository.createInteraction({ applicationId: parent.applicationId, groupId: parent.groupId, roomId: parent.roomId, userId: user.id, parentInteractionId: parent.id, kind: interactionType === "modal" ? "modal" : "component", commandName: parent.commandName, customId, payload });
+        json(response, 202, { interaction });
+      } catch {
+        json(response, 400, { error: "Não foi possível criar a interação." });
+      }
+      return true;
+    }
+
+    if (requestUrl.pathname === "/api/bot/interactions" && request.method === "GET") {
+      const token = botToken(request);
+      const identity = token ? await applicationRepository.findByTokenHash(hashToken(token)) : null;
+      if (!identity) {
+        json(response, 401, { error: "Token de bot inválido ou revogado." });
+        return true;
+      }
+      const interactions = await applicationInteractionRepository.claimPending(identity.applicationId, Number(requestUrl.searchParams.get("limit")) || 25);
+      await applicationRepository.touchToken(identity.tokenId);
+      json(response, 200, { interactions });
+      return true;
+    }
+
+    const botResponseMatch = requestUrl.pathname.match(/^\/api\/bot\/interactions\/([A-Za-z0-9-]{16,64})\/respond$/);
+    if (botResponseMatch && request.method === "POST") {
+      const token = botToken(request);
+      const identity = token ? await applicationRepository.findByTokenHash(hashToken(token)) : null;
+      if (!identity) {
+        json(response, 401, { error: "Token de bot inválido ou revogado." });
+        return true;
+      }
+      try {
+        const body = await readJson(request, 32 * 1024);
+        const botResponse = normalizeBotResponse(body);
+        if (!botResponse) {
+          json(response, 400, { error: "A resposta do bot não segue o contrato permitido." });
+          return true;
+        }
+        const interaction = await applicationInteractionRepository.respond(identity.applicationId, botResponseMatch[1], botResponse);
+        if (!interaction) {
+          json(response, 409, { error: "A interação não está disponível para resposta." });
+          return true;
+        }
+        await applicationRepository.touchToken(identity.tokenId);
+        await publishGroupEvent(interaction.groupId, { type: "application-interaction-response", interaction });
+        json(response, 200, { interaction });
+      } catch {
+        json(response, 400, { error: "Não foi possível responder à interação." });
+      }
+      return true;
+    }
+
     if (requestUrl.pathname === "/api/applications" && ["GET", "POST"].includes(request.method)) {
       const user = await requireUser(request, response);
       if (!user) return true;
@@ -158,7 +393,7 @@ export function createApplicationRoutes({
             const name = normalizeCommandName(body.name);
             const description = normalizeText(body.description, 100);
             const options = normalizeCommandOptions(body.options);
-            if (!name || !description || !options) {
+            if (!name || !description || (options !== undefined && !options)) {
               json(response, 400, { error: "Comando, descrição e opções precisam seguir o contrato da aplicação." });
               return true;
             }

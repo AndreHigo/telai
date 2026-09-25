@@ -33,6 +33,7 @@ import { createUserProfileRepository, createPostgresUserProfileRepository } from
 import { createSiteAdminRepository, createPostgresSiteAdminRepository } from "../repositories/site-admin.mjs";
 import { createMaintenanceRepository, createPostgresMaintenanceRepository } from "../repositories/maintenance.mjs";
 import { createApplicationRepository, createPostgresApplicationRepository } from "../repositories/applications.mjs";
+import { createApplicationInteractionRepository, createPostgresApplicationInteractionRepository } from "../repositories/application-interactions.mjs";
 
 export function createRuntimeRepositories({
   databaseDriver,
@@ -107,6 +108,9 @@ export function createRuntimeRepositories({
   const applicationRepository = databaseDriver === "postgres"
     ? createPostgresApplicationRepository(database, { createId: randomUUID })
     : createApplicationRepository(database, { createId: randomUUID });
+  const applicationInteractionRepository = databaseDriver === "postgres"
+    ? createPostgresApplicationInteractionRepository(database, { createId: randomUUID })
+    : createApplicationInteractionRepository(database, { createId: randomUUID });
   const groupRoomReadRepository = databaseDriver === "postgres"
     ? createPostgresGroupRoomReadRepository(database)
     : createGroupRoomReadRepository(database);
@@ -201,6 +205,7 @@ export function createRuntimeRepositories({
     groupAttachmentRepository,
     groupWebhookRepository,
     applicationRepository,
+    applicationInteractionRepository,
     groupRoomReadRepository,
     groupRepository,
     groupModerationRepository,

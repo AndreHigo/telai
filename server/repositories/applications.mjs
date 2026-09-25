@@ -141,6 +141,17 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     return database.prepare("DELETE FROM application_commands WHERE application_id = ? AND id = ?").run(applicationId, commandId).changes > 0;
   }
 
+  function findInstalledCommand(applicationId, groupId, name) {
+    return publicCommand(database.prepare(`
+      SELECT application_commands.id AS commandId, application_commands.application_id AS applicationId,
+        application_commands.name AS commandName, application_commands.description AS commandDescription,
+        application_commands.options_json AS commandOptionsJson
+      FROM application_commands
+      JOIN application_group_installations ON application_group_installations.application_id = application_commands.application_id
+      WHERE application_commands.application_id = ? AND application_group_installations.group_id = ? AND application_commands.name = ?
+    `).get(applicationId, groupId, name));
+  }
+
   function findByTokenHash(tokenHash) {
     return database.prepare(`
       SELECT application_tokens.id AS tokenId, application_tokens.application_id AS applicationId,
@@ -224,7 +235,7 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     }
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, createCommand, updateCommand, deleteCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }
 
 async function withPostgresTransaction(database, callback) {
@@ -314,6 +325,18 @@ export function createPostgresApplicationRepository(database, { createId = rando
     return result.rowCount > 0;
   }
 
+  async function findInstalledCommand(applicationId, groupId, name) {
+    const result = await database.query(`
+      SELECT application_commands.id AS "commandId", application_commands.application_id AS "applicationId",
+        application_commands.name AS "commandName", application_commands.description AS "commandDescription",
+        application_commands.options_json AS "commandOptionsJson"
+      FROM application_commands
+      JOIN application_group_installations ON application_group_installations.application_id = application_commands.application_id
+      WHERE application_commands.application_id = $1 AND application_group_installations.group_id = $2 AND application_commands.name = $3
+    `, [applicationId, groupId, name]);
+    return publicCommand(result.rows[0]);
+  }
+
   async function findByTokenHash(tokenHash) {
     const result = await database.query(`
       SELECT application_tokens.id AS "tokenId", application_tokens.application_id AS "applicationId",
@@ -379,5 +402,5 @@ export function createPostgresApplicationRepository(database, { createId = rando
     });
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, createCommand, updateCommand, deleteCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }
