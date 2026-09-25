@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import postgresTestEnv from "./postgres-test-env.cjs";
 import { createDatabaseConfig } from "../server/config/database.mjs";
+import { applyPostgresMigrations } from "../server/database/migrations.mjs";
 import { createPostgresPool } from "../server/repositories/postgres.mjs";
 import { createPostgresSessionRepository } from "../server/repositories/sessions.mjs";
 import { createPostgresGroupAccessRepository, createPostgresGroupRepository } from "../server/repositories/groups.mjs";
@@ -38,6 +39,7 @@ const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
 
 const pool = createPostgresPool(config);
+await applyPostgresMigrations(pool);
 const client = await pool.connect();
 const ids = { owner: randomUUID(), member: randomUUID(), invitee: randomUUID(), redeemer: randomUUID(), group: randomUUID(), conversation: randomUUID() };
 const now = new Date().toISOString();
