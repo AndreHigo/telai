@@ -73,7 +73,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair abertura do SQLite e migrações genéricas para `server/repositories`.
 - [ ] Separar consultas/repositórios de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
-- [ ] Dividir `App.svelte` em serviços, stores e features sem alterar o layout.
+- [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
+- [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
 
 ### Fase 2 — Contratos e tempo real
 

@@ -4,6 +4,7 @@
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
+  import { createApiClient } from "./services/api.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import {
@@ -861,37 +862,7 @@
     high: { label: "Alta", width: 1920, height: 1080, maxFramerate: 60, maxBitrate: 6_000_000 },
   };
 
-  async function api(path, options = {}) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
-    try {
-      const response = await fetch(path, {
-        ...options,
-        signal: options.signal || controller.signal,
-        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const error = new Error(body.error || "Não foi possível concluir a ação.");
-        error.status = response.status;
-        error.retryAfter = Number(body.retryAfter || response.headers.get("retry-after") || 0);
-        throw error;
-      }
-      return body;
-    } catch (error) {
-      // 429 é uma resposta esperada de proteção contra abuso. Não envie um
-      // novo diagnóstico para a API a cada bloqueio, evitando alimentar o
-      // próprio volume de requisições quando o usuário tenta novamente.
-      if (error?.status !== 429) reportClientError("api_error", error, { method: options.method || "GET", route: String(path).split("?", 1)[0] });
-      if (error?.name === "AbortError") throw new Error("O servidor demorou para responder. Tente novamente.");
-      if (error?.name === "TypeError" && /failed to fetch|load failed|networkerror/i.test(String(error.message || ""))) {
-        throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.");
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
+  const api = createApiClient({ reportError: reportClientError });
 
   async function loadGroups() {
     const result = await api("/api/groups");
