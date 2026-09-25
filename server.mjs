@@ -47,6 +47,7 @@ import { createGroupManagementRoutes } from "./server/http/group-management-rout
 import { createGroupRoleRoutes } from "./server/http/group-role-routes.mjs";
 import { createGroupRoomRoutes } from "./server/http/group-room-routes.mjs";
 import { createGroupContentRoutes } from "./server/http/group-content-routes.mjs";
+import { createGroupInviteRoutes } from "./server/http/group-invite-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -857,6 +858,22 @@ const handleGroupContentRoutes = createGroupContentRoutes({
   canGroupAction,
   groupMessageRepository,
   groupPermissionRepository,
+});
+const handleGroupInviteRoutes = createGroupInviteRoutes({
+  json,
+  readJson,
+  requireUser,
+  groupInviteRepository,
+  groupPermissionRepository,
+  groupSettingsRepository,
+  isGroupMember,
+  canGroupAction,
+  createNotification,
+  sendGroupInviteEmail,
+  publicOriginForRequest,
+  warnLog,
+  compactUserSummary,
+  randomBytes,
 });
 const userProfileRepository = createUserProfileRepository(database);
 const handleUserSettingsRoutes = createUserSettingsRoutes({
@@ -2393,31 +2410,6 @@ async function handleHttpRequest(request, response) {
   }
   if (await handleGroupManagementRoutes(request, response, requestUrl)) return;
   if (await handleGroupRoleRoutes(request, response, requestUrl)) return;
-  const memberInviteCreateMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/member-invites$/);
-  if (memberInviteCreateMatch && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = memberInviteCreateMatch[1];
-    if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
-    if (!canGroupAction(user.id, groupId, "canInvite")) return json(response, 403, { error: "Você não tem permissão para convidar pessoas neste grupo." });
-    readJson(request).then((body) => {
-      const group = groupInviteRepository.findGroup(groupId);
-      const invitedUserId = String(body.userId || "").trim();
-      const target = groupInviteRepository.findMemberInviteTarget(invitedUserId);
-      if (!target || target.id === user.id) return json(response, 404, { error: "Usuário não encontrado." });
-      if (isGroupMember(target.id, groupId)) return json(response, 409, { error: "Essa pessoa já está no grupo." });
-      const now = new Date().toISOString();
-      if (groupInviteRepository.hasPendingMemberInvite(groupId, target.id, now)) return json(response, 409, { error: "Já existe um convite pendente para essa pessoa." });
-      const invite = groupInviteRepository.createMemberInvite({ groupId, invitedUserId: target.id, invitedBy: user.id, expiresAt: new Date(Date.now() + 72 * 3600000).toISOString(), createdAt: now });
-      createNotification({ userId: target.id, type: "group_invite", entityId: invite.id, groupId, title: `Convite para ${group?.name || "um grupo"}`, body: `${user.displayName} convidou você para entrar neste grupo.`, createdAt: now });
-      if (target.email) {
-        void sendGroupInviteEmail({ to: target.email, displayName: target.displayName, groupName: group?.name, baseUrl: publicOriginForRequest(request) })
-          .catch((error) => warnLog("email_send_failed", { kind: "group_invite", groupId, targetUserId: target.id, errorCode: error?.code || "smtp-send-failed", error: error?.message || String(error) }));
-      }
-      return json(response, 201, { invite: { id: invite.id, user: compactUserSummary(target), expiresAt: invite.expiresAt } });
-    }).catch(() => json(response, 400, { error: "Não foi possível enviar o convite." }));
-    return;
-  }
   const groupOverviewMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/overview$/);
   if (groupOverviewMatch && request.method === "GET") {
     const user = requireUser(request, response);
@@ -2462,34 +2454,7 @@ async function handleHttpRequest(request, response) {
     return json(response, 200, { groupId, members });
   }
   if (await handleGroupContentRoutes(request, response, requestUrl)) return;
-  const inviteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/invites$/);
-  if (inviteMatch && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = inviteMatch[1];
-    const member = groupPermissionRepository.member(groupId, user.id);
-    if (!member) return json(response, 403, { error: "Você não participa deste grupo." });
-    if (!canGroupAction(user.id, groupId, "canInvite")) return json(response, 403, { error: "Você não tem permissão para criar convites neste grupo." });
-    readJson(request).then((body) => {
-      const rawToken = randomBytes(24).toString("base64url");
-      const hours = Math.max(1, Math.min(Number(body.hours) || 72, 168));
-      const maxUses = Math.max(1, Math.min(Number(body.maxUses) || 5, 50));
-      groupInviteRepository.createGroupInvite({ token: rawToken, groupId, createdBy: user.id, expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), maxUses });
-      return json(response, 201, { token: rawToken, expiresInHours: hours, maxUses });
-    }).catch(() => json(response, 400, { error: "Não foi possível criar o convite." }));
-    return;
-  }
-  const inviteDeleteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/invites\/([a-f0-9]{32,128})$/i);
-  if (inviteDeleteMatch && request.method === "DELETE") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const [, groupId, tokenHash] = inviteDeleteMatch;
-    const group = groupSettingsRepository.findGroup(groupId);
-    if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o dono pode revogar convites." });
-    if (!groupInviteRepository.deleteGroupInvite(groupId, tokenHash)) return json(response, 404, { error: "Convite não encontrado." });
-    return json(response, 200, { ok: true });
-  }
+  if (await handleGroupInviteRoutes(request, response, requestUrl)) return;
   if (await handleDirectRoutes(request, response, requestUrl)) return;
   if (await handleNotificationRoutes(request, response, requestUrl)) return;
   if (await handleMemberInviteRoutes(request, response, requestUrl)) return;
