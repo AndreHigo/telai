@@ -165,6 +165,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair seleção de telas, abertura do workspace de grupos e navegação da sidebar para `frontend/src/features/shell/navigation-controller.js` em chunk lazy, preservando o layout.
     - [x] Extrair notas de atualização e seu estado de leitura para `frontend/src/features/shell/release-notes-controller.js` em chunk lazy.
     - [x] Extrair atualização, inicialização com o sistema, aceleração gráfica e seletores de captura Electron para `frontend/src/features/shell/desktop-controller.js` em chunk lazy.
+    - [x] Extrair transporte WebSocket, pares WebRTC, ICE, renegociação e chat do host para `frontend/src/features/broadcast/transport-controller.js` em chunk lazy.
     - [x] Extrair carregamento, visualização pública, seleção e multistream para `frontend/src/features/live/controller.js` em chunk lazy, preservando rotas e layout.
     - [x] Extrair operações de mensagens, anexos, edição, exclusão e busca para `frontend/src/features/groups/message-controller.js` em chunk lazy.
     - [x] Extrair descoberta de grupos, convites e solicitações de entrada para `frontend/src/features/groups/membership-controller.js` em chunk lazy.

@@ -1564,6 +1564,51 @@
   function selectDisplaySource(...args) { void getDesktopController().then((controller) => controller.selectDisplaySource(...args)); }
   function cancelDisplayPicker(...args) { void getDesktopController().then((controller) => controller.cancelDisplayPicker(...args)); }
 
+  let broadcastTransportControllerPromise = null;
+  function getBroadcastTransportController() {
+    if (!broadcastTransportControllerPromise) {
+      broadcastTransportControllerPromise = import("./features/broadcast/transport-controller.js").then(({ createBroadcastTransportController }) => createBroadcastTransportController({
+        acceptGatewayMessage,
+        getState: () => ({
+          broadcastChatListElement,
+          broadcastChatMessageIds,
+          broadcastChatMessages,
+          broadcastError,
+          broadcastPeerNegotiations,
+          broadcastPeerRetryTimers,
+          broadcastRoomId,
+          broadcastSocket,
+          broadcastState,
+          broadcastStream,
+          mediaMode,
+          pendingBroadcastCandidates,
+          peerConnections,
+          rtcConfig,
+          selectedQuality,
+          user,
+          viewerCount,
+        }),
+        playVoiceSound,
+        qualityProfiles,
+        reportClientError,
+        sendBroadcast,
+        setState: (next) => {
+          if ("broadcastChatMessageIds" in next) broadcastChatMessageIds = next.broadcastChatMessageIds;
+          if ("broadcastChatMessages" in next) broadcastChatMessages = next.broadcastChatMessages;
+          if ("broadcastError" in next) broadcastError = next.broadcastError;
+          if ("broadcastSocket" in next) broadcastSocket = next.broadcastSocket;
+          if ("broadcastState" in next) broadcastState = next.broadcastState;
+          if ("viewerCount" in next) viewerCount = next.viewerCount;
+        },
+        tick,
+      }));
+    }
+    return broadcastTransportControllerPromise;
+  }
+  function clearBroadcastPeerRetry(...args) { void getBroadcastTransportController().then((controller) => controller.clearBroadcastPeerRetry(...args)); }
+  async function negotiateBroadcastPeer(...args) { return (await getBroadcastTransportController()).negotiateBroadcastPeer(...args); }
+  async function connectBroadcastSocket(...args) { return (await getBroadcastTransportController()).connectBroadcastSocket(...args); }
+
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
     return list.scrollHeight - list.scrollTop - list.clientHeight <= 96;
@@ -4681,130 +4726,6 @@
     void tick().then(() => settingsPageElement?.scrollTo({ top: 0, left: 0, behavior: "auto" }));
   }
 
-  function clearBroadcastPeerRetry(viewerId) {
-    const timer = broadcastPeerRetryTimers.get(viewerId);
-    if (timer) window.clearTimeout(timer);
-    broadcastPeerRetryTimers.delete(viewerId);
-  }
-
-  async function flushBroadcastPendingCandidates(viewerId, peer) {
-    const candidates = pendingBroadcastCandidates.get(viewerId) || [];
-    pendingBroadcastCandidates.delete(viewerId);
-    for (const candidate of candidates) {
-      await peer.addIceCandidate(candidate).catch((error) => reportClientError("broadcast_pending_candidate_error", error, { roomId: broadcastRoomId, mediaMode }));
-    }
-  }
-
-  function scheduleBroadcastPeerRetry(viewerId, delayMs = 8_000) {
-    if (!viewerId || broadcastPeerRetryTimers.has(viewerId)) return;
-    const timer = window.setTimeout(() => {
-      broadcastPeerRetryTimers.delete(viewerId);
-      if (broadcastState !== "live" || broadcastSocket?.readyState !== WebSocket.OPEN) return;
-      const peer = peerConnections.get(viewerId);
-      if (!peer || ["connected", "completed"].includes(peer.connectionState)) return;
-      peer.close();
-      peerConnections.delete(viewerId);
-      pendingBroadcastCandidates.delete(viewerId);
-      void negotiateBroadcastPeer(viewerId);
-    }, delayMs);
-    broadcastPeerRetryTimers.set(viewerId, timer);
-  }
-
-  async function negotiateBroadcastPeer(viewerId) {
-    if (!viewerId || !broadcastStream || mediaMode !== "p2p") return;
-    const existingNegotiation = broadcastPeerNegotiations.get(viewerId);
-    if (existingNegotiation) return existingNegotiation;
-    const negotiation = (async () => {
-      const peer = createBroadcastPeer(viewerId);
-      sendBroadcast({ type: "quality-lock", target: viewerId, quality: selectedQuality });
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      if (peerConnections.get(viewerId) !== peer || broadcastSocket?.readyState !== WebSocket.OPEN) return;
-      sendBroadcast({ type: "signal", target: viewerId, payload: { kind: "offer", sdp: peer.localDescription } });
-      scheduleBroadcastPeerRetry(viewerId);
-    })().catch((error) => {
-      reportClientError("broadcast_offer_error", error, { roomId: broadcastRoomId, mediaMode });
-      scheduleBroadcastPeerRetry(viewerId, 1_500);
-    }).finally(() => {
-      broadcastPeerNegotiations.delete(viewerId);
-    });
-    broadcastPeerNegotiations.set(viewerId, negotiation);
-    return negotiation;
-  }
-
-  function createBroadcastPeer(viewerId) {
-    if (peerConnections.has(viewerId)) return peerConnections.get(viewerId);
-    const peer = new RTCPeerConnection({ ...rtcConfig, iceCandidatePoolSize: 4 });
-    peerConnections.set(viewerId, peer);
-    const streamTracks = broadcastStream?.getTracks?.() || [];
-    const audioTracks = streamTracks.filter((track) => track.kind === "audio");
-    streamTracks.filter((track) => track.kind !== "audio").forEach((track) => peer.addTrack(track, broadcastStream));
-    if (audioTracks.length) audioTracks.forEach((track) => peer.addTrack(track, broadcastStream));
-    else {
-      // Reserve o m-line de áudio na primeira oferta. Sem isso, ativar o
-      // microfone depois que a live já tem espectadores exigiria uma nova
-      // negociação; a troca local da faixa, sozinha, não chega ao viewer.
-      try { peer.addTransceiver("audio", { direction: "sendonly" }); } catch (error) {
-        reportClientError("broadcast_audio_transceiver_error", error, { viewerId });
-      }
-    }
-    // O espectador pode ficar em "Automática" e não enviar uma mensagem de
-    // qualidade antes da primeira oferta. Aplique o teto localmente antes de
-    // negociar para nunca iniciar um encoder ilimitado por acidente.
-    applyBroadcastPeerQuality(peer, "auto");
-    peer.onicecandidate = (event) => { if (event.candidate) sendBroadcast({ type: "signal", target: viewerId, payload: { kind: "candidate", candidate: event.candidate } }); };
-    peer.onconnectionstatechange = () => {
-      if (["connected", "completed"].includes(peer.connectionState)) {
-        clearBroadcastPeerRetry(viewerId);
-      } else if (["failed", "closed"].includes(peer.connectionState)) {
-        peer.close();
-        if (peerConnections.get(viewerId) === peer) peerConnections.delete(viewerId);
-        pendingBroadcastCandidates.delete(viewerId);
-        scheduleBroadcastPeerRetry(viewerId, 1_500);
-      } else if (peer.connectionState === "disconnected") {
-        scheduleBroadcastPeerRetry(viewerId, 2_500);
-      }
-    };
-    return peer;
-  }
-
-  function applyBroadcastPeerQuality(peer, quality) {
-    if (!peer || mediaMode !== "p2p") return;
-    const profile = quality === "auto"
-      ? (qualityProfiles[selectedQuality] || qualityProfiles.balanced)
-      : (qualityProfiles[quality] || qualityProfiles.balanced);
-    for (const sender of peer.getSenders()) {
-      if (sender.track?.kind !== "video") continue;
-      const parameters = sender.getParameters();
-      if (!parameters.encodings?.length) continue;
-      const settings = sender.track.getSettings?.() || {};
-      const sourceWidth = Number(settings.width) || profile.width;
-      const sourceHeight = Number(settings.height) || profile.height;
-      const scaleResolutionDownBy = Math.max(1, sourceWidth / profile.width, sourceHeight / profile.height);
-      parameters.encodings = parameters.encodings.map((encoding) => ({
-        ...encoding,
-        maxBitrate: profile.maxBitrate,
-        maxFramerate: profile.maxFramerate,
-        scaleResolutionDownBy,
-      }));
-      sender.setParameters(parameters).catch((error) => reportClientError("broadcast_quality_apply_error", error, { quality, peer: Boolean(peer) }));
-    }
-  }
-
-  async function handleBroadcastSignal(message) {
-    const peer = createBroadcastPeer(message.from);
-    if (message.payload?.kind === "answer") {
-      await peer.setRemoteDescription(message.payload.sdp);
-      await flushBroadcastPendingCandidates(message.from, peer);
-    } else if (message.payload?.kind === "candidate") {
-      if (peer.remoteDescription) {
-        await peer.addIceCandidate(message.payload.candidate).catch((error) => reportClientError("broadcast_candidate_error", error, { roomId: broadcastRoomId, mediaMode }));
-      } else {
-        pendingBroadcastCandidates.set(message.from, [...(pendingBroadcastCandidates.get(message.from) || []), message.payload.candidate].slice(-64));
-      }
-    }
-  }
-
   function relayMimeForStream(stream) {
     const candidates = stream?.getAudioTracks().length
       ? ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp8"]
@@ -4841,93 +4762,6 @@
     });
     recorder.start(200);
     sendBroadcast({ type: "relay-start", mimeType });
-  }
-
-  function connectBroadcastSocket() {
-    return new Promise((resolve, reject) => {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const socket = new WebSocket(`${protocol}//${window.location.host}/signal`);
-      broadcastSocket = socket;
-      let settled = false;
-      const handshakeTimeout = window.setTimeout(() => {
-        if (settled) return;
-        const caught = new Error("A conexão da transmissão demorou para responder.");
-        reportClientError("broadcast_socket_connect_timeout", caught, { roomId: broadcastRoomId });
-        try { socket.close(); } catch {}
-        settled = true;
-        reject(caught);
-      }, 12_000);
-      const resolveConnection = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(handshakeTimeout);
-        resolve(socket);
-      };
-      const rejectConnection = (error) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(handshakeTimeout);
-        reject(error);
-      };
-      socket.addEventListener("open", resolveConnection, { once: true });
-      socket.addEventListener("error", () => rejectConnection(new Error("Não foi possível conectar ao servidor de transmissão.")), { once: true });
-      socket.addEventListener("message", (event) => {
-        void (async () => {
-          if (typeof event.data !== "string") return;
-          let message;
-          try {
-            message = JSON.parse(event.data);
-          } catch {
-            return;
-          }
-          if (!acceptGatewayMessage(socket, message)) return;
-          if (message.type === "viewer-joined" && mediaMode === "p2p") {
-            await negotiateBroadcastPeer(message.viewerId);
-          } else if (message.type === "viewer-left") {
-            clearBroadcastPeerRetry(message.viewerId);
-            pendingBroadcastCandidates.delete(message.viewerId);
-            peerConnections.get(message.viewerId)?.close();
-            peerConnections.delete(message.viewerId);
-          } else if (message.type === "viewer-count") {
-            viewerCount = message.count || 0;
-          } else if (message.type === "chat-history") {
-            // O histórico não deve disparar sons ao conectar ou reconectar a live.
-            broadcastChatMessages = (message.messages || []).filter(Boolean).slice(-100);
-            broadcastChatMessageIds = new Set(broadcastChatMessages.map((chatMessage) => chatMessage?.id).filter(Boolean));
-            await tick();
-            if (broadcastChatListElement) broadcastChatListElement.scrollTop = broadcastChatListElement.scrollHeight;
-          } else if (message.type === "chat-message" && message.message) {
-            const chatMessage = message.message;
-            if (chatMessage.id && !broadcastChatMessageIds.has(chatMessage.id)) {
-              broadcastChatMessageIds = new Set([...broadcastChatMessageIds, chatMessage.id]);
-              broadcastChatMessages = [...broadcastChatMessages, chatMessage].slice(-100);
-              await tick();
-              if (broadcastChatListElement) broadcastChatListElement.scrollTop = broadcastChatListElement.scrollHeight;
-              const isOwnMessage = chatMessage.userId === user?.id || chatMessage.username === user?.username;
-              if (!isOwnMessage) playVoiceSound("message");
-            }
-          } else if (message.type === "signal" && mediaMode === "p2p") {
-            await handleBroadcastSignal(message);
-          } else if (message.type === "error") {
-            broadcastError = message.message || "O servidor recusou a transmissão.";
-            broadcastState = "error";
-          }
-        })().catch((error) => {
-          reportClientError("broadcast_message_error", error, { roomId: broadcastRoomId, mediaMode });
-          if (broadcastSocket === socket && broadcastState === "live") {
-            broadcastError = error?.message || "A conexão da transmissão encontrou um erro.";
-          }
-        });
-      });
-      socket.addEventListener("error", () => reportClientError("broadcast_socket_error", new Error("A conexão da transmissão falhou."), { roomId: broadcastRoomId }));
-      socket.addEventListener("close", () => {
-        if (!settled) rejectConnection(new Error("A conexão da transmissão foi encerrada antes de conectar."));
-        if (broadcastState === "live") {
-          reportClientError("broadcast_socket_closed", new Error("A conexão da transmissão foi encerrada."), { roomId: broadcastRoomId });
-          broadcastError = "A conexão com o servidor foi encerrada.";
-        }
-      });
-    });
   }
 
   async function attachBroadcastPreview() {
