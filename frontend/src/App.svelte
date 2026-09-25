@@ -39,6 +39,7 @@
   } from "./services/media/voice-input.js";
   import { createVoiceCaptureService } from "./services/media/voice-capture.js";
   import { createVoiceTrackSyncService } from "./services/media/voice-track-sync.js";
+  import { createClientDiagnostics } from "./services/client-diagnostics.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { HugeiconsIcon } from "@hugeicons/svelte";
@@ -79,42 +80,13 @@
     desktop: { "0.2.68": { platformLabel: "app desktop", ...RELEASE_NOTES_CONTENT } },
     web: { "2026-09-22": { platformLabel: "versão web", ...RELEASE_NOTES_CONTENT } },
   };
-  const routineVoiceDiagnosticKinds = new Set(["voice_activity_sample", "voice_activity_state"]);
-  const clientDiagnosticLastSentAt = new Map();
-  const CLIENT_DIAGNOSTIC_COOLDOWN_MS = 5_000;
-
-  function shouldSendClientDiagnostic(kind) {
-    const key = `${kind}:${window.location.pathname}`;
-    const now = Date.now();
-    const lastSentAt = clientDiagnosticLastSentAt.get(key) || 0;
-    if (now - lastSentAt < CLIENT_DIAGNOSTIC_COOLDOWN_MS) return false;
-    clientDiagnosticLastSentAt.set(key, now);
-    if (clientDiagnosticLastSentAt.size > 128) {
-      const oldestKey = clientDiagnosticLastSentAt.keys().next().value;
-      if (oldestKey) clientDiagnosticLastSentAt.delete(oldestKey);
-    }
-    return true;
-  }
-
-  function reportClientError(kind, error, context = {}) {
-    const diagnosticKind = String(kind || "client_error").slice(0, 64);
-    // Essas amostras são úteis durante diagnóstico local, mas não são falhas.
-    // Enviá-las durante o uso normal transforma a fala em tráfego e logs.
-    if (routineVoiceDiagnosticKinds.has(diagnosticKind)) return;
-    if (!shouldSendClientDiagnostic(diagnosticKind)) return;
-    const source = error instanceof Error ? error : new Error(String(error || "Erro sem mensagem"));
-    const payload = {
-      kind: diagnosticKind,
-      message: String(source.message || "Erro sem mensagem").slice(0, 240),
-      stack: String(source.stack || "").slice(0, 1200),
-      route: window.location.pathname,
-      appVersion: runtimeVersion(),
-      context: { ...context, view, isDesktop: Boolean(window.miranteDesktop?.isDesktop) },
-    };
-    try {
-      void fetch("/api/client-errors", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => {});
-    } catch {}
-  }
+  const reportClientError = createClientDiagnostics({
+    routineKinds: ["voice_activity_sample", "voice_activity_state"],
+    getRoute: () => window.location.pathname,
+    getAppVersion: () => runtimeVersion(),
+    getView: () => view,
+    isDesktop: () => Boolean(window.miranteDesktop?.isDesktop),
+  });
 
   async function copyText(text, successMessage, failureMessage) {
     const value = String(text || "");
