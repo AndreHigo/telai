@@ -22,7 +22,6 @@ import { createAuthRuntime } from "./server/auth/runtime.mjs";
 import { createRequireUser } from "./server/auth/guards.mjs";
 import { hashPassword, hashSessionToken } from "./server/auth/crypto.mjs";
 import { createStreamRuntime } from "./server/domain/streams/runtime.mjs";
-import { createGroupRuntime } from "./server/domain/groups/runtime.mjs";
 import { createVoiceRuntime } from "./server/domain/voice/runtime.mjs";
 import { createNotificationSyncService } from "./server/services/notification-sync.mjs";
 import { createPostgresNotificationSyncService } from "./server/services/postgres-notification-sync.mjs";
@@ -43,15 +42,7 @@ import { createAdminRuntime } from "./server/admin/runtime.mjs";
 import { createAuthRoutes } from "./server/http/auth-routes.mjs";
 import { createObservabilityRoutes } from "./server/http/observability-routes.mjs";
 import { createHttpRouter } from "./server/http/router.mjs";
-import { createGroupDiscoveryRoutes } from "./server/http/group-discovery-routes.mjs";
-import { createGroupManagementRoutes } from "./server/http/group-management-routes.mjs";
-import { createGroupRoleRoutes } from "./server/http/group-role-routes.mjs";
-import { createGroupRoomRoutes } from "./server/http/group-room-routes.mjs";
-import { createGroupAuditRoutes } from "./server/http/group-audit-routes.mjs";
-import { createGroupModerationRoutes } from "./server/http/group-moderation-routes.mjs";
-import { createGroupContentRoutes } from "./server/http/group-content-routes.mjs";
-import { createGroupInviteRoutes } from "./server/http/group-invite-routes.mjs";
-import { createGroupRuntimeRoutes } from "./server/http/group-runtime-routes.mjs";
+import { createGroupRoutesRuntime } from "./server/http/group-routes-runtime.mjs";
 import { createMediaRoutes } from "./server/http/media-routes.mjs";
 import { createOAuthRoutes } from "./server/http/oauth-routes.mjs";
 import { createStaticRoutes } from "./server/http/static-routes.mjs";
@@ -403,96 +394,66 @@ const {
   canGroupRoomAction,
 });
 
-const { disconnectGroupUser } = createGroupRuntime({
-  voiceRooms,
-  groupPresence,
-  send,
-  leaveVoiceRoom,
-  disconnectUserFromGroup: (...args) => eventGateway?.disconnectUserFromGroup(...args),
-  publishGroupPresence: (...args) => eventGateway?.publishGroupPresence(...args),
-});
-const handleGroupDiscoveryRoutes = createGroupDiscoveryRoutes({
+const {
+  disconnectGroupUser,
+  handleGroupDiscoveryRoutes,
+  handleGroupManagementRoutes,
+  handleGroupRoleRoutes,
+  handleGroupRoomRoutes,
+  handleGroupAuditRoutes,
+  handleGroupModerationRoutes,
+  handleGroupContentRoutes,
+  handleGroupInviteRoutes,
+  handleGroupRuntimeRoutes,
+} = createGroupRoutesRuntime({
   json,
   readJson,
   requireUser,
+  groupPresence,
   groupRepository,
   groupSettingsRepository,
   groupMemberRepository,
-  slugFor,
-});
-const handleGroupManagementRoutes = createGroupManagementRoutes({
-  json,
-  readJson,
-  requireUser,
   groupJoinRequestRepository,
-  groupSettingsRepository,
   groupPermissionRepository,
   groupSetupRepository,
   groupRoleRepository,
   groupAuditRepository,
   groupModerationRepository,
   groupInviteRepository,
-  isGroupMember,
-  createNotification,
-  slugFor,
-});
-const handleGroupRoleRoutes = createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRepository, groupPermissionRepository, groupAuditRepository });
-const handleGroupRoomRoutes = createGroupRoomRoutes({
-  json,
-  readJson,
-  requireUser,
-  isGroupMember,
-  canGroupAction,
-  groupRoleRepository,
-  groupRoomPermissionRepository,
-  groupPermissionRepository,
-  groupRoomRepository,
-  groupAuditRepository,
-  roomSlugFor,
-  parseVoiceRoomParticipantLimit,
-});
-const handleGroupAuditRoutes = createGroupAuditRoutes({ json, requireUser, groupPermissionRepository, groupAuditRepository });
-const handleGroupModerationRoutes = createGroupModerationRoutes({
-  json,
-  readJson,
-  requireUser,
-  groupPermissions,
-  groupMemberRepository,
-  groupModerationRepository,
-  groupAuditRepository,
-  disconnectGroupUser,
-  publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
-});
-const handleGroupContentRoutes = createGroupContentRoutes({
-  json,
-  readJson,
-  requireUser,
-  isGroupMember,
-  canGroupAction,
   groupMessageRepository,
   groupAttachmentRepository,
-  attachmentStorage,
-  attachmentUrlFor,
-  canGroupRoomAction,
-  groupPermissionRepository,
-  groupModerationRepository,
-  publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
-});
-const handleGroupInviteRoutes = createGroupInviteRoutes({
-  json,
-  readJson,
-  requireUser,
-  groupInviteRepository,
-  groupPermissionRepository,
-  groupSettingsRepository,
+  groupRoomPermissionRepository,
+  groupRoomRepository,
+  groupRoomReadRepository,
+  groupPermissions,
   isGroupMember,
   canGroupAction,
+  canGroupRoomAction,
+  attachmentStorage,
+  attachmentUrlFor,
+  streamRepository,
+  runtimeStreamIsLive,
+  streamPublicPath,
+  compactAvatarData,
+  compactUserSummary,
+  parseChannelGames,
+  slugFor,
+  roomSlugFor,
+  parseVoiceRoomParticipantLimit,
   createNotification,
   sendGroupInviteEmail,
   publicOriginForRequest,
   warnLog,
-  compactUserSummary,
   randomBytes,
+  voiceRooms,
+  send,
+  leaveVoiceRoom,
+  voiceParticipantFor,
+  touchGroupPresence,
+  isPresent,
+  disconnectUserFromGroup: (...args) => eventGateway?.disconnectUserFromGroup(...args),
+  publishGroupPresence: (...args) => eventGateway?.publishGroupPresence(...args),
+  publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
 });
 const {
   clearHostReconnectTimer,
@@ -576,33 +537,6 @@ const handleStreamRoutes = createStreamRoutes({
   parseChannelGames,
   slugFor,
   createNotification,
-});
-const handleGroupRuntimeRoutes = createGroupRuntimeRoutes({
-  json,
-  requireUser,
-  groupJoinRequestRepository,
-  groupSettingsRepository,
-  groupRoomRepository,
-  groupRoomReadRepository,
-  groupMemberRepository,
-  groupMessageRepository,
-  groupAttachmentRepository,
-  attachmentStorage,
-  attachmentUrlFor,
-  streamRepository,
-  groupPermissions,
-  isGroupMember,
-  runtimeStreamIsLive,
-  streamPublicPath,
-  compactAvatarData,
-  parseChannelGames,
-  voiceRooms,
-  send,
-  leaveVoiceRoom,
-  voiceParticipantFor,
-  touchGroupPresence,
-  isPresent,
-  canGroupRoomAction,
 });
 const iceConfiguration = createIceConfiguration({ randomUUID, createHmac });
 const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, databaseDriver, requireLogin, publicOriginForRequest });

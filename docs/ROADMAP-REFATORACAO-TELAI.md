@@ -135,6 +135,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair autorização de host/viewer para `server/domain/streams/runtime.mjs`, mantendo as regras de visibilidade e grupo.
 - [x] Extrair exclusão de grupos, overview e presença para `server/http/group-runtime-routes.mjs`, mantendo o runtime de voz no gateway.
 - [x] Extrair coordenação de desconexão de membros em voz, presença e eventos para `server/domain/groups/runtime.mjs`, mantendo autorização na rota de moderação.
+- [x] Centralizar a composição das rotas de grupos e seu runtime em `server/http/group-routes-runtime.mjs`, mantendo contratos de autorização, eventos e persistência.
 - [x] Extrair início, callback e vínculo OAuth para `server/http/oauth-routes.mjs`, mantendo a sessão local e os provedores existentes.
 - [x] Extrair páginas SEO, legais, download, updates e fallback de arquivos para `server/http/static-routes.mjs`.
 - [x] Extrair o despacho HTTP e a página administrativa para `server/http/router.mjs`, mantendo a ordem dos domínios e dos fallbacks.
