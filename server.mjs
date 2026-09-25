@@ -6,6 +6,7 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash, creat
 import { DatabaseSync } from "node:sqlite";
 import { WebSocketServer } from "ws";
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
+import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1391,19 +1392,6 @@ function linkOAuthAccount(providerName, identity, userId) {
   database.prepare("INSERT INTO oauth_accounts (id, provider, provider_user_id, user_id, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .run(randomUUID(), providerName, identity.providerUserId, userId, identity.email || null, now, now);
   return { alreadyLinked: false, currentDisplayName: target.displayName, suggestedDisplayName: identity.displayName };
-}
-
-function json(response, status, body) {
-  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify(body));
-}
-
-async function readJson(request, maxLength = 16 * 1024) {
-  let raw = "";
-  for await (const part of request) {
-    raw += part;
-    if (Buffer.byteLength(raw, "utf8") > maxLength) throw new Error("body-too-large");
-  }
-  return JSON.parse(raw || "{}");
 }
 
 function normalizeUsername(value) {
