@@ -18,6 +18,7 @@
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
+  import { createViewportController } from "./features/shell/viewport-controller.js";
   import SettingsCategoryNav from "./features/settings/SettingsCategoryNav.svelte";
   import SettingsHeading from "./features/settings/SettingsHeading.svelte";
   import ChannelProfileSettings from "./features/settings/ChannelProfileSettings.svelte";
@@ -309,6 +310,14 @@
   let GroupAuditLogSettings = null;
   let groupAuditLogSettingsLoad = null;
   let groupEventGateway = null;
+  const viewportController = createViewportController({
+    getCompactViewport: () => compactViewport,
+    matchMedia: (query) => window.matchMedia(query),
+    setState: (next) => {
+      if ("compactViewport" in next) compactViewport = next.compactViewport;
+      if ("showGlobalSidebar" in next) showGlobalSidebar = next.showGlobalSidebar;
+    },
+  });
 
   function loadGroupTextWorkspace() {
     if (GroupTextChatWorkspace || groupTextWorkspaceLoad) return groupTextWorkspaceLoad;
@@ -5723,12 +5732,7 @@
   onMount(async () => {
     detectViewerRoute();
     void loadMaintenance();
-    const handleNavigationViewport = () => {
-      const nextCompactViewport = window.matchMedia("(max-width: 1100px)").matches;
-      if (nextCompactViewport === compactViewport) return;
-      compactViewport = nextCompactViewport;
-      if (!compactViewport) showGlobalSidebar = false;
-    };
+    const handleNavigationViewport = () => viewportController.sync();
     handleNavigationViewport();
     voiceReconnectSession = readVoiceReconnectSession();
     voiceReconnectVisible = Boolean(voiceReconnectSession);

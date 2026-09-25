@@ -15,6 +15,7 @@
     "test:api-client": "node qa/test-api-client.mjs",
     "test:api-types": "tsc -p frontend/tsconfig.json --noEmit",
     "test:navigation": "node qa/test-navigation-controller.mjs",
+    "test:viewport-controller": "node qa/test-viewport-controller.mjs",
     "test:release-notes": "node qa/test-release-notes-controller.mjs",
     "test:broadcast-audio-bridge": "node qa/test-broadcast-audio-bridge.mjs",
     "test:broadcast-audio-mixer": "node qa/test-broadcast-audio-mixer.mjs",
