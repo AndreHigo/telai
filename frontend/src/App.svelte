@@ -9,6 +9,7 @@
   import { createNotificationStateStore } from "./features/notifications/notification-state.js";
   import FriendsPage from "./features/social/FriendsPage.svelte";
   import FollowingPage from "./features/social/FollowingPage.svelte";
+  import { createSocialStateStore } from "./features/social/social-state.js";
   import DirectMessagesPage from "./features/direct/DirectMessagesPage.svelte";
   import BroadcastPage from "./features/broadcast/BroadcastPage.svelte";
   import LivePage from "./features/live/LivePage.svelte";
@@ -140,6 +141,7 @@
   const settingsState = createSettingsStateStore();
   const authState = createAuthStateStore();
   const notificationState = createNotificationStateStore();
+  const socialState = createSocialStateStore();
   let groups = groupState.getState().groups;
   let streams = [];
   const navigationState = createNavigationStateStore();
@@ -353,6 +355,10 @@
 
   function setNotificationState(next) {
     notificationState.setState(next);
+  }
+
+  function setSocialState(next) {
+    socialState.setState(next);
   }
 
   const unsubscribeNavigationState = navigationState.subscribe((next) => {
@@ -907,15 +913,28 @@
   let directConversationRefreshInFlight = directState.getState().directConversationRefreshInFlight;
   let directConversationRefreshQueued = directState.getState().directConversationRefreshQueued;
   let directConversationRefreshId = directState.getState().directConversationRefreshId;
-  let social = { friends: [], incomingRequests: [], outgoingRequests: [], following: [], blocked: [], counts: { friends: 0, incomingRequests: 0, following: 0, blocked: 0 } };
-  let socialSearchQuery = "";
-  let socialSearchOpen = false;
-  let socialRequestsOpen = false;
-  let socialSearchResults = [];
-  let socialSearchBusy = false;
-  let socialError = "";
-  let socialActionId = "";
-  let socialRefreshInFlight = false;
+  let social = socialState.getState().social;
+  let socialSearchQuery = socialState.getState().socialSearchQuery;
+  let socialSearchOpen = socialState.getState().socialSearchOpen;
+  let socialRequestsOpen = socialState.getState().socialRequestsOpen;
+  let socialSearchResults = socialState.getState().socialSearchResults;
+  let socialSearchBusy = socialState.getState().socialSearchBusy;
+  let socialError = socialState.getState().socialError;
+  let socialActionId = socialState.getState().socialActionId;
+  let socialRefreshInFlight = socialState.getState().socialRefreshInFlight;
+
+  const unsubscribeSocialState = socialState.subscribe((next) => {
+    social = next.social;
+    socialSearchQuery = next.socialSearchQuery;
+    socialSearchOpen = next.socialSearchOpen;
+    socialRequestsOpen = next.socialRequestsOpen;
+    socialSearchResults = next.socialSearchResults;
+    socialSearchBusy = next.socialSearchBusy;
+    socialError = next.socialError;
+    socialActionId = next.socialActionId;
+    socialRefreshInFlight = next.socialRefreshInFlight;
+  });
+
   let groupLoadSequence = groupState.getState().groupLoadSequence;
   let groupOverviewRetryAt = groupState.getState().groupOverviewRetryAt;
   const pendingGroupOverviewRequests = new Map();
@@ -1741,23 +1760,11 @@
         getUser: () => user,
         loadStreams,
         setNotice: (message) => { notice = message; },
-        getState: () => ({
-          social,
-          socialSearchQuery,
-          socialSearchResults,
-          socialSearchBusy,
-          socialError,
-          socialActionId,
-          socialRefreshInFlight,
-          streams,
-        }),
+        getState: () => ({ ...socialState.getState(), streams }),
         setState: (next) => {
-          if ("social" in next) social = next.social;
-          if ("socialSearchResults" in next) socialSearchResults = next.socialSearchResults;
-          if ("socialSearchBusy" in next) socialSearchBusy = next.socialSearchBusy;
-          if ("socialError" in next) socialError = next.socialError;
-          if ("socialActionId" in next) socialActionId = next.socialActionId;
-          if ("socialRefreshInFlight" in next) socialRefreshInFlight = next.socialRefreshInFlight;
+          const socialKeys = ["social", "socialSearchQuery", "socialSearchOpen", "socialRequestsOpen", "socialSearchResults", "socialSearchBusy", "socialError", "socialActionId", "socialRefreshInFlight"];
+          const socialPatch = Object.fromEntries(socialKeys.filter((key) => key in next).map((key) => [key, next[key]]));
+          if (Object.keys(socialPatch).length) setSocialState(socialPatch);
           if ("streams" in next) streams = next.streams;
         },
       }));
@@ -1849,7 +1856,7 @@
         setNotice: (message) => { notice = message; },
         setNotificationsError: (message) => setNotificationState({ notificationsError: message }),
         setDirectConversationError: (message) => setDirectState({ directConversationError: message }),
-        setSocialError: (message) => { socialError = message; },
+        setSocialError: (message) => setSocialState({ socialError: message }),
       }));
     }
     return navigationControllerPromise;
@@ -5703,6 +5710,7 @@
     unsubscribeNavigationState();
     unsubscribeAuthState();
     unsubscribeNotificationState();
+    unsubscribeSocialState();
     unsubscribeSettingsState();
     unsubscribeGroupState();
     unsubscribeMessageState();
@@ -5880,14 +5888,15 @@
         />
       {:else if view === "friends"}
         <FriendsPage
-          bind:socialSearchOpen
-          bind:socialRequestsOpen
-          bind:socialSearchQuery
+          {socialSearchOpen}
+          {socialRequestsOpen}
+          {socialSearchQuery}
           {social}
           {socialError}
           {socialSearchBusy}
           {socialSearchResults}
           {socialActionId}
+          onStateChange={setSocialState}
           onSearchUsers={searchSocialUsers}
           onOpenDirectConversation={openDirectConversationWithUser}
           onCancelFriendRequest={cancelFriendRequest}

@@ -68,6 +68,7 @@
     "test:media": "electron --no-sandbox qa/e2e-media.cjs",
     "test:voice-reconnect": "electron --no-sandbox qa/e2e-voice-reconnect.cjs",
     "test:seo": "node qa/e2e-seo.cjs",
+    "test:social-state": "node qa/test-social-state.mjs",
     "test:admin": "node qa/e2e-admin.cjs",
     "test:tray": "electron --no-sandbox qa/e2e-tray.cjs",
     "generate:tray-icons": "electron --no-sandbox qa/generate-tray-icons.cjs",
