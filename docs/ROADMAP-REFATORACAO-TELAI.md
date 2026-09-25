@@ -116,6 +116,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair envio de mensagens textuais e atualização de permissões para `server/http/group-content-routes.mjs`.
 - [x] Extrair criação e revogação de convites de grupo e convites de membros para `server/http/group-invite-routes.mjs`.
 - [x] Extrair configuração ICE, healthcheck e runtime config para `server/http/media-routes.mjs`, mantendo WebRTC/WebSocket no gateway.
+- [x] Extrair resolução, listagem, abertura, encerramento e follows de streams para `server/http/stream-routes.mjs`, mantendo salas runtime e WebRTC no gateway.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
