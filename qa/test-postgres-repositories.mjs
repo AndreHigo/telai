@@ -10,6 +10,7 @@ import { createPostgresUserPreferenceRepository } from "../server/repositories/u
 import { createPostgresNotificationRepository } from "../server/repositories/notifications.mjs";
 import { createPostgresNotificationSyncService } from "../server/services/postgres-notification-sync.mjs";
 import { createPostgresAuthRepository } from "../server/repositories/auth.mjs";
+import { createPostgresOAuthRepository } from "../server/repositories/oauth.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -43,6 +44,27 @@ try {
   await auth.recordLegalConsents(ids.owner, now);
   assert.equal((await auth.legalConsentStatus(ids.owner)).required, false);
   assert.equal((await auth.userWithLinkedAccounts({ id: ids.owner, username: "pg-owner", displayName: "PG Owner", avatarData: null })).linkedAccounts.length, 0);
+
+  const oauth = createPostgresOAuthRepository(client, {
+    slugFor: (value) => String(value || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32),
+    createPasswordHash: () => "oauth-test-password",
+    mergeUsers: async () => { throw new Error("merge-not-used-in-test"); },
+  });
+  const oauthUser = await oauth.upsertOAuthUser("test", {
+    providerUserId: `provider-${ids.owner}`,
+    email: "pg-oauth@example.test",
+    emailVerified: true,
+    displayName: "PG OAuth",
+    usernameHint: "pg-oauth",
+  });
+  assert.equal(oauthUser.displayName, "PG OAuth");
+  assert.equal((await oauth.upsertOAuthUser("test", {
+    providerUserId: `provider-${ids.owner}`,
+    email: "pg-oauth-updated@example.test",
+    emailVerified: true,
+    displayName: "Updated Name",
+    usernameHint: "updated",
+  })).id, oauthUser.id);
 
   const groups = createPostgresGroupAccessRepository(client);
   assert.equal(await groups.isGroupMember(ids.member, ids.group), true);

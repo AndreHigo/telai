@@ -16,6 +16,7 @@ import { createNotificationSyncService } from "./server/services/notification-sy
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { createSessionRepository } from "./server/repositories/sessions.mjs";
 import { createAuthRepository } from "./server/repositories/auth.mjs";
+import { createOAuthRepository } from "./server/repositories/oauth.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -768,6 +769,12 @@ const notificationSyncService = createNotificationSyncService(database, {
   createLiveContext: liveNotificationContext,
   createNotification,
 });
+const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
+  slugFor,
+  createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
+  createId: randomUUID,
+  mergeUsers: (targetId, sourceId) => mergeUsers(targetId, sourceId),
+});
 
 function pruneExpiredRuntimeState() {
   const now = Date.now();
@@ -991,46 +998,6 @@ async function fetchOAuthIdentity(providerName, code, verifier, request) {
   };
 }
 
-function uniqueOAuthUsername(providerName, identity) {
-  const base = (slugFor(identity.usernameHint) || slugFor(identity.displayName) || providerName).slice(0, 24);
-  let candidate = base.length >= 3 ? base : `${providerName}-${base}`.slice(0, 32);
-  while (database.prepare("SELECT 1 FROM users WHERE username = ?").get(candidate)) {
-    candidate = `${base.slice(0, 23)}-${randomBytes(4).toString("hex")}`.slice(0, 32);
-  }
-  return candidate;
-}
-
-function upsertOAuthUser(providerName, identity) {
-  const linked = database.prepare(`
-    SELECT users.id, users.username, users.display_name AS displayName, users.email
-    FROM oauth_accounts JOIN users ON users.id = oauth_accounts.user_id
-    WHERE oauth_accounts.provider = ? AND oauth_accounts.provider_user_id = ?
-  `).get(providerName, identity.providerUserId);
-  const now = new Date().toISOString();
-  if (linked) {
-    database.prepare("UPDATE oauth_accounts SET email = ?, updated_at = ? WHERE provider = ? AND provider_user_id = ?")
-      .run(identity.email || null, now, providerName, identity.providerUserId);
-    return { id: linked.id, username: linked.username, displayName: linked.displayName };
-  }
-  const existingByEmail = identity.email && identity.emailVerified
-    ? database.prepare("SELECT id, username, display_name AS displayName FROM users WHERE email = ?").get(identity.email)
-    : null;
-  const user = existingByEmail || {
-    id: randomUUID(),
-    username: uniqueOAuthUsername(providerName, identity),
-    displayName: identity.displayName.slice(0, 48) || `Usuário ${providerName}`,
-  };
-  if (!existingByEmail) {
-    database.prepare("INSERT INTO users (id, username, display_name, email, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(user.id, user.username, user.displayName, identity.email || null, hashPassword(randomBytes(48).toString("base64url")), now);
-  } else if (identity.email && !existingByEmail.email) {
-    database.prepare("UPDATE users SET email = ? WHERE id = ?").run(identity.email, existingByEmail.id);
-  }
-  database.prepare("INSERT INTO oauth_accounts (id, provider, provider_user_id, user_id, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(randomUUID(), providerName, identity.providerUserId, user.id, identity.email || null, now, now);
-  return { id: user.id, username: user.username, displayName: user.displayName };
-}
-
 function userDataExport(userId) {
   const account = database.prepare(`
     SELECT id, username, display_name AS displayName, email, avatar_data AS avatarData, created_at AS createdAt
@@ -1197,30 +1164,6 @@ function mergeUsers(targetId, sourceId) {
     try { database.exec("ROLLBACK"); } catch {}
     throw error;
   }
-}
-
-function linkOAuthAccount(providerName, identity, userId) {
-  const target = database.prepare("SELECT id, username, display_name AS displayName, email FROM users WHERE id = ?").get(userId);
-  if (!target) throw new Error("oauth-link-session-invalid");
-  const existing = database.prepare("SELECT user_id FROM oauth_accounts WHERE provider = ? AND provider_user_id = ?")
-    .get(providerName, identity.providerUserId);
-  if (existing && existing.user_id !== userId) {
-    mergeUsers(userId, existing.user_id);
-    return { merged: true, currentDisplayName: target.displayName, suggestedDisplayName: identity.displayName };
-  }
-  const now = new Date().toISOString();
-  if (existing) {
-    database.prepare("UPDATE oauth_accounts SET email = ?, updated_at = ? WHERE provider = ? AND provider_user_id = ?")
-      .run(identity.email || null, now, providerName, identity.providerUserId);
-    return { alreadyLinked: true, currentDisplayName: target.displayName, suggestedDisplayName: identity.displayName };
-  }
-  const emailOwner = identity.email && identity.emailVerified
-    ? database.prepare("SELECT id FROM users WHERE email = ? AND id <> ?").get(identity.email, userId)
-    : null;
-  if (emailOwner) throw new Error("oauth-email-linked-other-account");
-  database.prepare("INSERT INTO oauth_accounts (id, provider, provider_user_id, user_id, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(randomUUID(), providerName, identity.providerUserId, userId, identity.email || null, now, now);
-  return { alreadyLinked: false, currentDisplayName: target.displayName, suggestedDisplayName: identity.displayName };
 }
 
 function requireUser(request, response) {
