@@ -104,6 +104,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair rotas de perfil, canal, preferências e preferências de voz para `server/http/user-settings-routes.mjs`.
 - [x] Extrair busca social, amizades, solicitações e follows para `server/http/social-routes.mjs`.
 - [x] Extrair listagem, leitura e sincronização de notificações para `server/http/notification-routes.mjs`.
+- [x] Extrair apresentação contextual de lives e sincronização de notificações para `server/notifications/runtime.mjs`.
 - [x] Extrair criação, leitura e envio de conversas diretas para `server/http/direct-routes.mjs`.
 - [x] Extrair convites de membro e resgate de convites para `server/http/member-invite-routes.mjs`.
 - [x] Extrair manutenção e API administrativa para `server/http/admin-routes.mjs`, mantendo a página `/admin` no servidor principal.

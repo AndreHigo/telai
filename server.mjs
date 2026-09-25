@@ -18,6 +18,7 @@ import { createNotificationRepository } from "./server/repositories/notification
 import { createChannelProfileRepository } from "./server/repositories/channel-profiles.mjs";
 import { createUserPreferenceRepository } from "./server/repositories/user-preferences.mjs";
 import { createNotificationSyncService } from "./server/services/notification-sync.mjs";
+import { createNotificationRuntime, liveNotificationContext } from "./server/notifications/runtime.mjs";
 import { openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { ensureCompatibilityColumns, ensureCompatibilityIndexes } from "./server/database/sqlite-compatibility.mjs";
 import { createSessionRepository } from "./server/repositories/sessions.mjs";
@@ -792,6 +793,10 @@ const notificationSyncService = createNotificationSyncService(database, {
   createLiveContext: liveNotificationContext,
   createNotification,
 });
+const { liveNotificationPresentation, syncNotificationsForUser } = createNotificationRuntime({
+  notificationSyncService,
+  canAccessStream,
+});
 const accountRepository = createAccountRepository(database, { legalPolicyVersion, createId: randomUUID });
 const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
 const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialRepository, createNotification });
@@ -1139,54 +1144,6 @@ const handleObservabilityRoutes = createObservabilityRoutes({
   errorLog,
   warnLog,
 });
-
-function liveNotificationContext(stream, canRevealPrivate = true) {
-  if (!stream || (stream.visibility === "private" && !canRevealPrivate)) return null;
-  const initiatorName = String(stream.channelName || stream.channelUsername || "Alguém").trim();
-  const isPrivate = stream.visibility === "private";
-  const locationParts = isPrivate
-    ? [
-        stream.groupName ? `grupo ${stream.groupName}` : null,
-        stream.voiceRoomName ? `sala de voz ${stream.voiceRoomName}` : null,
-        stream.liveRoomName ? `canal ${stream.liveRoomName}` : null,
-      ].filter(Boolean)
-    : ["canal público"];
-  const locationLabel = locationParts.length ? locationParts.join(" · ") : (isPrivate ? "sala privada" : "canal público");
-  return {
-    initiatorName,
-    visibility: isPrivate ? "private" : "public",
-    visibilityLabel: isPrivate ? "Privada" : "Pública",
-    locationLabel,
-    groupName: stream.groupName || null,
-    voiceRoomName: stream.voiceRoomName || null,
-    liveRoomName: stream.liveRoomName || null,
-  };
-}
-
-function liveNotificationPresentation(notification, userId) {
-  if (notification.type !== "channel_live" || !notification.streamId) return { liveContext: null };
-  const stream = {
-    visibility: notification.streamVisibility,
-    createdBy: notification.streamCreatedBy,
-    groupId: notification.streamGroupId,
-    channelName: notification.streamChannelName,
-    channelUsername: notification.streamChannelUsername,
-    groupName: notification.streamGroupName,
-    voiceRoomName: notification.streamVoiceRoomName,
-    liveRoomName: notification.streamLiveRoomName,
-  };
-  const liveContext = liveNotificationContext(stream, canAccessStream(userId, stream));
-  if (!liveContext) return { liveContext: null, streamPath: null };
-  return {
-    title: `${liveContext.initiatorName} está ao vivo`,
-    body: `${liveContext.visibilityLabel} · ${liveContext.locationLabel}.`,
-    liveContext,
-  };
-}
-
-function syncNotificationsForUser(userId) {
-  notificationSyncService.sync(userId);
-}
 
 const mergeUsers = (targetId, sourceId) => accountRepository.mergeUsers(targetId, sourceId);
 
