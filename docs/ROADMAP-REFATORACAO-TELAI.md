@@ -101,6 +101,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair atualização e exclusão persistente de grupos, mantendo cleanup de runtime no gateway.
 - [x] Extrair consultas paginadas de administração e membros, mantendo métricas de runtime fora do repositório.
 - [x] Extrair agendamento, consulta e cancelamento de manutenção do roteador HTTP.
+- [x] Extrair rotas de perfil, canal, preferências e preferências de voz para `server/http/user-settings-routes.mjs`.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
