@@ -7,6 +7,7 @@ export function createGroupContentRoutes({
   canGroupRoomAction = canGroupAction,
   groupMessageRepository,
   groupPermissionRepository,
+  groupModerationRepository,
   publishGroupEvent = () => {},
 }) {
   return async function handleGroupContentRoutes(request, response, requestUrl) {
@@ -17,6 +18,10 @@ export function createGroupContentRoutes({
       const groupId = groupMessageMatch[1];
       if (!isGroupMember(user.id, groupId)) {
         json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      if (groupModerationRepository?.isMuted(groupId, user.id)) {
+        json(response, 403, { error: "Você está silenciado neste grupo." });
         return true;
       }
       if (!canGroupAction(user.id, groupId, "canChat")) {

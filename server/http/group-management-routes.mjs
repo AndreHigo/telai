@@ -12,6 +12,7 @@ export function createGroupManagementRoutes({
   createNotification,
   slugFor,
   groupAuditRepository,
+  groupModerationRepository,
 }) {
   return async function handleGroupManagementRoutes(request, response, requestUrl) {
     const groupJoinRequestMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/join-requests$/);
@@ -34,6 +35,10 @@ export function createGroupManagementRoutes({
       }
       if (isGroupMember(user.id, groupId)) {
         json(response, 409, { error: "Você já participa deste grupo." });
+        return true;
+      }
+      if (groupModerationRepository?.isBanned(groupId, user.id)) {
+        json(response, 403, { error: "Você está banido deste grupo." });
         return true;
       }
       const now = new Date().toISOString();

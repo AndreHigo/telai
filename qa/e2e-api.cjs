@@ -352,6 +352,22 @@ async function main() {
     assert.ok(listedInvite);
     assert.equal((await api(owner, `/api/groups/${groupId}/invites/${listedInvite.tokenHash}`, "DELETE")).response.status, 200);
   });
+  await check("basic moderation", async () => {
+    const muted = await api(owner, `/api/groups/${groupId}/moderation`, "POST", { action: "mute", memberId: member.user.id, durationMinutes: 60, reason: "QA" });
+    assert.equal(muted.response.status, 200);
+    assert.ok(muted.body.expiresAt);
+    assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "silenciado" })).response.status, 403);
+    assert.equal((await api(owner, `/api/groups/${groupId}/moderation`, "POST", { action: "unmute", memberId: member.user.id })).response.status, 200);
+    assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "depois do silencio" })).response.status, 201);
+    assert.equal((await api(owner, `/api/groups/${groupId}/moderation`, "POST", { action: "ban", memberId: outsider.user.id, reason: "QA ban" })).response.status, 200);
+    assert.equal((await api(outsider, `/api/groups/${groupId}/overview`)).response.status, 403);
+    assert.equal((await api(owner, `/api/groups/${groupId}/moderation`, "POST", { action: "unban", memberId: outsider.user.id })).response.status, 200);
+    const reinvite = await api(owner, `/api/groups/${groupId}/member-invites`, "POST", { userId: outsider.user.id });
+    assert.equal(reinvite.response.status, 201);
+    assert.equal((await api(outsider, `/api/member-invites/${reinvite.body.invite.id}/accept`, "POST")).response.status, 200);
+    const audit = await api(owner, `/api/groups/${groupId}/audit-log`);
+    assert.ok(audit.body.entries.some((entry) => entry.action === "member_ban"));
+  });
 
   const publicStream = await expectStatus("create public stream", "/api/streams", {
     method: "POST", headers: { cookie: owner.cookie },

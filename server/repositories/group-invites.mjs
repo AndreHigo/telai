@@ -5,6 +5,7 @@ export function createGroupInviteRepository(database, {
   hashToken = (value) => value,
   groupSetupRepository,
   ensureGroupPermissionRow,
+  groupModerationRepository,
 } = {}) {
   if (!groupSetupRepository) throw new Error("groupSetupRepository is required");
   if (typeof ensureGroupPermissionRow !== "function") throw new Error("ensureGroupPermissionRow is required");
@@ -80,6 +81,7 @@ export function createGroupInviteRepository(database, {
       updateMemberInviteStatus(inviteId, "expired");
       return { kind: "expired" };
     }
+    if (groupModerationRepository?.isBanned(invite.groupId, userId, now)) return { kind: "banned", groupId: invite.groupId };
     try {
       database.exec("BEGIN");
       const ownerId = findGroup(invite.groupId)?.ownerId;
@@ -102,6 +104,7 @@ export function createGroupInviteRepository(database, {
   function redeemGroupInvite(token, userId, now = new Date().toISOString()) {
     const invite = findGroupInvite(token);
     if (!invite || invite.expiresAt <= now || invite.uses >= invite.maxUses) return { kind: "unavailable" };
+    if (groupModerationRepository?.isBanned(invite.groupId, userId, now)) return { kind: "banned", groupId: invite.groupId };
     try {
       database.exec("BEGIN");
       const ownerId = findGroup(invite.groupId)?.ownerId;
@@ -156,6 +159,7 @@ export function createPostgresGroupInviteRepository(database, {
   hashToken = (value) => value,
   groupSetupRepository,
   ensureGroupPermissionRow,
+  groupModerationRepository,
   transactionClient = false,
 } = {}) {
   if (!groupSetupRepository) throw new Error("groupSetupRepository is required");
@@ -238,6 +242,7 @@ export function createPostgresGroupInviteRepository(database, {
     return withPostgresTransaction(database, async (client) => {
       const lockedInvite = await findMemberInvite(inviteId, userId, client);
       if (!lockedInvite || lockedInvite.status !== "pending") return { kind: "already-answered" };
+      if (groupModerationRepository && await groupModerationRepository.isBanned(lockedInvite.groupId, userId, now, client)) return { kind: "banned", groupId: lockedInvite.groupId };
       const group = await findGroup(lockedInvite.groupId, client);
       const roleId = await groupSetupRepository.ensureDefaultGroupRoles(lockedInvite.groupId, group?.ownerId);
       await client.query("INSERT INTO group_members (group_id, user_id, role, role_id, created_at) VALUES ($1, $2, 'member', $3, $4) ON CONFLICT (group_id, user_id) DO NOTHING", [lockedInvite.groupId, userId, roleId, now]);
@@ -258,6 +263,7 @@ export function createPostgresGroupInviteRepository(database, {
     return withPostgresTransaction(database, async (client) => {
       const lockedInvite = await findGroupInvite(token, client);
       if (!lockedInvite || lockedInvite.expiresAt <= now || Number(lockedInvite.uses) >= Number(lockedInvite.maxUses)) return { kind: "unavailable" };
+      if (groupModerationRepository && await groupModerationRepository.isBanned(lockedInvite.groupId, userId, now, client)) return { kind: "banned", groupId: lockedInvite.groupId };
       const group = await findGroup(lockedInvite.groupId, client);
       const roleId = await groupSetupRepository.ensureDefaultGroupRoles(lockedInvite.groupId, group?.ownerId);
       const joined = await client.query("INSERT INTO group_members (group_id, user_id, role, role_id, created_at) VALUES ($1, $2, 'member', $3, $4) ON CONFLICT (group_id, user_id) DO NOTHING", [lockedInvite.groupId, userId, roleId, now]);

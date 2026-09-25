@@ -194,6 +194,7 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Anexos com armazenamento local controlado e posterior compatibilidade S3/MinIO.
 - [ ] Threads, busca, não lidas e notificações em tempo real.
 - [ ] Moderação básica: bloquear, expulsar, banir e silenciar.
+  - [x] Expulsar, banir, silenciar, remover silêncio e desfazer banimento no servidor, com auditoria e desconexão de voz/eventos.
 
 ### Fase 4 — Qualidade de mídia
 

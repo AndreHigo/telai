@@ -151,7 +151,15 @@ async function main() {
     const reducedOverview = await request(baseUrl, `/api/groups/${groupId}/overview?includeMessages=0`, { headers: { cookie: owner.cookie } });
     assert.equal(reducedOverview.response.status, 200);
     assert.equal(Object.hasOwn(reducedOverview.body, "messages"), false, "overview reduzido ainda transportou mensagens");
-    console.log(JSON.stringify({ ok: true, separateEventsGateway: true, groupMessageDelivered: true, groupMessageMutationsDelivered: true, presenceDelivered: true, overviewWithoutMessages: true }));
+    const kicked = await request(baseUrl, `/api/groups/${groupId}/moderation`, {
+      method: "POST",
+      headers: { cookie: owner.cookie },
+      body: JSON.stringify({ action: "kick", memberId: member.user.id, reason: "QA events" }),
+    });
+    assert.equal(kicked.response.status, 200, JSON.stringify(kicked.body));
+    const unsubscribed = await waitFor(memberEvents, (message) => message.type === "group-unsubscribed" && message.groupId === groupId);
+    assert.equal(unsubscribed.reason, "kick");
+    console.log(JSON.stringify({ ok: true, separateEventsGateway: true, groupMessageDelivered: true, groupMessageMutationsDelivered: true, presenceDelivered: true, overviewWithoutMessages: true, moderationDisconnectDelivered: true }));
   } finally {
     for (const socket of sockets) if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close();
     await new Promise((resolve) => server.close(resolve));

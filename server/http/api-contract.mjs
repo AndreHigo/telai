@@ -103,6 +103,7 @@ const paths = {
     delete: ["resetRoomPermission", "Remove override de permissão do canal"],
   }),
   "/groups/{groupId}/audit-log": pathItem("Auditoria", { get: ["listGroupAuditLog", "Lista a auditoria administrativa do grupo"] }),
+  "/groups/{groupId}/moderation": pathItem("Moderação", { post: ["moderateGroupMember", "Expulsa, bane ou silencia um membro"] }),
   "/groups/{groupId}/roles": pathItem("Permissões", { post: ["createRole", "Cria um cargo", { methods: ["201"] }] }),
   "/groups/{groupId}/roles/order": pathItem("Permissões", { patch: ["reorderRoles", "Ordena cargos"] }),
   "/groups/{groupId}/roles/{roleId}": pathItem("Permissões", {

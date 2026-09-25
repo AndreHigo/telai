@@ -33,6 +33,11 @@ O dono também pode consultar `GET /api/v1/groups/{groupId}/audit-log`. A
 resposta contém `entries` com as ações administrativas recentes e
 `nextBefore`; use esse cursor em `before` para buscar páginas anteriores.
 
+O dono pode usar `POST /api/v1/groups/{groupId}/moderation` com `action` igual
+a `kick`, `ban`, `mute`, `unmute` ou `unban`. Banimentos e silêncios aceitam
+`durationMinutes` e `reason`; a autorização e o bloqueio de mensagens são
+aplicados no servidor.
+
 O namespace ainda não representa uma promessa de compatibilidade eterna para
 cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
 incompatíveis devem ser introduzidas em outra versão e documentadas aqui.

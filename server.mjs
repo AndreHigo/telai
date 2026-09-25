@@ -42,6 +42,7 @@ import { createGroupRoleRepository } from "./server/repositories/group-roles.mjs
 import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs";
 import { createGroupRoomPermissionRepository } from "./server/repositories/group-room-permissions.mjs";
 import { createGroupAuditRepository } from "./server/repositories/group-audit.mjs";
+import { createGroupModerationRepository } from "./server/repositories/group-moderation.mjs";
 import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
 import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
 import { createStreamRepository } from "./server/repositories/streams.mjs";
@@ -68,6 +69,7 @@ import { createGroupManagementRoutes } from "./server/http/group-management-rout
 import { createGroupRoleRoutes } from "./server/http/group-role-routes.mjs";
 import { createGroupRoomRoutes } from "./server/http/group-room-routes.mjs";
 import { createGroupAuditRoutes } from "./server/http/group-audit-routes.mjs";
+import { createGroupModerationRoutes } from "./server/http/group-moderation-routes.mjs";
 import { createGroupContentRoutes } from "./server/http/group-content-routes.mjs";
 import { createGroupInviteRoutes } from "./server/http/group-invite-routes.mjs";
 import { createGroupRuntimeRoutes } from "./server/http/group-runtime-routes.mjs";
@@ -482,11 +484,13 @@ const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialReposit
 const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
 const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });
 const groupRepository = createGroupRepository(database, { createId: randomUUID, groupSetupRepository });
+const groupModerationRepository = createGroupModerationRepository(database, { createId: randomUUID });
 const groupInviteRepository = createGroupInviteRepository(database, {
   createId: randomUUID,
   hashToken: hashSessionToken,
   groupSetupRepository,
   ensureGroupPermissionRow,
+  groupModerationRepository,
 });
 const handleNotificationRoutes = createNotificationRoutes({
   json,
@@ -525,6 +529,20 @@ const {
   canGroupAction,
   canGroupRoomAction,
 });
+
+function disconnectGroupUser(groupId, userId, reason) {
+  for (const voiceRoom of voiceRooms.values()) {
+    if (voiceRoom.groupId !== groupId) continue;
+    for (const participant of [...voiceRoom.participants.values()]) {
+      if (participant.user?.id !== userId) continue;
+      send(participant, { type: "voice-disconnected", reason, message: reason === "ban" ? "Você foi banido deste grupo." : "Você foi expulso deste grupo." });
+      leaveVoiceRoom(participant);
+    }
+  }
+  groupPresence.delete(`${groupId}:${userId}`);
+  eventGateway?.disconnectUserFromGroup(groupId, userId, reason);
+  eventGateway?.publishGroupPresence(groupId);
+}
 const groupPermissionRepository = createGroupPermissionRepository(database);
 const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
 const groupSettingsRepository = createGroupSettingsRepository(database);
@@ -547,6 +565,7 @@ const handleGroupManagementRoutes = createGroupManagementRoutes({
   groupSetupRepository,
   groupRoleRepository,
   groupAuditRepository,
+  groupModerationRepository,
   groupInviteRepository,
   isGroupMember,
   createNotification,
@@ -568,6 +587,17 @@ const handleGroupRoomRoutes = createGroupRoomRoutes({
   parseVoiceRoomParticipantLimit,
 });
 const handleGroupAuditRoutes = createGroupAuditRoutes({ json, requireUser, groupPermissionRepository, groupAuditRepository });
+const handleGroupModerationRoutes = createGroupModerationRoutes({
+  json,
+  readJson,
+  requireUser,
+  groupPermissionRepository,
+  groupMemberRepository,
+  groupModerationRepository,
+  groupAuditRepository,
+  disconnectGroupUser,
+  publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
+});
 const handleGroupContentRoutes = createGroupContentRoutes({
   json,
   readJson,
@@ -577,6 +607,7 @@ const handleGroupContentRoutes = createGroupContentRoutes({
   groupMessageRepository,
   canGroupRoomAction,
   groupPermissionRepository,
+  groupModerationRepository,
   publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
 });
 const handleGroupInviteRoutes = createGroupInviteRoutes({
@@ -958,6 +989,7 @@ const handleHttpRoutes = createHttpRouter({
   handleGroupRoleRoutes,
   handleGroupRoomRoutes,
   handleGroupAuditRoutes,
+  handleGroupModerationRoutes,
   handleGroupContentRoutes,
   handleGroupInviteRoutes,
   handleDirectRoutes,

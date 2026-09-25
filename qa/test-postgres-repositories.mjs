@@ -21,6 +21,7 @@ import { createPostgresGroupRoleRepository } from "../server/repositories/group-
 import { createPostgresGroupRoomRepository } from "../server/repositories/group-rooms.mjs";
 import { createPostgresGroupRoomPermissionRepository } from "../server/repositories/group-room-permissions.mjs";
 import { createPostgresGroupAuditRepository } from "../server/repositories/group-audit.mjs";
+import { createPostgresGroupModerationRepository } from "../server/repositories/group-moderation.mjs";
 import { createPostgresGroupPermissionRepository } from "../server/repositories/group-permissions.mjs";
 import { createPostgresGroupMemberRepository } from "../server/repositories/group-members.mjs";
 import { createPostgresStreamRepository } from "../server/repositories/streams.mjs";
@@ -198,6 +199,12 @@ try {
   assert.equal(auditEntry.actorUsername, ownerUsername);
   assert.equal(auditEntry.metadata.name, "Auditoria PG");
   assert.equal((await audit.list(createdGroup.id, { limit: 10 })).entries[0].id, auditEntry.id);
+
+  const moderation = createPostgresGroupModerationRepository(client, { createId: randomUUID, transactionClient: true });
+  await moderation.apply({ groupId: createdGroup.id, actorUserId: ids.owner, userId: ids.member, action: "mute", durationMinutes: 60, reason: "PG QA", now });
+  assert.equal(await moderation.isMuted(createdGroup.id, ids.member, now), true);
+  await moderation.apply({ groupId: createdGroup.id, actorUserId: ids.owner, userId: ids.member, action: "unmute", now });
+  assert.equal(await moderation.isMuted(createdGroup.id, ids.member, now), false);
   const roomOverride = await roomPermissions.save({ groupId: createdGroup.id, roomId: textRoom.id, roleId: createdDefaultRole.id, canView: true, canChat: false, canConnect: true, updatedAt: now });
   assert.equal(roomOverride.canChat, false);
   assert.equal(await roomAwareGroups.canGroupRoomAction(ids.member, createdGroup.id, textRoom.id, "canChat"), false);
@@ -311,7 +318,7 @@ try {
   assert.equal(await groupSettings.deleteGroup(createdGroup.id), true);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-room-permissions", "group-permissions", "group-members", "group-settings", "user-profile", "site-admin", "maintenance", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-room-permissions", "group-permissions", "group-members", "group-moderation", "group-settings", "user-profile", "site-admin", "maintenance", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

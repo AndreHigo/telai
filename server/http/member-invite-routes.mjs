@@ -36,6 +36,10 @@ export function createMemberInviteRoutes({ json, requireUser, groupInviteReposit
       }
       try {
         const result = groupInviteRepository.acceptMemberInvite(inviteId, user.id);
+        if (result.kind === "banned") {
+          json(response, 403, { error: "Você está banido deste grupo." });
+          return true;
+        }
         json(response, 200, { ok: true, status: result.kind, groupId: result.groupId });
       } catch {
         json(response, 400, { error: "Não foi possível aceitar o convite." });
@@ -48,6 +52,10 @@ export function createMemberInviteRoutes({ json, requireUser, groupInviteReposit
       const user = requireUser(request, response);
       if (!user) return true;
       const result = groupInviteRepository.redeemGroupInvite(redeemMatch[1], user.id);
+      if (result.kind === "banned") {
+        json(response, 403, { error: "Você está banido deste grupo." });
+        return true;
+      }
       if (result.kind === "unavailable") {
         json(response, 400, { error: "Este convite expirou ou não está mais disponível." });
         return true;

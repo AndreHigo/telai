@@ -7110,6 +7110,12 @@ html, body, #app { min-width: 0; max-width: 100%; }
 .group-audit-entry strong, .group-audit-entry small { display: block; }
 .group-audit-entry strong { color: #eaf0ff; font-size: 12px; }
 .group-audit-entry small { margin-top: 3px; color: #899abd; font-size: 11px; }
+.group-moderation-form { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 190px; gap: 12px; margin-top: 12px; }
+.group-moderation-form label > span { display: block; margin-bottom: 6px; color: #aebbd5; font-size: 11px; font-weight: 800; }
+.group-moderation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.group-moderation-actions .danger-button { border: 1px solid rgba(255, 126, 145, .55); color: #ffb2be; background: rgba(126, 31, 57, .28); }
+.settings-success { margin-top: 10px; color: #8ce6aa; font-size: 12px; }
+@media (max-width: 760px) { .group-moderation-form { grid-template-columns: 1fr; } }
 
 /* Esta seleção iguala a especificidade da regra legada de desktop que zerava
    a altura dos estados vazios. */
