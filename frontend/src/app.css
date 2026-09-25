@@ -1159,8 +1159,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .applications-sidebar, .applications-details, .application-detail-grid { display: grid; gap: 16px; min-width: 0; }
 .application-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .application-list { display: grid; gap: 6px; }
-.application-list-item { display: flex; align-items: center; gap: 10px; min-width: 0; border: 1px solid transparent; border-radius: 10px; padding: 9px; color: #9aabd0; background: transparent; text-align: left; }
+.application-list-item { display: flex; align-items: center; gap: 10px; min-width: 0; border: 1px solid transparent; border-radius: 10px; padding: 9px; color: #9aabd0; background: transparent; text-align: left; transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease; }
 .application-list-item:hover, .application-list-item.active { border-color: #3e5787; color: #f0f4ff; background: #1b2d4f; }
+.application-list-item:hover { transform: translateX(2px); }
+.application-list-item:focus-visible { outline: 2px solid #8990ff; outline-offset: 1px; }
 .application-list-item > span:last-child, .application-bot-identity > span:last-child, .application-row > span { display: grid; min-width: 0; }
 .application-list-item strong, .application-list-item small, .application-bot-identity strong, .application-bot-identity small, .application-row strong, .application-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .application-list-item strong, .application-bot-identity strong, .application-row strong { font-size: 11px; }
@@ -1177,9 +1179,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .application-token-reveal { display: flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid #80652e; border-radius: 10px; background: #332912; }
 .application-token-reveal code { min-width: 0; overflow: auto; color: #ffe4a0; font-size: 10px; }
 .application-token-list { display: grid; gap: 5px; padding-top: 10px; border-top: 1px solid #263b5d; }
-.application-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 8px 0; }
+.application-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 9px 0; border-bottom: 1px solid rgba(47, 70, 108, .58); }
+.application-row:last-child { border-bottom: 0; }
 .application-row > button { flex: 0 0 auto; padding: 6px 9px; font-size: 9px; }
 .application-empty-state { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
+.applications-intro .settings-success { margin: 14px 0 0; border: 1px solid rgba(91, 220, 138, .3); border-radius: 10px; padding: 10px 12px; color: #9df0b7; background: rgba(50, 157, 91, .12); }
+.application-token-reveal { box-shadow: 0 8px 20px rgba(114, 75, 13, .12); }
 .mirante-shell.light .application-list-item { color: #61728e; }
 .mirante-shell.light .application-list-item:hover, .mirante-shell.light .application-list-item.active { border-color: #b4c5e7; color: #1d2b45; background: #e9effb; }
 .mirante-shell.light .application-list-icon { color: #4055aa; background: #edf2fb; }
@@ -1187,6 +1192,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mirante-shell.light .application-bot-identity, .mirante-shell.light .application-token-list { border-color: #d1dbea; }
 .mirante-shell.light .application-token-reveal { border-color: #d8b966; background: #fff9e8; }
 .mirante-shell.light .application-token-reveal code { color: #6f5100; }
+.mirante-shell.light .application-row { border-color: #dbe3ef; }
+.mirante-shell.light .applications-intro .settings-success { border-color: #a9dbb9; color: #277d51; background: #eef9f1; }
 .settings-card { display: grid; gap: 20px; padding: 23px; border: 1px solid #293f66; border-radius: 18px; background: #111e37; }
 .desktop-startup-card { gap: 14px; }
 .desktop-startup-toggle { flex: 0 0 auto; margin-top: 4px; cursor: pointer; }
@@ -1582,6 +1589,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .modal-search-row { flex-direction: column; }
   .modal-footer { align-items: stretch; flex-direction: column-reverse; }
   .settings-page.window-page { padding: 16px; }
+  .applications-intro .settings-card-heading, .application-identity-card .settings-card-heading { align-items: flex-start; flex-direction: column; }
+  .applications-intro .settings-card-heading > button, .application-identity-card .danger-outline { width: 100%; justify-content: center; }
+  .inline-settings-form { align-items: stretch; flex-direction: column; }
   .notifications-page.window-page { padding: 16px; }
   .notifications-heading { flex-direction: column; }
   .notifications-heading-actions { justify-content: flex-start; }
