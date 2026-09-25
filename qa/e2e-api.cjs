@@ -273,8 +273,16 @@ async function main() {
     const searchedGroupMessages = await api(owner, `/api/groups/${groupId}/messages/search?q=${encodeURIComponent("editada")}&roomId=${encodeURIComponent(group.textRoomId)}`);
     assert.equal(searchedGroupMessages.response.status, 200);
     assert.equal(searchedGroupMessages.body.messages.some((message) => message.id === sentGroupMessage.body.message.id), true);
+    const threadReply = await api(owner, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, parentMessageId: sentGroupMessage.body.message.id, body: "resposta QA" });
+    assert.equal(threadReply.response.status, 201);
+    assert.equal(threadReply.body.message.parentMessageId, sentGroupMessage.body.message.id);
+    const thread = await api(member, `/api/groups/${groupId}/messages/${sentGroupMessage.body.message.id}/thread`);
+    assert.equal(thread.response.status, 200);
+    assert.equal(thread.body.messages.some((message) => message.id === threadReply.body.message.id), true);
+    assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, parentMessageId: threadReply.body.message.id, body: "resposta aninhada" })).response.status, 400);
     const overview = await api(owner, `/api/groups/${groupId}/overview`);
     assert.ok(overview.body.messages.some((message) => message.id === sentGroupMessage.body.message.id && message.body === "mensagem QA editada"));
+    assert.equal(overview.body.messages.find((message) => message.id === sentGroupMessage.body.message.id).threadCount, 1);
     const roomBeforeRead = overview.body.rooms.find((room) => room.id === group.textRoomId);
     assert.ok(roomBeforeRead.unreadCount >= 1, "a mensagem do membro não apareceu como não lida");
     assert.equal((await api(null, `/api/groups/${groupId}/rooms/${group.textRoomId}/read`, "POST")).response.status, 401);

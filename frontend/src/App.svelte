@@ -343,6 +343,10 @@
   let groupVoiceWorkspaceLoad = null;
   let GroupMessageSearchDialog = null;
   let groupMessageSearchDialogLoad = null;
+  let GroupThreadDialog = null;
+  let groupThreadDialogLoad = null;
+  let groupThreadControllerPromise = null;
+  let groupEventHandlerPromise = null;
   let GroupChannelPermissionsSettings = null;
   let groupChannelPermissionsSettingsLoad = null;
   let GroupAuditLogSettings = null;
@@ -380,6 +384,70 @@
   }
 
   $: if (showGroupMessageSearch && !GroupMessageSearchDialog) void loadGroupMessageSearchDialog();
+
+  function loadGroupThreadDialog() {
+    if (GroupThreadDialog || groupThreadDialogLoad) return groupThreadDialogLoad;
+    groupThreadDialogLoad = import("./features/groups/GroupThreadDialog.svelte")
+      .then((module) => { GroupThreadDialog = module.default; })
+      .catch((error) => reportClientError("group_thread_dialog_load_error", error))
+      .finally(() => { groupThreadDialogLoad = null; });
+    return groupThreadDialogLoad;
+  }
+
+  $: if (activeGroupThread && !GroupThreadDialog) void loadGroupThreadDialog();
+
+  function getGroupThreadController() {
+    if (!groupThreadControllerPromise) {
+      groupThreadControllerPromise = import("./features/groups/thread-controller.js").then(({ createGroupThreadController }) => createGroupThreadController({
+        api,
+        getSelectedGroupId: () => selectedGroupId,
+        getSelectedRoom: () => selectedRoom,
+        getActiveThread: () => activeGroupThread,
+        setActiveThread: (value) => { activeGroupThread = value; },
+        getThreadMessages: () => groupThreadMessages,
+        setThreadMessages: (value) => { groupThreadMessages = value; },
+        getThreadDraft: () => groupThreadDraft,
+        setThreadDraft: (value) => { groupThreadDraft = value; },
+        getThreadBusy: () => groupThreadBusy,
+        setThreadBusy: (value) => { groupThreadBusy = value; },
+        setThreadError: (value) => { groupThreadError = value; },
+        getKnownMessageIds: () => knownGroupMessageIds,
+        setKnownMessageIds: (value) => { knownGroupMessageIds = value; },
+        getGroupOverview: () => groupOverview,
+        setGroupOverview: (value) => { groupOverview = value; },
+      }));
+    }
+    return groupThreadControllerPromise;
+  }
+
+  async function openGroupThread(...args) { return (await getGroupThreadController()).openGroupThread(...args); }
+  async function sendGroupThreadMessage(...args) { return (await getGroupThreadController()).sendGroupThreadMessage(...args); }
+
+  function getGroupEventHandler() {
+    if (!groupEventHandlerPromise) {
+      groupEventHandlerPromise = import("./features/groups/group-event-handler.js").then(({ createGroupEventHandler }) => createGroupEventHandler({
+        getSelectedGroupId: () => selectedGroupId,
+        getGroupOverview: () => groupOverview,
+        setGroupOverview: (value) => { groupOverview = value; },
+        getUser: () => user,
+        getRooms: () => rooms,
+        getSelectedRoomId: () => selectedRoomId,
+        getActiveGroupThread: () => activeGroupThread,
+        setActiveGroupThread: (value) => { activeGroupThread = value; },
+        getGroupThreadMessages: () => groupThreadMessages,
+        setGroupThreadMessages: (value) => { groupThreadMessages = value; },
+        getKnownGroupMessageIds: () => knownGroupMessageIds,
+        setKnownGroupMessageIds: (value) => { knownGroupMessageIds = value; },
+        shouldKeepGroupMessagesAtBottom,
+        markGroupRoomRead,
+        messageBelongsToRoom,
+        incrementGroupRoomUnread,
+        playVoiceSound,
+        scrollGroupMessagesToBottom,
+      }));
+    }
+    return groupEventHandlerPromise;
+  }
 
   function loadGroupChannelPermissionsSettings() {
     if (GroupChannelPermissionsSettings || groupChannelPermissionsSettingsLoad) return groupChannelPermissionsSettingsLoad;
@@ -708,6 +776,11 @@
   let groupMessageSearchResults = [];
   let groupMessageSearchBusy = false;
   let groupMessageSearchError = "";
+  let activeGroupThread = null;
+  let groupThreadMessages = [];
+  let groupThreadDraft = "";
+  let groupThreadBusy = false;
+  let groupThreadError = "";
   let groupJoinRequests = [];
   let groupJoinActionId = "";
   let groupAuditEntries = [];
@@ -950,47 +1023,8 @@
     }
   }
 
-  function applyGroupEventPresence(groupId, members) {
-    if (selectedGroupId !== groupId || !groupOverview || !Array.isArray(members)) return;
-    const onlineById = new Map(members.map((member) => [member.id, Boolean(member.online)]));
-    groupOverview = {
-      ...groupOverview,
-      members: (groupOverview.members || []).map((member) => (
-        onlineById.has(member.id) ? { ...member, online: onlineById.get(member.id) } : member
-      )),
-    };
-  }
-
   function handleGroupEvent(message) {
-    if (!message?.groupId || message.groupId !== selectedGroupId) return;
-    if (message.type === "group-subscribed" || message.type === "group-presence") {
-      applyGroupEventPresence(message.groupId, message.members);
-      return;
-    }
-    if (message.type === "group-message-updated" && message.message && groupOverview) {
-      groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).map((item) => item.id === message.message.id ? message.message : item) };
-      return;
-    }
-    if (message.type === "group-message-deleted" && message.messageId && groupOverview) {
-      knownGroupMessageIds = new Set([...knownGroupMessageIds].filter((id) => id !== message.messageId));
-      groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).filter((item) => item.id !== message.messageId) };
-      return;
-    }
-    if (message.type !== "group-message" || !message.message || !groupOverview) return;
-    const incoming = message.message;
-    if (!incoming.id || knownGroupMessageIds.has(incoming.id)) return;
-    const messageList = document.querySelector(".chat-workspace .message-list");
-    const keepAtBottom = shouldKeepGroupMessagesAtBottom(messageList);
-    knownGroupMessageIds = new Set([...knownGroupMessageIds, incoming.id]);
-    groupOverview = { ...groupOverview, messages: [...(groupOverview.messages || []), incoming].slice(-80) };
-    const incomingIsUnread = incoming.userId !== user?.id;
-    if (incomingIsUnread) {
-      const currentRoom = rooms.find((room) => room.id === selectedRoomId);
-      if (keepAtBottom && messageBelongsToRoom(incoming, currentRoom)) void markGroupRoomRead(currentRoom);
-      else incrementGroupRoomUnread(incoming);
-      playVoiceSound("message");
-    }
-    if (keepAtBottom) void scrollGroupMessagesToBottom({ force: true });
+    void getGroupEventHandler().then((handler) => handler(message)).catch((error) => reportClientError("group_event_handler_error", error));
   }
 
   function ensureGroupEventGateway() {
@@ -2943,6 +2977,17 @@
     const room = rooms.find((candidate) => candidate.id === message.roomId) || rooms.find((candidate) => candidate.slug === "geral" && candidate.kind === "text");
     showGroupMessageSearch = false;
     if (room) await selectRoom(room.id);
+  }
+
+  function closeGroupThread() {
+    activeGroupThread = null;
+    groupThreadMessages = [];
+    groupThreadDraft = "";
+    groupThreadError = "";
+  }
+
+  function updateGroupThreadDraft(value) {
+    groupThreadDraft = value;
   }
 
   function ensureVoicePeerHealthTimer() {
@@ -6479,7 +6524,11 @@
     try {
       const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/messages/${encodeURIComponent(message.id)}`, { method: "PATCH", body: JSON.stringify({ body }) });
       if (result.message && groupOverview?.group?.id === selectedGroupId) {
-        groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).map((item) => item.id === message.id ? result.message : item) };
+        if (message.parentMessageId && activeGroupThread?.id === message.parentMessageId) {
+          groupThreadMessages = groupThreadMessages.map((item) => item.id === message.id ? result.message : item);
+        } else {
+          groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).map((item) => item.id === message.id ? result.message : item) };
+        }
       }
       cancelEditMessage();
     } catch (error) {
@@ -6491,7 +6540,15 @@
     if (!selectedGroupId || !window.confirm("Excluir esta mensagem?")) return;
     try {
       await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/messages/${encodeURIComponent(message.id)}`, { method: "DELETE" });
-      groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).filter((item) => item.id !== message.id) };
+      if (message.parentMessageId) {
+        if (activeGroupThread?.id === message.parentMessageId) groupThreadMessages = groupThreadMessages.filter((item) => item.id !== message.id);
+        groupOverview = {
+          ...groupOverview,
+          messages: (groupOverview.messages || []).map((item) => item.id === message.parentMessageId ? { ...item, threadCount: Math.max(0, (item.threadCount || 0) - 1) } : item),
+        };
+      } else {
+        groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).filter((item) => item.id !== message.id) };
+      }
       knownGroupMessageIds = new Set([...knownGroupMessageIds].filter((id) => id !== message.id));
     } catch (error) {
       notice = error.message;
@@ -7411,7 +7468,7 @@
           onOpenVoiceSettings={openVoiceSettings}
           onLeaveVoiceRoom={leaveVoiceRoom}
         />
-        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} onSearchMessages={openGroupMessageSearch} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
+        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} onSearchMessages={openGroupMessageSearch} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onOpenThread={openGroupThread} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
         <GroupMemberRail
           {user}
           {memberRoleGroups}
@@ -7692,6 +7749,26 @@
       />
     {:else}
       <div class="workspace-loading" role="status" aria-label="Carregando busca de mensagens"><span></span><span></span><span></span></div>
+    {/if}
+  {/if}
+  {#if activeGroupThread}
+    {#if GroupThreadDialog}
+      <svelte:component
+        this={GroupThreadDialog}
+        parent={activeGroupThread}
+        messages={groupThreadMessages}
+        currentUserId={user?.id}
+        draft={groupThreadDraft}
+        busy={groupThreadBusy}
+        error={groupThreadError}
+        onDraftChange={updateGroupThreadDraft}
+        onSend={sendGroupThreadMessage}
+        onClose={closeGroupThread}
+        onStartEdit={startEditMessage}
+        onDelete={deleteMessage}
+      />
+    {:else}
+      <div class="workspace-loading" role="status" aria-label="Carregando respostas"><span></span><span></span><span></span></div>
     {/if}
   {/if}
   {#if showLeaveGroupDialog}

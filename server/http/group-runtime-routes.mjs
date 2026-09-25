@@ -28,6 +28,34 @@ export function createGroupRuntimeRoutes({
   canGroupRoomAction = () => true,
 }) {
   return async function handleGroupRuntimeRoutes(request, response, requestUrl) {
+    const groupThreadMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages\/([\w-]{16,128})\/thread$/);
+    if (groupThreadMatch && request.method === "GET") {
+      const user = requireUser(request, response);
+      if (!user) return true;
+      const [, groupId, parentMessageId] = groupThreadMatch;
+      if (!isGroupMember(user.id, groupId)) {
+        json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      const parent = groupMessageRepository.findMessage(groupId, parentMessageId);
+      if (!parent || parent.parentMessageId) {
+        json(response, 404, { error: "Mensagem principal não encontrada." });
+        return true;
+      }
+      if (!canGroupRoomAction(user.id, groupId, parent.roomId || null, "canView")) {
+        json(response, 403, { error: "Você não tem permissão para visualizar este canal." });
+        return true;
+      }
+      const decorate = (message) => ({
+        ...message,
+        attachments: (message.attachments || []).map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor)),
+      });
+      const parentWithAttachments = groupAttachmentRepository.attachToMessages(groupId, [parent])[0];
+      const threadMessages = groupAttachmentRepository.attachToMessages(groupId, groupMessageRepository.listThread(groupId, parent.id));
+      json(response, 200, { parent: decorate(parentWithAttachments), messages: threadMessages.map(decorate) });
+      return true;
+    }
+
     const groupMessageSearchMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages\/search$/);
     if (groupMessageSearchMatch && request.method === "GET") {
       const user = requireUser(request, response);

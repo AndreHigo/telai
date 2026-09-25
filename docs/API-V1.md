@@ -41,6 +41,10 @@ contagem.
 `GET /api/v1/groups/{groupId}/messages/search?q=...` busca até 50 mensagens
 visíveis ao membro; `roomId` pode restringir a busca a um canal de texto.
 
+`GET /api/v1/groups/{groupId}/messages/{messageId}/thread` lista a mensagem
+principal e até 100 respostas diretas. Respostas não podem abrir uma segunda
+camada de thread e continuam sujeitas às permissões do canal.
+
 O dono pode usar `POST /api/v1/groups/{groupId}/moderation` com `action` igual
 a `kick`, `ban`, `mute`, `unmute` ou `unban`. Cargos com a permissão de moderar
 membros também podem usar a rota, mas somente contra cargos inferiores na ordem

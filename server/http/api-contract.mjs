@@ -115,6 +115,7 @@ const paths = {
   "/groups/{groupId}/permissions": pathItem("Permissões", { patch: ["updateMemberPermissions", "Atualiza permissões individuais"] }),
   "/groups/{groupId}/messages": pathItem("Mensagens", { post: ["createGroupMessage", "Envia mensagem no grupo, opcionalmente com anexos", { methods: ["201"] }] }),
   "/groups/{groupId}/messages/search": pathItem("Mensagens", { get: ["searchGroupMessages", "Busca mensagens do grupo"] }),
+  "/groups/{groupId}/messages/{messageId}/thread": pathItem("Mensagens", { get: ["getGroupMessageThread", "Lista as respostas de uma mensagem"] }),
   "/groups/{groupId}/messages/{messageId}": pathItem("Mensagens", {
     patch: ["editGroupMessage", "Edita uma mensagem do grupo"],
     delete: ["deleteGroupMessage", "Exclui uma mensagem do grupo"],

@@ -318,12 +318,14 @@ CREATE TABLE IF NOT EXISTS group_messages (
   group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   room_id TEXT REFERENCES group_rooms(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_message_id TEXT REFERENCES group_messages(id) ON DELETE CASCADE,
   body TEXT NOT NULL,
   created_at TEXT NOT NULL,
   edited_at TEXT
 );
 CREATE INDEX IF NOT EXISTS group_messages_recent_idx ON group_messages(group_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS group_messages_room_idx ON group_messages(group_id, room_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS group_messages_thread_idx ON group_messages(parent_message_id, created_at ASC);
 
 CREATE TABLE IF NOT EXISTS group_room_reads (
   group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,

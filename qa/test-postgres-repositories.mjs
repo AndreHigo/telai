@@ -163,6 +163,9 @@ try {
   assert.equal(updatedGroupMessage.body, "Mensagem editada PostgreSQL");
   assert.equal(updatedGroupMessage.editedAt, now);
   assert.equal((await groupMessages.searchMessages({ groupId: ids.group, query: "editada", roomId: generalRoom.id })).some((message) => message.id === groupMessage.id), true);
+  const threadReply = await groupMessages.createMessage({ groupId: ids.group, roomId: generalRoom.id, parentMessageId: groupMessage.id, userId: ids.member, body: "Resposta PostgreSQL", displayName: "PG Member", username: memberUsername, createdAt: now });
+  assert.equal((await groupMessages.listThread(ids.group, groupMessage.id))[0].id, threadReply.id);
+  assert.equal((await groupMessages.listMessages(ids.group)).find((message) => message.id === groupMessage.id).threadCount, 1);
   const groupAttachments = createPostgresGroupAttachmentRepository(client, { createId: randomUUID });
   const attachmentMessage = await groupMessages.createMessage({ groupId: ids.group, roomId: generalRoom.id, userId: ids.owner, body: "Mensagem com anexo PostgreSQL", displayName: "PG Owner", username: ownerUsername, createdAt: now });
   const createdAttachments = await groupAttachments.createAttachments({

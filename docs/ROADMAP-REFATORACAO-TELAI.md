@@ -197,6 +197,7 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Threads, busca, não lidas e notificações em tempo real.
   - [x] Persistir cursores de leitura por membro/canal, expor `unreadCount` no overview e atualizar o badge pelo gateway de eventos.
   - [x] Buscar mensagens por grupo/canal com limite de resultados e modal leve no frontend.
+  - [x] Adicionar threads de uma camada com respostas persistentes, limite de 100 itens e painel carregado sob demanda.
 - [ ] Moderação básica: bloquear, expulsar, banir e silenciar.
   - [x] Expulsar, banir, silenciar, remover silêncio e desfazer banimento no servidor, com auditoria e desconexão de voz/eventos.
   - [x] Permissão de moderação por cargo com respeito à hierarquia.

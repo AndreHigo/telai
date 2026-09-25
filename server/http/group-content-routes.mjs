@@ -85,6 +85,12 @@ export function createGroupContentRoutes({
           json(response, 403, { error: "Você não tem permissão para conversar neste canal." });
           return true;
         }
+        const requestedParentMessageId = String(body.parentMessageId || "").trim();
+        const parentMessage = requestedParentMessageId ? groupMessageRepository.findMessage(groupId, requestedParentMessageId) : null;
+        if (requestedParentMessageId && (!parentMessage || parentMessage.parentMessageId || (parentMessage.roomId || null) !== (room?.id || null))) {
+          json(response, 400, { error: "A resposta precisa apontar para uma mensagem principal deste canal." });
+          return true;
+        }
         const stored = [];
         let createdMessage = null;
         try {
@@ -94,7 +100,7 @@ export function createGroupContentRoutes({
             stored.push({ ...attachment, id, storageKey });
           }
           const createdAt = new Date().toISOString();
-          createdMessage = groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt });
+          createdMessage = groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, parentMessageId: parentMessage?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt });
           const rows = groupAttachmentRepository.createAttachments({ groupId, messageId: createdMessage.id, attachments: stored, createdAt });
           createdMessage.attachments = rows.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor));
           publishGroupEvent(groupId, { type: "group-message", message: createdMessage });
@@ -140,7 +146,7 @@ export function createGroupContentRoutes({
           return true;
         }
         await Promise.all(attachments.map((attachment) => attachmentStorage.remove(attachment.storageKey).catch(() => {})));
-        publishGroupEvent(groupId, { type: "group-message-deleted", messageId, roomId: message.roomId || null });
+        publishGroupEvent(groupId, { type: "group-message-deleted", messageId, parentMessageId: message.parentMessageId || null, roomId: message.roomId || null });
         json(response, 200, { ok: true, messageId });
         return true;
       }

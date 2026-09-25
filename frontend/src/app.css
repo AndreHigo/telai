@@ -743,6 +743,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .message-attachment > span { display: grid; min-width: 0; gap: 3px; }
 .message-attachment strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .message-attachment small { color: #8298be; font-size: 9px; }
+.message-thread-button { display: block; margin-top: 7px; border: 0; padding: 0; color: #9daaff; background: transparent; font-size: 10px; font-weight: 800; cursor: pointer; }
+.message-thread-button:hover { color: #d4d9ff; text-decoration: underline; }
+.group-thread-dialog { display: flex; width: min(520px, 100%); max-height: min(720px, calc(100vh - 32px)); flex-direction: column; overflow: hidden; border: 1px solid #304a73; border-radius: 16px; background: #101d35; box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+.group-thread-header { display: flex; align-items: start; justify-content: space-between; gap: 15px; padding: 18px 20px 15px; border-bottom: 1px solid #2b4268; }
+.group-thread-header h2 { margin: 2px 0 0; color: #eef3ff; font-size: 18px; }
+.group-thread-parent { display: flex; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #263b5e; background: rgba(28,45,80,.42); }
+.group-thread-parent > div { min-width: 0; }
+.group-thread-parent p { margin: 4px 0 0; color: #b6c4df; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+.group-thread-messages { display: flex; min-height: 120px; flex: 1; flex-direction: column; gap: 14px; overflow-y: auto; padding: 18px 20px; }
+.group-thread-message { display: flex; gap: 10px; }
+.group-thread-message .message-content { min-width: 0; flex: 1; }
+.group-thread-message p { margin: 4px 0 0; color: #b6c4df; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+.group-thread-empty { display: grid; min-height: 150px; place-items: center; align-content: center; gap: 8px; color: #8298be; font-size: 11px; text-align: center; }
+.group-thread-empty p { margin: 0; }
+.group-thread-composer { display: grid; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid #2b4268; background: #111f38; }
+.group-thread-composer textarea { min-height: 58px; resize: vertical; border: 1px solid #304a73; border-radius: 10px; padding: 9px 10px; color: #eef3ff; background: #0d172b; outline: none; font-size: 11px; line-height: 1.4; }
+.group-thread-composer textarea:focus { border-color: #7381f6; box-shadow: 0 0 0 2px rgba(115,129,246,.14); }
+.group-thread-composer button { justify-self: end; }
+.mirante-shell.light .message-thread-button { color: #4f5edb; }
+.mirante-shell.light .message-thread-button:hover { color: #3043a6; }
+.mirante-shell.light .group-thread-dialog { border-color: #cbd5e6; background: #fff; box-shadow: 0 24px 70px rgba(25,44,80,.18); }
+.mirante-shell.light .group-thread-header { border-color: #d8e0ed; }
+.mirante-shell.light .group-thread-header h2 { color: #1d2b45; }
+.mirante-shell.light .group-thread-parent { border-color: #d8e0ed; background: #f4f6fb; }
+.mirante-shell.light .group-thread-parent p, .mirante-shell.light .group-thread-message p { color: #40536f; }
+.mirante-shell.light .group-thread-messages { background: #fff; }
+.mirante-shell.light .group-thread-composer { border-color: #d8e0ed; background: #f7f9fc; }
+.mirante-shell.light .group-thread-composer textarea { border-color: #cbd5e6; color: #1d2b45; background: #fff; }
 .message-empty { margin: auto; text-align: center; }
 .message-empty span { display: inline-grid; width: 38px; height: 38px; place-items: center; border-radius: 12px; color: #aeb5ff; background: #1c2d50; font-size: 22px; }
 .message-empty h2 { margin: 12px 0 0; color: #eef3ff; font-size: 16px; }
