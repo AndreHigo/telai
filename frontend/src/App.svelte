@@ -179,8 +179,6 @@
   let broadcastCameraEnabled = false;
   let broadcastMicrophoneEnabled = true;
   let broadcastVideoComposition = null;
-  let broadcastAudioMixContext = null;
-  let broadcastAudioMixDestination = null;
   let broadcastSocket = null;
   let broadcastChatMessageIds = new Set();
   let broadcastChatMessages = [];
@@ -1672,6 +1670,19 @@
   async function captureBroadcastMicrophoneStream(...args) { return (await getBroadcastCaptureController()).captureBroadcastMicrophoneStream(...args); }
   async function captureDisplayStream(...args) { return (await getBroadcastCaptureController()).captureDisplayStream(...args); }
   async function refreshBroadcastDevices(...args) { return (await getBroadcastCaptureController()).refreshBroadcastDevices(...args); }
+
+  let broadcastAudioMixerControllerPromise = null;
+  function getBroadcastAudioMixerController() {
+    if (!broadcastAudioMixerControllerPromise) {
+      broadcastAudioMixerControllerPromise = import("./features/broadcast/audio-mixer-controller.js").then(({ createBroadcastAudioMixerController }) => createBroadcastAudioMixerController({
+        getAudioContext: () => window.AudioContext || window.webkitAudioContext,
+        reportClientError,
+      }));
+    }
+    return broadcastAudioMixerControllerPromise;
+  }
+  async function stopBroadcastAudioMix(...args) { return (await getBroadcastAudioMixerController()).stop(...args); }
+  async function mixBroadcastAudio(...args) { return (await getBroadcastAudioMixerController()).mix(...args); }
 
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
@@ -5011,42 +5022,6 @@
 
   function requestCameraBroadcastStart() {
     requestBroadcastStart("camera");
-  }
-
-  async function stopBroadcastAudioMix() {
-    const destination = broadcastAudioMixDestination;
-    broadcastAudioMixDestination = null;
-    try { destination?.stream?.getTracks?.().forEach((track) => track.stop()); } catch {}
-    const context = broadcastAudioMixContext;
-    broadcastAudioMixContext = null;
-    try { await context?.close?.(); } catch {}
-  }
-
-  async function mixBroadcastAudio(...tracks) {
-    const audioTracks = tracks.filter(Boolean);
-    await stopBroadcastAudioMix();
-    if (!audioTracks.length) return null;
-    if (audioTracks.length === 1) return audioTracks[0];
-    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextConstructor) return audioTracks[0];
-    const context = new AudioContextConstructor({ latencyHint: "interactive" });
-    try {
-      await context.resume();
-      const destination = context.createMediaStreamDestination();
-      audioTracks.forEach((track) => {
-        const source = context.createMediaStreamSource(new MediaStream([track]));
-        const gain = context.createGain();
-        gain.gain.value = 1;
-        source.connect(gain).connect(destination);
-      });
-      broadcastAudioMixContext = context;
-      broadcastAudioMixDestination = destination;
-      return destination.stream.getAudioTracks()[0] || audioTracks[0];
-    } catch (error) {
-      try { await context.close(); } catch {}
-      reportClientError("broadcast_audio_mix_fallback", error, { trackCount: audioTracks.length });
-      return audioTracks[0];
-    }
   }
 
   function openLeaveGroupDialog() {
