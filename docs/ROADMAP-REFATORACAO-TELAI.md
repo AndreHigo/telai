@@ -110,10 +110,16 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair a tela de canais seguidos para `frontend/src/features/social`.
 - [x] Extrair a feature de mensagens diretas para `frontend/src/features/direct`.
 - [x] Extrair a camada de apresentação da transmissão para `frontend/src/features/broadcast`.
+- [x] Extrair o cabeçalho, navegação global e banner de reconexão do shell para `frontend/src/features/shell`.
+- [x] Extrair a tela inicial para `frontend/src/features/home` sem alterar sua identidade visual.
+- [x] Extrair a seleção de grupos, rails de comunidades/canais/membros e cabeçalho do workspace para `frontend/src/features/groups`.
+- [x] Extrair o chat textual e a sala de voz do workspace de grupos para `frontend/src/features/groups`, mantendo o estado de mídia no shell.
 - [x] Extrair o pipeline de entrada de voz para `frontend/src/services/media` sem alterar os filtros atuais.
 - [x] Extrair captura, fallback e seleção do microfone para `frontend/src/services/media`.
 - [x] Extrair sincronização, `replaceTrack` e renegociação do áudio local para `frontend/src/services/media`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
+  - [ ] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
+  - [ ] Separar a tela de configurações por domínio e reduzir o markup restante do shell.
 
 ### Fase 2 — Contratos e tempo real
 
