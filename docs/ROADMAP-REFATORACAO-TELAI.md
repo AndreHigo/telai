@@ -80,6 +80,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair listagem e estado de leitura das notificações persistentes.
 - [x] Separar o sincronizador de notificações e suas consultas de domínio.
 - [x] Preparar pool, Compose local e plano de migração para PostgreSQL.
+- [x] Criar implementações PostgreSQL assíncronas para os repositórios já extraídos e testá-las com rollback.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.

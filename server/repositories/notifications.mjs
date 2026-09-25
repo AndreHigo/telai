@@ -61,3 +61,61 @@ export function createNotificationRepository(database, { createId = randomUUID }
 
   return { createNotification, listNotifications, markAllRead, hasNotification, markRead };
 }
+
+export function createPostgresNotificationRepository(database, { createId = randomUUID } = {}) {
+  async function createNotification({ userId, type, entityId, groupId = null, title, body, createdAt = new Date().toISOString() }) {
+    await database.query(`
+      INSERT INTO notifications (id, user_id, type, entity_id, group_id, title, body, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (user_id, type, entity_id) DO NOTHING
+    `, [createId(), userId, type, entityId, groupId, title, body, createdAt]);
+  }
+
+  async function listNotifications(userId, now) {
+    const result = await database.query(`
+      SELECT notifications.id, notifications.type, notifications.entity_id AS "entityId",
+        notifications.group_id AS "groupId", notifications.title, notifications.body,
+        notifications.created_at AS "createdAt", notifications.read_at AS "readAt",
+        groups.name AS "groupName", group_user_invites.status AS "inviteStatus",
+        group_user_invites.expires_at AS "inviteExpiresAt",
+        group_join_requests.status AS "joinRequestStatus",
+        streams.id AS "streamId", streams.visibility AS "streamVisibility",
+        streams.group_id AS "streamGroupId", streams.created_by AS "streamCreatedBy",
+        COALESCE(stream_channel_profiles.display_name, stream_users.display_name) AS "streamChannelName",
+        stream_users.username AS "streamChannelUsername",
+        stream_groups.name AS "streamGroupName", stream_groups.slug AS "streamGroupSlug",
+        stream_voice_rooms.name AS "streamVoiceRoomName", stream_live_rooms.name AS "streamLiveRoomName",
+        direct_messages.conversation_id AS "directConversationId"
+      FROM notifications
+      LEFT JOIN groups ON groups.id = notifications.group_id
+      LEFT JOIN group_user_invites ON notifications.type = 'group_invite' AND group_user_invites.id = notifications.entity_id
+      LEFT JOIN group_join_requests ON notifications.type IN ('group_join_request', 'group_join_decision') AND group_join_requests.id = notifications.entity_id
+      LEFT JOIN streams ON notifications.type = 'channel_live' AND streams.id = notifications.entity_id
+      LEFT JOIN users AS stream_users ON stream_users.id = streams.created_by
+      LEFT JOIN channel_profiles AS stream_channel_profiles ON stream_channel_profiles.user_id = streams.created_by
+      LEFT JOIN groups AS stream_groups ON stream_groups.id = streams.group_id
+      LEFT JOIN group_voice_rooms AS stream_voice_rooms ON stream_voice_rooms.id = streams.voice_room_id
+      LEFT JOIN group_rooms AS stream_live_rooms ON stream_live_rooms.id = streams.room_id
+      LEFT JOIN direct_messages ON notifications.type = 'direct_message' AND direct_messages.id = notifications.entity_id
+      WHERE notifications.user_id = $1
+        AND (notifications.type <> 'group_invite' OR (group_user_invites.status = 'pending' AND group_user_invites.expires_at > $2) OR notifications.read_at IS NOT NULL)
+      ORDER BY notifications.created_at DESC LIMIT 100
+    `, [userId, now]);
+    return result.rows;
+  }
+
+  async function markAllRead(userId, readAt) {
+    await database.query("UPDATE notifications SET read_at = COALESCE(read_at, $1) WHERE user_id = $2", [readAt, userId]);
+  }
+
+  async function hasNotification(userId, notificationId) {
+    const result = await database.query("SELECT id FROM notifications WHERE id = $1 AND user_id = $2", [notificationId, userId]);
+    return result.rowCount > 0;
+  }
+
+  async function markRead(notificationId, readAt) {
+    await database.query("UPDATE notifications SET read_at = COALESCE(read_at, $1) WHERE id = $2", [readAt, notificationId]);
+  }
+
+  return { createNotification, listNotifications, markAllRead, hasNotification, markRead };
+}
