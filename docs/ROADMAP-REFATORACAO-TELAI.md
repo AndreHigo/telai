@@ -119,6 +119,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair criação e revogação de convites de grupo e convites de membros para `server/http/group-invite-routes.mjs`.
 - [x] Extrair configuração ICE, healthcheck e runtime config para `server/http/media-routes.mjs`, mantendo WebRTC/WebSocket no gateway.
 - [x] Extrair resolução, listagem, abertura, encerramento e follows de streams para `server/http/stream-routes.mjs`, mantendo salas runtime e WebRTC no gateway.
+- [x] Extrair presença, autorização, validade runtime e caminhos públicos de streams para `server/domain/streams/runtime.mjs`.
 - [x] Extrair exclusão de grupos, overview e presença para `server/http/group-runtime-routes.mjs`, mantendo o runtime de voz no gateway.
 - [x] Extrair início, callback e vínculo OAuth para `server/http/oauth-routes.mjs`, mantendo a sessão local e os provedores existentes.
 - [x] Extrair páginas SEO, legais, download, updates e fallback de arquivos para `server/http/static-routes.mjs`.

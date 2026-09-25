@@ -12,6 +12,7 @@ import { createBroadcastMessageHandler } from "./server/gateway/broadcast-messag
 import { createBroadcastRuntime } from "./server/gateway/broadcast-runtime.mjs";
 import { createIceConfiguration } from "./server/media/ice-configuration.mjs";
 import { createAuthRuntime } from "./server/auth/runtime.mjs";
+import { createStreamRuntime } from "./server/domain/streams/runtime.mjs";
 import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
 import { createGroupAccessRepository, createGroupRepository } from "./server/repositories/groups.mjs";
 import { createNotificationRepository } from "./server/repositories/notifications.mjs";
@@ -787,6 +788,27 @@ const handleDirectRoutes = createDirectRoutes({
 const channelProfileRepository = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
 const { channelProfileForUser } = channelProfileRepository;
 const userPreferenceRepository = createUserPreferenceRepository(database, { normalizePreferenceVolume });
+const streamRepository = createStreamRepository(database, { createId: randomUUID });
+const {
+  canAccessStream,
+  decorateRuntimeStream,
+  endStreamByRoom,
+  isPresent,
+  loadStreamChat,
+  runtimeStreamIsLive,
+  streamForRoom,
+  streamPublicPath,
+  touchGroupPresence,
+} = createStreamRuntime({
+  rooms,
+  groupPresence,
+  streamRepository,
+  runtimeStartedAt,
+  streamOrphanGraceMs,
+  hostReconnectGraceMs,
+  isGroupMember,
+  slugFor,
+});
 const notificationSyncService = createNotificationSyncService(database, {
   getNotificationScope: (userId) => userPreferenceRepository.getPreferences(userId).liveNotificationScope,
   isStreamLive: runtimeStreamIsLive,
@@ -829,7 +851,6 @@ const groupRoleRepository = createGroupRoleRepository(database, { createId: rand
 const groupRoomRepository = createGroupRoomRepository(database, { createId: randomUUID });
 const groupPermissionRepository = createGroupPermissionRepository(database);
 const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
-const streamRepository = createStreamRepository(database, { createId: randomUUID });
 const groupSettingsRepository = createGroupSettingsRepository(database);
 const handleGroupDiscoveryRoutes = createGroupDiscoveryRoutes({
   json,
@@ -1320,64 +1341,7 @@ function siteAdminGroupMembersPage(requestUrl, groupId) {
   return { group, ...adminPage(members, total, page, pageSize) };
 }
 
-function streamPublicPath(stream) {
-  // O endereço amigável acompanha o nome de exibição. O username continua
-  // aceito pelo resolvedor apenas para preservar links antigos.
-  const channel = slugFor(stream.channelName || stream.displayName || stream.channelUsername || stream.username || "");
-  const group = stream.visibility === "private" ? slugFor(stream.groupSlug || "") : "";
-  if (!channel) return "";
-  return group ? `/${group}/${channel}` : `/${channel}`;
-}
-
 groupSetupRepository.initializeExistingGroups();
-
-function presenceKey(groupId, userId) { return `${groupId}:${userId}`; }
-
-function touchGroupPresence(groupId, userId) {
-  groupPresence.set(presenceKey(groupId, userId), Date.now());
-}
-
-function isPresent(groupId, userId) {
-  const lastSeen = groupPresence.get(presenceKey(groupId, userId)) || 0;
-  return Date.now() - lastSeen <= 35_000;
-}
-
-function canAccessStream(userId, stream) {
-  const createdBy = stream.created_by ?? stream.createdBy;
-  const groupId = stream.group_id ?? stream.groupId;
-  return stream.visibility === "public" || (userId && createdBy === userId) || (userId && groupId && isGroupMember(userId, groupId));
-}
-
-function streamForRoom(roomId) {
-  return streamRepository.findForRoom(roomId);
-}
-
-function loadStreamChat(roomId) {
-  return streamRepository.loadChatForRoom(roomId);
-}
-
-function endStreamByRoom(roomId) {
-  streamRepository.endByRoom(roomId);
-}
-
-function runtimeStreamIsLive(stream) {
-  const room = rooms.get(stream.roomName);
-  if (room?.host) return true;
-  if (room?.hostDisconnectedAt && Date.now() - room.hostDisconnectedAt <= hostReconnectGraceMs) return true;
-  if (Date.now() - runtimeStartedAt <= streamOrphanGraceMs) return true;
-  // A stream is inserted just before the host joins signaling. Give that
-  // handshake a short grace period. After the process startup grace above,
-  // never expose an abandoned database row indefinitely.
-  const startedAt = Date.parse(stream.startedAt || "");
-  if (Number.isFinite(startedAt) && Date.now() - startedAt <= 15_000) return true;
-  endStreamByRoom(stream.roomName);
-  return false;
-}
-
-function decorateRuntimeStream(stream) {
-  const room = rooms.get(stream.roomName);
-  return { ...stream, viewerCount: room?.viewers?.size || 0 };
-}
 
 function send(socket, message) {
   if (socket?.readyState !== 1) return false;
