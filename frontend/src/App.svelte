@@ -40,6 +40,7 @@
   import { createVoiceTrackSyncService } from "./services/media/voice-track-sync.js";
   import { createVoiceReconnectStorage } from "./services/media/voice-reconnect-storage.js";
   import { createVoiceQualityController } from "./features/voice/quality-controller.js";
+  import { createVoiceSignalingController } from "./features/voice/signaling-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
   import {
@@ -270,7 +271,6 @@
   let voicePeerHealthInFlight = false;
   let voicePeerRelayRecoveryAttempted = new Set();
   let voicePendingCandidates = new Map();
-  let voiceSignalQueues = new Map();
   let voicePendingSignals = new Map();
   let voiceRemoteAudio = new Map();
   let voiceRemoteStreams = new Map();
@@ -2926,6 +2926,18 @@
     if (voiceSocket?.readyState === WebSocket.OPEN) voiceSocket.send(JSON.stringify(message));
   }
 
+  const voiceSignalingController = createVoiceSignalingController({
+    getState: () => ({ voiceClientId, voiceError, voiceParticipants, voicePeerConnections, voicePendingCandidates, voicePendingSignals, voiceRoomId, voiceSignalQueues: voiceSignalingControllerQueues, voiceState }),
+    setState: (next) => {
+      if ("voiceError" in next) voiceError = next.voiceError;
+    },
+    createPeer: (participantId) => createVoicePeer(participantId),
+    closePeer: (participantId) => closeVoicePeer(participantId),
+    sendVoice,
+    reportClientError,
+  });
+  const voiceSignalingControllerQueues = new Map();
+
   function updateVoiceRoomSnapshot(roomId, updater) {
     if (!roomId || !groupOverview?.rooms?.length) return;
     groupOverview = {
@@ -3097,7 +3109,7 @@
     voicePeerConnections.get(participantId)?.close();
     voicePeerConnections.delete(participantId);
     voicePendingCandidates.delete(participantId);
-    voiceSignalQueues.delete(participantId);
+    voiceSignalingController.clearParticipant(participantId);
     voicePendingSignals.delete(participantId);
     voicePeerAudioHealth.delete(participantId);
     voicePeerRelayRecoveryAttempted.delete(participantId);
@@ -3978,77 +3990,12 @@
     return peer;
   }
 
-  async function handleVoiceSignal(message) {
-    const participantId = String(message?.from || "").trim();
-    const payload = message?.payload;
-    if (!voiceRoomId || !participantId || participantId === voiceClientId || !payload || typeof payload !== "object") return;
-    // O servidor só encaminha sinais entre participantes da mesma sala, mas
-    // o evento voice-user-joined chega por outro envio WebSocket. Em entradas
-    // simultâneas, a oferta/candidato pode chegar antes da presença; guardar o
-    // sinal evita que alguns pares do mesh nunca criem o áudio remoto.
-    if (!voiceParticipants.has(participantId)) {
-      voicePendingSignals.set(participantId, [...(voicePendingSignals.get(participantId) || []), message].slice(-96));
-      return;
-    }
-    let peer = voicePeerConnections.get(participantId);
-    if (peer?.connectionState === "closed") {
-      closeVoicePeer(participantId);
-      peer = null;
-    }
-    peer ||= createVoicePeer(participantId);
-    if (!peer) return;
-    if (payload.kind === "candidate") {
-      if (!payload.candidate || typeof payload.candidate !== "object") return;
-      if (peer.remoteDescription) await peer.addIceCandidate(payload.candidate).catch((error) => reportClientError("voice_candidate_error", error, { participantId }));
-      else voicePendingCandidates.set(participantId, [...(voicePendingCandidates.get(participantId) || []), payload.candidate].slice(-64));
-      return;
-    }
-
-    if (payload.kind === "offer") {
-      // O mesmo par pode gerar uma oferta local durante uma troca de
-      // microfone/reconexão. Recuar a oferta local permite aceitar a oferta
-      // mais nova, em vez de deixar setRemoteDescription lançar
-      // InvalidStateError e contaminar a sala inteira.
-      if (peer.signalingState === "have-local-offer") await peer.setLocalDescription({ type: "rollback" });
-      if (peer.signalingState === "have-remote-offer") return;
-      await peer.setRemoteDescription(payload.sdp);
-      if (voicePeerConnections.get(participantId) !== peer || peer.connectionState === "closed") return;
-      for (const candidate of voicePendingCandidates.get(participantId) || []) await peer.addIceCandidate(candidate).catch((error) => reportClientError("voice_pending_candidate_error", error, { participantId }));
-      voicePendingCandidates.delete(participantId);
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      if (voicePeerConnections.get(participantId) !== peer || peer.connectionState === "closed") return;
-      sendVoice({ type: "voice-signal", target: participantId, payload: { kind: "answer", sdp: peer.localDescription } });
-    } else if (payload.kind === "answer") {
-      // Respostas antigas podem chegar depois de uma recuperação. Elas não
-      // devem ser aplicadas a um peer que já voltou ao estado estável.
-      if (peer.signalingState !== "have-local-offer") return;
-      await peer.setRemoteDescription(payload.sdp);
-      for (const candidate of voicePendingCandidates.get(participantId) || []) await peer.addIceCandidate(candidate).catch((error) => reportClientError("voice_pending_candidate_error", error, { participantId }));
-      voicePendingCandidates.delete(participantId);
-    }
+  function handleVoiceSignal(message) {
+    return voiceSignalingController.handleSignal(message);
   }
 
   function enqueueVoiceSignal(message) {
-    const participantId = String(message?.from || "").trim();
-    if (!participantId) return;
-    const previous = voiceSignalQueues.get(participantId) || Promise.resolve();
-    const next = previous
-      .catch(() => {})
-      .then(() => handleVoiceSignal(message))
-      .catch((error) => {
-        reportClientError("voice_signal_processing_error", error, {
-          roomId: voiceRoomId,
-          participantId,
-          signalKind: message?.payload?.kind || "unknown",
-          signalingState: voicePeerConnections.get(participantId)?.signalingState || "closed",
-        });
-        if (voiceState === "connected" && voiceRoomId) voiceError = "A conexão de áudio com um participante apresentou uma falha. Tentando recuperar…";
-      })
-      .finally(() => {
-        if (voiceSignalQueues.get(participantId) === next) voiceSignalQueues.delete(participantId);
-      });
-    voiceSignalQueues.set(participantId, next);
+    return voiceSignalingController.enqueueSignal(message);
   }
 
   function connectVoiceSocket() {
@@ -4413,7 +4360,7 @@
     voiceRtcStatSnapshots.clear();
     voicePeerAudioHealth.clear();
     voicePeerRelayRecoveryAttempted.clear();
-    voiceSignalQueues.clear();
+    voiceSignalingControllerQueues.clear();
     voicePendingSignals.clear();
     stopVoicePeerHealthTimer();
     voiceState = "idle";

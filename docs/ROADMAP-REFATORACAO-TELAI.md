@@ -229,6 +229,7 @@ enviada ao GitHub nem publicada em produção.
   - [x] Extrair sumarização leve de `RTCStatsReport` e enviar amostras de qualidade de voz sob demanda, sem aumentar o bundle inicial.
     - [x] Extrair o polling de qualidade RTC para um controlador de voz independente, isolando snapshots por participante e preservando o bundle inicial lazy.
     - [x] Extrair a persistência/normalização da sessão de reconexão de voz para `frontend/src/services/media/voice-reconnect-storage.js`, mantendo o banner e o fluxo no shell.
+    - [x] Extrair fila, buffer de candidatos e negociação offer/answer de voz para `frontend/src/features/voice/signaling-controller.js`, mantendo a captura local no shell.
 - [ ] Preservar captura de tela, janela, câmera, áudio de jogos e Electron.
 
 ### Fase 5 — Plataforma e escala sob demanda
