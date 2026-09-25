@@ -51,6 +51,7 @@
   import { createVoiceSignalingController } from "./features/voice/signaling-controller.js";
   import { createVoicePeerHealthController } from "./features/voice/peer-health-controller.js";
   import { createVoicePeerRecoveryController } from "./features/voice/peer-recovery-controller.js";
+  import { createVoicePeerController } from "./features/voice/peer-controller.js";
   import { createVoiceAudioTestController } from "./features/voice/audio-test-controller.js";
   import { createVoiceRemotePlaybackController } from "./features/voice/remote-playback-controller.js";
   import { createVoiceParticipantPreferencesController } from "./features/voice/participant-preferences-controller.js";
@@ -291,6 +292,7 @@
   let voiceSocket = null;
   let voiceParticipants = new Map();
   let voicePeerConnections = new Map();
+  let voicePeerController = null;
   let voicePeerConnectionTimers = new Map();
   let voicePeerAudioTrackTimers = new Map();
   let voicePeerNegotiationInFlight = new Set();
@@ -726,6 +728,42 @@
     shouldInitiate: (participantId) => voicePeerShouldInitiate(participantId),
     sendVoice,
     reportClientError,
+  });
+  voicePeerController = createVoicePeerController({
+    getState: () => ({
+      selectedOutputDeviceId,
+      voiceDeafened,
+      voiceLocalStream,
+      voiceLocallyMutedParticipants,
+      voicePeerAudioHealth,
+      voicePeerAudioTrackTimers,
+      voicePeerConnectionTimers,
+      voicePeerConnections,
+      voiceRemoteAudio,
+      voiceRemoteStreams,
+    }),
+    getRtcConfig: () => rtcConfig,
+    setState: (next) => { if ("voiceError" in next) voiceError = next.voiceError; },
+    ensureVoiceActivityTimer: (...args) => ensureVoiceActivityTimer(...args),
+    bindVoiceLocalTrack: (track) => bindVoiceLocalTrack(track),
+    sendVoice: (...args) => sendVoice(...args),
+    reportClientError: (...args) => reportClientError(...args),
+    hasTurnServer: () => voiceHasTurnServer(),
+    recoverPeer: (participantId, peer, options) => recoverVoicePeer(participantId, peer, options),
+    closePeer: (participantId) => closeVoicePeer(participantId),
+    schedulePeerRecovery: (participantId, delayMs, forceRelay) => scheduleVoicePeerRecovery(participantId, delayMs, forceRelay),
+    clearPeerRecovery: (participantId) => voicePeerRecoveryController.clearParticipant(participantId),
+    ensureRemoteStream: (participantId) => ensureVoiceRemoteStream(participantId),
+    ensureRemoteAudio: (participantId) => ensureVoiceRemoteAudio(participantId),
+    scheduleVoiceRemotePlayback: (participantId, delayMs) => scheduleVoiceRemotePlayback(participantId, delayMs),
+    ensurePeerHealthTimer: () => ensureVoicePeerHealthTimer(),
+    attachVoiceActivityDetector: (participantId, audio) => attachVoiceActivityDetector(participantId, audio),
+    playRemoteAudio: (participantId, audio) => playVoiceRemoteAudio(participantId, audio),
+    clearRecoveredVoiceError: () => clearRecoveredVoiceError(),
+    voicePreferenceTargetId: (...args) => voicePreferenceTargetId(...args),
+    effectiveVoiceOutputVolume: (...args) => effectiveVoiceOutputVolume(...args),
+    connectionTimeoutMs: VOICE_PEER_CONNECTION_TIMEOUT_MS,
+    audioTrackTimeoutMs: VOICE_PEER_AUDIO_TRACK_TIMEOUT_MS,
   });
   let voiceDevicesBusy = false;
   let voiceDevicesError = "";
@@ -3836,114 +3874,9 @@
     if (allPeersRecovered) voiceError = "";
   }
 
-  function createVoicePeer(participantId, initiator = false, peerConfig = rtcConfig) {
-    if (voicePeerConnections.has(participantId)) return voicePeerConnections.get(participantId);
-    const peer = new RTCPeerConnection({ ...peerConfig, iceCandidatePoolSize: 2 });
-    voicePeerConnections.set(participantId, peer);
-    const connectionTimer = window.setTimeout(() => {
-      voicePeerConnectionTimers.delete(participantId);
-      if (voicePeerConnections.get(participantId) !== peer || ["connected", "completed", "closed"].includes(peer.connectionState)) return;
-      reportClientError("voice_peer_connection_timeout", new Error("O par de voz não concluiu a conexão a tempo."), { participantId, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, forceRelay: voiceHasTurnServer() });
-      voiceError = "A conexão de áudio ainda não foi concluída. Tentando recuperar o áudio…";
-      void recoverVoicePeer(participantId, peer, { forceRelay: true });
-    }, VOICE_PEER_CONNECTION_TIMEOUT_MS);
-    voicePeerConnectionTimers.set(participantId, connectionTimer);
-    ensureVoiceActivityTimer();
-    const localTrack = voiceLocalStream?.getAudioTracks?.().find((track) => track.readyState === "live");
-    if (localTrack) {
-      peer.addTrack(localTrack, voiceLocalStream);
-      bindVoiceLocalTrack(localTrack);
-    }
-    peer.onicecandidate = (event) => { if (event.candidate) sendVoice({ type: "voice-signal", target: participantId, payload: { kind: "candidate", candidate: event.candidate } }); };
-    peer.ontrack = (event) => {
-      const audioTrackTimer = voicePeerAudioTrackTimers.get(participantId);
-      if (audioTrackTimer) clearTimeout(audioTrackTimer);
-      voicePeerAudioTrackTimers.delete(participantId);
-      // Quando suportado pelo Chromium, elimina o atraso extra do buffer de
-      // reprodução sem desativar a adaptação automática em redes instáveis.
-      try {
-        if (event.receiver && "playoutDelayHint" in event.receiver) event.receiver.playoutDelayHint = 0;
-      } catch (error) {
-        reportClientError("voice_playout_delay_hint_error", error, { participantId });
-      }
-      const remoteStream = ensureVoiceRemoteStream(participantId);
-      if (!remoteStream.getTracks().some((track) => track.id === event.track.id)) remoteStream.addTrack(event.track);
-      const audio = ensureVoiceRemoteAudio(participantId);
-      audio.muted = voiceDeafened || voiceLocallyMutedParticipants.has(voicePreferenceTargetId(participantId));
-      audio.volume = effectiveVoiceOutputVolume(participantId);
-      if (audio.srcObject !== remoteStream) audio.srcObject = remoteStream;
-      event.track.addEventListener("ended", () => {
-        if (voiceRemoteStreams.get(participantId) !== remoteStream) return;
-        try { remoteStream.removeTrack(event.track); } catch {}
-        if (!remoteStream.getAudioTracks().some((track) => track.readyState === "live")) {
-          voicePeerAudioHealth.delete(participantId);
-          scheduleVoiceRemotePlayback(participantId, 400);
-        }
-      }, { once: true });
-      clearRecoveredVoiceError();
-      const currentHealth = voicePeerAudioHealth.get(participantId);
-      voicePeerAudioHealth.set(participantId, {
-        firstTrackAt: currentHealth?.firstTrackAt || Date.now(),
-        lastProgressAt: currentHealth?.lastProgressAt || Date.now(),
-        lastBytes: currentHealth?.lastBytes || 0,
-        recoveryAttempted: currentHealth?.recoveryAttempted || false,
-      });
-      ensureVoicePeerHealthTimer();
-      attachVoiceActivityDetector(participantId, audio);
-      void playVoiceRemoteAudio(participantId, audio).catch((error) => {
-        reportClientError("voice_remote_audio_play_error", error, { participantId, deviceSelected: Boolean(selectedOutputDeviceId) });
-        voiceError = "O áudio remoto foi conectado, mas não conseguiu tocar. Verifique a saída de áudio selecionada.";
-      });
-    };
-    peer.onconnectionstatechange = () => {
-      if (peer.connectionState === "failed") {
-        reportClientError("voice_peer_failed", new Error("A conexão de áudio falhou."), { participantId, iceConnectionState: peer.iceConnectionState });
-        void recoverVoicePeer(participantId, peer, { forceRelay: true });
-      } else if (peer.connectionState === "closed") closeVoicePeer(participantId);
-      else if (peer.connectionState === "disconnected") scheduleVoicePeerRecovery(participantId, 1500, true);
-      else {
-        if (["connected", "completed"].includes(peer.connectionState)) {
-          const connectionTimer = voicePeerConnectionTimers.get(participantId);
-          if (connectionTimer) clearTimeout(connectionTimer);
-          voicePeerConnectionTimers.delete(participantId);
-          clearRecoveredVoiceError();
-          if (!voiceRemoteAudio.has(participantId) && !voicePeerAudioTrackTimers.has(participantId)) {
-            const audioTrackTimer = window.setTimeout(() => {
-              voicePeerAudioTrackTimers.delete(participantId);
-              if (voicePeerConnections.get(participantId) !== peer || voiceRemoteAudio.has(participantId) || peer.connectionState === "closed") return;
-              reportClientError("voice_peer_audio_track_timeout", new Error("O par de voz conectou, mas não entregou a faixa de áudio remota."), { participantId, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, forceRelay: voiceHasTurnServer() });
-              voiceError = "A conexão de áudio foi estabelecida, mas a voz não chegou. Tentando recuperar…";
-              void recoverVoicePeer(participantId, peer, { forceRelay: true });
-            }, VOICE_PEER_AUDIO_TRACK_TIMEOUT_MS);
-            voicePeerAudioTrackTimers.set(participantId, audioTrackTimer);
-          }
-        }
-        if (peer.connectionState === "connected" && !voicePeerAudioHealth.has(participantId)) {
-          const now = Date.now();
-          voicePeerAudioHealth.set(participantId, {
-            firstTrackAt: now,
-            lastProgressAt: now,
-            lastBytes: 0,
-            recoveryAttempted: false,
-          });
-          ensureVoicePeerHealthTimer();
-        }
-        voicePeerRecoveryController.clearParticipant(participantId);
-      }
-    };
-    peer.oniceconnectionstatechange = () => {
-      if (peer.iceConnectionState === "failed") {
-        reportClientError("voice_ice_failed", new Error("A negociação ICE de áudio falhou."), { participantId });
-        voiceError = "Não foi possível atravessar a rede para conectar o áudio. Verifique o TURN da VPS.";
-        void recoverVoicePeer(participantId, peer, { forceRelay: true });
-      } else if (peer.iceConnectionState === "disconnected") {
-        scheduleVoicePeerRecovery(participantId, 1500, true);
-      }
-    };
-    if (initiator) peer.createOffer().then(async (offer) => { await peer.setLocalDescription(offer); sendVoice({ type: "voice-signal", target: participantId, payload: { kind: "offer", sdp: peer.localDescription } }); }).catch((caught) => reportClientError("voice_offer_error", caught, { participantId }));
-    return peer;
+  function createVoicePeer(...args) {
+    return voicePeerController?.createPeer(...args) || null;
   }
-
   function handleVoiceSignal(message) {
     return voiceSignalingController.handleSignal(message);
   }
