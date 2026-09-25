@@ -70,6 +70,7 @@ async function clickAccountSettings(window) {
 }
 
 async function clickSettingsCategory(window, label) {
+  await waitFor("navegação de categorias de configurações", () => evaluate(window, () => Boolean(document.querySelector(".settings-category-nav"))));
   const labelLiteral = JSON.stringify(label);
   const clicked = await evaluate(window, `() => {
     const label = ${labelLiteral};
