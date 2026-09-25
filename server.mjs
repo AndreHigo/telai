@@ -36,6 +36,7 @@ import { createMaintenanceRepository } from "./server/repositories/maintenance.m
 import { json, readJson } from "./server/http/body.mjs";
 import { createUserSettingsRoutes } from "./server/http/user-settings-routes.mjs";
 import { createSocialRoutes } from "./server/http/social-routes.mjs";
+import { createNotificationRoutes } from "./server/http/notification-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -770,6 +771,15 @@ const groupInviteRepository = createGroupInviteRepository(database, {
   hashToken: hashSessionToken,
   groupSetupRepository,
   ensureGroupPermissionRow,
+});
+const handleNotificationRoutes = createNotificationRoutes({
+  json,
+  requireUser,
+  groupInviteRepository,
+  notificationRepository,
+  syncNotificationsForUser,
+  liveNotificationPresentation,
+  streamPublicPath,
 });
 const groupJoinRequestRepository = createGroupJoinRequestRepository(database, {
   createId: randomUUID,
@@ -3008,46 +3018,7 @@ async function handleHttpRequest(request, response) {
     });
     return;
   }
-  if (requestUrl.pathname === "/api/notifications" && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const now = new Date().toISOString();
-    groupInviteRepository.expireMemberInvites(user.id, now);
-    syncNotificationsForUser(user.id);
-    const notifications = notificationRepository.listNotifications(user.id, now).map((notification) => {
-      const presentation = liveNotificationPresentation(notification, user.id);
-      const streamPath = notification.streamId && presentation.liveContext
-        ? streamPublicPath({ visibility: notification.streamVisibility, channelName: notification.streamChannelName, channelUsername: notification.streamChannelUsername, groupSlug: notification.streamGroupSlug })
-        : null;
-      const {
-        streamId, streamVisibility, streamGroupId, streamCreatedBy, streamChannelName, streamChannelUsername,
-        streamGroupName, streamGroupSlug, streamVoiceRoomName, streamLiveRoomName, ...safeNotification
-      } = notification;
-      return {
-        ...safeNotification,
-        ...presentation,
-        streamPath,
-        unread: !notification.readAt,
-        actionable: notification.type === "group_invite" ? notification.inviteStatus === "pending" : notification.type === "group_join_request" ? notification.joinRequestStatus === "pending" : notification.type === "channel_live" ? Boolean(streamPath) : notification.type === "direct_message" ? Boolean(notification.directConversationId) : false,
-      };
-    });
-    return json(response, 200, { notifications, unreadCount: notifications.filter((notification) => notification.unread).length });
-  }
-  if (requestUrl.pathname === "/api/notifications/read-all" && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    notificationRepository.markAllRead(user.id, new Date().toISOString());
-    return json(response, 200, { ok: true });
-  }
-  const notificationMatch = requestUrl.pathname.match(/^\/api\/notifications\/([\w-]{16,64})$/);
-  if (notificationMatch && request.method === "PATCH") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const notificationId = notificationMatch[1];
-    if (!notificationRepository.hasNotification(user.id, notificationId)) return json(response, 404, { error: "Notificação não encontrada." });
-    notificationRepository.markRead(notificationId, new Date().toISOString());
-    return json(response, 200, { ok: true });
-  }
+  if (await handleNotificationRoutes(request, response, requestUrl)) return;
   const memberInviteActionMatch = requestUrl.pathname.match(/^\/api\/member-invites\/([\w-]{16,})\/(accept|decline)$/);
   if (memberInviteActionMatch && request.method === "POST") {
     const user = requireUser(request, response);
