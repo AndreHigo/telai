@@ -112,6 +112,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair descoberta, criação e saída de grupos para `server/http/group-discovery-routes.mjs`, mantendo exclusão e runtime de voz no gateway.
 - [x] Extrair solicitações de entrada, configurações e visão administrativa de grupos para `server/http/group-management-routes.mjs`.
 - [x] Extrair criação, ordenação, edição, exclusão e atribuição de cargos para `server/http/group-role-routes.mjs`.
+- [x] Extrair CRUD e validação de slug das salas de texto e voz para `server/http/group-room-routes.mjs`, mantendo presença e WebRTC no gateway.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
