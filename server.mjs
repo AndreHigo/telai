@@ -38,6 +38,7 @@ import { createUserSettingsRoutes } from "./server/http/user-settings-routes.mjs
 import { createSocialRoutes } from "./server/http/social-routes.mjs";
 import { createNotificationRoutes } from "./server/http/notification-routes.mjs";
 import { createDirectRoutes } from "./server/http/direct-routes.mjs";
+import { createMemberInviteRoutes } from "./server/http/member-invite-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -792,6 +793,7 @@ const handleNotificationRoutes = createNotificationRoutes({
   liveNotificationPresentation,
   streamPublicPath,
 });
+const handleMemberInviteRoutes = createMemberInviteRoutes({ json, requireUser, groupInviteRepository });
 const groupJoinRequestRepository = createGroupJoinRequestRepository(database, {
   createId: randomUUID,
   groupSetupRepository,
@@ -2957,47 +2959,9 @@ async function handleHttpRequest(request, response) {
     if (!groupInviteRepository.deleteGroupInvite(groupId, tokenHash)) return json(response, 404, { error: "Convite não encontrado." });
     return json(response, 200, { ok: true });
   }
-  if (requestUrl.pathname === "/api/member-invites/pending" && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const now = new Date().toISOString();
-    groupInviteRepository.expireMemberInvites(user.id, now);
-    const invites = groupInviteRepository.listPendingMemberInvites(user.id);
-    return json(response, 200, { invites });
-  }
   if (await handleDirectRoutes(request, response, requestUrl)) return;
   if (await handleNotificationRoutes(request, response, requestUrl)) return;
-  const memberInviteActionMatch = requestUrl.pathname.match(/^\/api\/member-invites\/([\w-]{16,})\/(accept|decline)$/);
-  if (memberInviteActionMatch && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const [, inviteId, action] = memberInviteActionMatch;
-    const invite = groupInviteRepository.findMemberInvite(inviteId, user.id);
-    if (!invite) return json(response, 404, { error: "Convite não encontrado." });
-    if (invite.status !== "pending") return json(response, 400, { error: "Esse convite já foi respondido." });
-    if (invite.expiresAt <= new Date().toISOString()) {
-      groupInviteRepository.updateMemberInviteStatus(inviteId, "expired");
-      return json(response, 400, { error: "Esse convite expirou." });
-    }
-    if (action === "decline") {
-      groupInviteRepository.updateMemberInviteStatus(inviteId, "declined");
-      return json(response, 200, { ok: true, status: "declined" });
-    }
-    try {
-      const result = groupInviteRepository.acceptMemberInvite(inviteId, user.id);
-      return json(response, 200, { ok: true, status: result.kind, groupId: result.groupId });
-    } catch (error) {
-      return json(response, 400, { error: "Não foi possível aceitar o convite." });
-    }
-  }
-  const redeemMatch = requestUrl.pathname.match(/^\/api\/invites\/([\w-]{16,})\/redeem$/);
-  if (redeemMatch && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const result = groupInviteRepository.redeemGroupInvite(redeemMatch[1], user.id);
-    if (result.kind === "unavailable") return json(response, 400, { error: "Este convite expirou ou não está mais disponível." });
-    return json(response, 200, { ok: true, groupId: result.groupId });
-  }
+  if (await handleMemberInviteRoutes(request, response, requestUrl)) return;
   if (requestUrl.pathname === "/api/streams/resolve" && request.method === "GET") {
     const parts = String(requestUrl.searchParams.get("path") || "").split("/").filter(Boolean).map(slugFor);
     if (![1, 2].includes(parts.length) || parts.some((part) => !part)) return json(response, 400, { error: "Endereço de transmissão inválido." });
