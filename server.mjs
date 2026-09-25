@@ -591,7 +591,7 @@ const handleGroupModerationRoutes = createGroupModerationRoutes({
   json,
   readJson,
   requireUser,
-  groupPermissionRepository,
+  groupPermissions,
   groupMemberRepository,
   groupModerationRepository,
   groupAuditRepository,

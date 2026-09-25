@@ -300,17 +300,19 @@ async function main() {
     assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "canal liberado" })).response.status, 201);
   });
   await check("roles and member assignment", async () => {
-    const roleResult = await api(owner, `/api/groups/${groupId}/roles`, "POST", { name: "QA Moderator", color: "#ff6600", canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true });
+    const roleResult = await api(owner, `/api/groups/${groupId}/roles`, "POST", { name: "QA Moderator", color: "#ff6600", canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true, canModerateMembers: true });
     assert.equal(roleResult.response.status, 201);
     const roleId = roleResult.body.role.id;
     assert.equal(roleResult.body.role.canChat, true);
     assert.equal(roleResult.body.role.canMoveMembers, true);
-    const updatedRole = await api(owner, `/api/groups/${groupId}/roles/${roleId}`, "PATCH", { name: "QA Moderador", color: "#00aaff", canChat: true, canStream: false, canInvite: true, canViewVoiceMembers: false, canMoveMembers: true });
+    assert.equal(roleResult.body.role.canModerateMembers, true);
+    const updatedRole = await api(owner, `/api/groups/${groupId}/roles/${roleId}`, "PATCH", { name: "QA Moderador", color: "#00aaff", canChat: true, canStream: false, canInvite: true, canViewVoiceMembers: false, canMoveMembers: true, canModerateMembers: true });
     assert.equal(updatedRole.response.status, 200);
     assert.equal(updatedRole.body.role.name, "QA Moderador");
     assert.equal(updatedRole.body.role.color, "#00aaff");
     assert.equal(updatedRole.body.role.canStream, false);
     assert.equal(updatedRole.body.role.canViewVoiceMembers, false);
+    assert.equal(updatedRole.body.role.canModerateMembers, true);
     const secondRoleResult = await api(owner, `/api/groups/${groupId}/roles`, "POST", { name: "QA Helper", color: "#00cc88" });
     assert.equal(secondRoleResult.response.status, 201);
     const reordered = await api(owner, `/api/groups/${groupId}/roles/order`, "PATCH", { roleIds: [secondRoleResult.body.role.id, roleId, (await api(owner, `/api/groups/${groupId}/admin`)).body.roles.find((role) => role.isDefault).id] });
@@ -353,9 +355,16 @@ async function main() {
     assert.equal((await api(owner, `/api/groups/${groupId}/invites/${listedInvite.tokenHash}`, "DELETE")).response.status, 200);
   });
   await check("basic moderation", async () => {
-    const muted = await api(owner, `/api/groups/${groupId}/moderation`, "POST", { action: "mute", memberId: member.user.id, durationMinutes: 60, reason: "QA" });
+    const moderationRole = await api(owner, `/api/groups/${groupId}/roles`, "POST", { name: "QA Active Moderator", color: "#8844ff", canModerateMembers: true });
+    assert.equal(moderationRole.response.status, 201);
+    assert.equal((await api(owner, `/api/groups/${groupId}/roles/order`, "PATCH", { roleIds: [moderationRole.body.role.id, (await api(owner, `/api/groups/${groupId}/admin`)).body.roles.find((role) => role.isDefault).id] })).response.status, 200);
+    assert.equal((await api(owner, `/api/groups/${groupId}/members/${member.user.id}/role`, "PATCH", { roleId: moderationRole.body.role.id })).response.status, 200);
+    const muted = await api(member, `/api/groups/${groupId}/moderation`, "POST", { action: "mute", memberId: outsider.user.id, durationMinutes: 60, reason: "QA delegated" });
     assert.equal(muted.response.status, 200);
     assert.ok(muted.body.expiresAt);
+    assert.equal((await api(member, `/api/groups/${groupId}/moderation`, "POST", { action: "unmute", memberId: outsider.user.id })).response.status, 200);
+    const ownerMuted = await api(owner, `/api/groups/${groupId}/moderation`, "POST", { action: "mute", memberId: member.user.id, durationMinutes: 60, reason: "QA" });
+    assert.equal(ownerMuted.response.status, 200);
     assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "silenciado" })).response.status, 403);
     assert.equal((await api(owner, `/api/groups/${groupId}/moderation`, "POST", { action: "unmute", memberId: member.user.id })).response.status, 200);
     assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, body: "depois do silencio" })).response.status, 201);

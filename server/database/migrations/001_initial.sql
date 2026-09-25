@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS group_roles (
   can_invite INTEGER NOT NULL DEFAULT 1,
   can_view_voice_members INTEGER NOT NULL DEFAULT 1,
   can_move_members INTEGER NOT NULL DEFAULT 0,
+  can_moderate_members INTEGER NOT NULL DEFAULT 0,
   is_default INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

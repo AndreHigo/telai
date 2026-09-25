@@ -19,9 +19,10 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
         const canInvite = body.canInvite !== false;
         const canViewVoiceMembers = body.canViewVoiceMembers !== false;
         const canMoveMembers = body.canMoveMembers === true;
+        const canModerateMembers = body.canModerateMembers === true;
         let role;
         try {
-          role = groupRoleRepository.createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, createdBy: user.id });
+          role = groupRoleRepository.createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers, createdBy: user.id });
           groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_create", targetType: "role", targetId: role.id, metadata: { name: role.name } });
         } catch (error) {
           if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe um cargo com esse nome." });
@@ -93,10 +94,11 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
         const canInvite = body.canInvite === undefined ? Boolean(role.canInvite) : body.canInvite === true;
         const canViewVoiceMembers = body.canViewVoiceMembers === undefined ? Boolean(role.canViewVoiceMembers) : body.canViewVoiceMembers === true;
         const canMoveMembers = body.canMoveMembers === undefined ? Boolean(role.canMoveMembers) : body.canMoveMembers === true;
+        const canModerateMembers = body.canModerateMembers === undefined ? Boolean(role.canModerateMembers) : body.canModerateMembers === true;
         if (name.length < 2) return json(response, 400, { error: "Informe um nome válido para o cargo." });
         try {
-          const updatedRole = groupRoleRepository.updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers });
-          groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_update", targetType: "role", targetId: roleId, metadata: { name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers } });
+          const updatedRole = groupRoleRepository.updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers });
+          groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_update", targetType: "role", targetId: roleId, metadata: { name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers } });
           return json(response, 200, { role: updatedRole });
         } catch (error) {
           if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe um cargo com esse nome." });

@@ -646,6 +646,7 @@
   const rolePermissionOptions = [
     { key: "canChat", category: "Texto", label: "Conversar", description: "Enviar mensagens e conversar nas salas." },
     { key: "canInvite", category: "Geral", label: "Convidar", description: "Adicionar pessoas ao grupo." },
+    { key: "canModerateMembers", category: "Geral", label: "Moderar membros", description: "Silenciar, expulsar e banir cargos inferiores." },
     { key: "canStream", category: "Voz e vídeo", label: "Transmitir", description: "Iniciar transmissões ao vivo." },
     { key: "canViewVoiceMembers", category: "Voz e vídeo", label: "Ver voz", description: "Ver participantes das salas." },
     { key: "canMoveMembers", category: "Voz e vídeo", label: "Moderar voz", description: "Mover e silenciar participantes." },

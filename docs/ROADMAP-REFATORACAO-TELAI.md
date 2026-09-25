@@ -186,7 +186,7 @@ enviada ao GitHub nem publicada em produção.
 
 - [x] Permissões por grupo, cargo e canal.
   - [x] Criar overrides por cargo/canal, interface administrativa, e aplicar a visão, chat, voz e eventos em tempo real.
-- [ ] Hierarquia de cargos.
+- [x] Hierarquia de cargos, com ordenação persistente e moderação delegada apenas sobre cargos inferiores.
 - [x] Auditoria administrativa.
   - [x] Registrar mudanças de grupo, cargos, atribuições de membros, canais e overrides de permissão em SQLite/PostgreSQL.
   - [x] Expor histórico paginado somente ao dono e apresentar as ações recentes na administração do grupo.
@@ -195,6 +195,7 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Threads, busca, não lidas e notificações em tempo real.
 - [ ] Moderação básica: bloquear, expulsar, banir e silenciar.
   - [x] Expulsar, banir, silenciar, remover silêncio e desfazer banimento no servidor, com auditoria e desconexão de voz/eventos.
+  - [x] Permissão de moderação por cargo com respeito à hierarquia.
 
 ### Fase 4 — Qualidade de mídia
 

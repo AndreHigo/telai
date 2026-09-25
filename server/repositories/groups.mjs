@@ -19,7 +19,7 @@ export function createGroupAccessRepository(database, { roomPermissionRepository
   function groupPermissions(groupId, userId) {
     const member = database.prepare("SELECT role, role_id AS roleId FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, userId);
     if (!member) return null;
-    if (member.role === "owner") return { canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true };
+    if (member.role === "owner") return { canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true, canModerateMembers: true };
     ensureGroupPermissionRow(groupId, userId);
     const permissions = database.prepare(`
       SELECT can_chat AS canChat, can_stream AS canStream, can_invite AS canInvite,
@@ -29,7 +29,8 @@ export function createGroupAccessRepository(database, { roomPermissionRepository
     const role = member.roleId
       ? database.prepare(`
         SELECT can_chat AS canChat, can_stream AS canStream, can_invite AS canInvite,
-          can_view_voice_members AS canViewVoiceMembers, can_move_members AS canMoveMembers
+          can_view_voice_members AS canViewVoiceMembers, can_move_members AS canMoveMembers,
+          can_moderate_members AS canModerateMembers
         FROM group_roles WHERE id = ? AND group_id = ?
       `).get(member.roleId, groupId)
       : null;
@@ -39,6 +40,7 @@ export function createGroupAccessRepository(database, { roomPermissionRepository
       canInvite: Boolean(role.canInvite),
       canViewVoiceMembers: Boolean(role.canViewVoiceMembers),
       canMoveMembers: Boolean(role.canMoveMembers),
+      canModerateMembers: Boolean(role.canModerateMembers),
     };
     return {
       canChat: Boolean(permissions?.canChat),
@@ -46,6 +48,7 @@ export function createGroupAccessRepository(database, { roomPermissionRepository
       canInvite: Boolean(permissions?.canInvite),
       canViewVoiceMembers: Boolean(permissions?.canViewVoiceMembers),
       canMoveMembers: false,
+      canModerateMembers: false,
     };
   }
 
@@ -97,7 +100,7 @@ export function createPostgresGroupAccessRepository(database, { roomPermissionRe
     );
     const member = memberResult.rows[0];
     if (!member) return null;
-    if (member.role === "owner") return { canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true };
+    if (member.role === "owner") return { canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true, canModerateMembers: true };
 
     await ensureGroupPermissionRow(groupId, userId, queryDatabase);
     const permissionsResult = await queryDatabase.query(`
@@ -109,7 +112,8 @@ export function createPostgresGroupAccessRepository(database, { roomPermissionRe
     const roleResult = member.roleId
       ? await queryDatabase.query(`
         SELECT can_chat AS "canChat", can_stream AS "canStream", can_invite AS "canInvite",
-          can_view_voice_members AS "canViewVoiceMembers", can_move_members AS "canMoveMembers"
+          can_view_voice_members AS "canViewVoiceMembers", can_move_members AS "canMoveMembers",
+          can_moderate_members AS "canModerateMembers"
         FROM group_roles WHERE id = $1 AND group_id = $2
       `, [member.roleId, groupId])
       : { rows: [] };
@@ -120,6 +124,7 @@ export function createPostgresGroupAccessRepository(database, { roomPermissionRe
       canInvite: Boolean(role.canInvite),
       canViewVoiceMembers: Boolean(role.canViewVoiceMembers),
       canMoveMembers: Boolean(role.canMoveMembers),
+      canModerateMembers: Boolean(role.canModerateMembers),
     };
     return {
       canChat: Boolean(permissions?.canChat),
@@ -127,6 +132,7 @@ export function createPostgresGroupAccessRepository(database, { roomPermissionRe
       canInvite: Boolean(permissions?.canInvite),
       canViewVoiceMembers: Boolean(permissions?.canViewVoiceMembers),
       canMoveMembers: false,
+      canModerateMembers: false,
     };
   }
 

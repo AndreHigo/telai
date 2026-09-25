@@ -16,6 +16,7 @@ export function ensureCompatibilityColumns(database) {
   ensureColumn(database, "group_roles", "can_invite", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(database, "group_roles", "can_view_voice_members", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(database, "group_roles", "can_move_members", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(database, "group_roles", "can_moderate_members", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(database, "group_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn(database, "group_member_permissions", "can_view_voice_members", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(database, "group_voice_rooms", "max_participants", "INTEGER NOT NULL DEFAULT 8");

@@ -1,0 +1,1 @@
+ALTER TABLE group_roles ADD COLUMN IF NOT EXISTS can_moderate_members INTEGER NOT NULL DEFAULT 0;

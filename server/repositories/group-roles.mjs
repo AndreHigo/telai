@@ -10,6 +10,7 @@ function mapRole(role) {
     canInvite: Boolean(role.canInvite),
     canViewVoiceMembers: Boolean(role.canViewVoiceMembers),
     canMoveMembers: Boolean(role.canMoveMembers),
+    canModerateMembers: Boolean(role.canModerateMembers),
     isDefault: Boolean(role.isDefault),
   };
 }
@@ -19,7 +20,8 @@ export function createGroupRoleRepository(database, { createId = randomUUID } = 
     return database.prepare(`
       SELECT id, name, color, can_chat AS canChat, can_stream AS canStream,
         can_invite AS canInvite, can_view_voice_members AS canViewVoiceMembers,
-        can_move_members AS canMoveMembers, is_default AS isDefault, sort_order AS sortOrder
+        can_move_members AS canMoveMembers, can_moderate_members AS canModerateMembers,
+        is_default AS isDefault, sort_order AS sortOrder
       FROM group_roles WHERE group_id = ? ORDER BY sort_order ASC, name COLLATE NOCASE
     `).all(groupId).map(mapRole);
   }
@@ -32,13 +34,13 @@ export function createGroupRoleRepository(database, { createId = randomUUID } = 
     return Number(database.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS sortOrder FROM group_roles WHERE group_id = ?").get(groupId)?.sortOrder || 0);
   }
 
-  function createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, createdBy, createdAt = new Date().toISOString(), id = createId(), sortOrder = nextSortOrder(groupId) }) {
-    const role = { id, groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, isDefault: false, sortOrder };
+  function createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers, createdBy, createdAt = new Date().toISOString(), id = createId(), sortOrder = nextSortOrder(groupId) }) {
+    const role = { id, groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers, isDefault: false, sortOrder };
     database.prepare(`
       INSERT INTO group_roles (id, group_id, name, color, can_chat, can_stream, can_invite,
-        can_view_voice_members, can_move_members, is_default, sort_order, created_by, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
-    `).run(id, groupId, name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, sortOrder, createdBy, createdAt);
+        can_view_voice_members, can_move_members, can_moderate_members, is_default, sort_order, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+    `).run(id, groupId, name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, canModerateMembers ? 1 : 0, sortOrder, createdBy, createdAt);
     return role;
   }
 
@@ -59,7 +61,8 @@ export function createGroupRoleRepository(database, { createId = randomUUID } = 
     return mapRole(database.prepare(`
       SELECT id, name, color, can_chat AS canChat, can_stream AS canStream,
         can_invite AS canInvite, can_view_voice_members AS canViewVoiceMembers,
-        can_move_members AS canMoveMembers, is_default AS isDefault, sort_order AS sortOrder
+        can_move_members AS canMoveMembers, can_moderate_members AS canModerateMembers,
+        is_default AS isDefault, sort_order AS sortOrder
       FROM group_roles WHERE id = ? AND group_id = ?
     `).get(roleId, groupId));
   }
@@ -81,12 +84,12 @@ export function createGroupRoleRepository(database, { createId = randomUUID } = 
     }
   }
 
-  function updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers }) {
+  function updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers }) {
     database.prepare(`
       UPDATE group_roles SET name = ?, color = ?, can_chat = ?, can_stream = ?, can_invite = ?,
-        can_view_voice_members = ?, can_move_members = ? WHERE id = ? AND group_id = ?
-    `).run(name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, roleId, groupId);
-    return { ...findRole(groupId, roleId), name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers };
+        can_view_voice_members = ?, can_move_members = ?, can_moderate_members = ? WHERE id = ? AND group_id = ?
+    `).run(name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, canModerateMembers ? 1 : 0, roleId, groupId);
+    return { ...findRole(groupId, roleId), name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers };
   }
 
   function member(groupId, userId) {
@@ -125,7 +128,8 @@ export function createPostgresGroupRoleRepository(database, { createId = randomU
     const result = await database.query(`
       SELECT id, name, color, can_chat AS "canChat", can_stream AS "canStream",
         can_invite AS "canInvite", can_view_voice_members AS "canViewVoiceMembers",
-        can_move_members AS "canMoveMembers", is_default AS "isDefault", sort_order AS "sortOrder"
+        can_move_members AS "canMoveMembers", can_moderate_members AS "canModerateMembers",
+        is_default AS "isDefault", sort_order AS "sortOrder"
       FROM group_roles WHERE group_id = $1 ORDER BY sort_order ASC, LOWER(name)
     `, [groupId]);
     return result.rows.map(mapRole);
@@ -141,14 +145,14 @@ export function createPostgresGroupRoleRepository(database, { createId = randomU
     return Number(result.rows[0]?.sortOrder || 0);
   }
 
-  async function createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, createdBy, createdAt = new Date().toISOString(), id = createId(), sortOrder }) {
+  async function createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers, createdBy, createdAt = new Date().toISOString(), id = createId(), sortOrder }) {
     const resolvedSortOrder = sortOrder ?? await nextSortOrder(groupId);
-    const role = { id, groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, isDefault: false, sortOrder: resolvedSortOrder };
+    const role = { id, groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers, isDefault: false, sortOrder: resolvedSortOrder };
     await database.query(`
       INSERT INTO group_roles (id, group_id, name, color, can_chat, can_stream, can_invite,
-        can_view_voice_members, can_move_members, is_default, sort_order, created_by, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, $10, $11, $12)
-    `, [id, groupId, name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, resolvedSortOrder, createdBy, createdAt]);
+        can_view_voice_members, can_move_members, can_moderate_members, is_default, sort_order, created_by, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, $11, $12, $13)
+    `, [id, groupId, name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, canModerateMembers ? 1 : 0, resolvedSortOrder, createdBy, createdAt]);
     return role;
   }
 
@@ -157,7 +161,7 @@ export function createPostgresGroupRoleRepository(database, { createId = randomU
       for (const [index, roleId] of roleIds.entries()) await client.query("UPDATE group_roles SET sort_order = $1 WHERE id = $2 AND group_id = $3", [index, roleId, groupId]);
       const result = await client.query(`
         SELECT id, name, color, can_chat AS "canChat", can_stream AS "canStream", can_invite AS "canInvite",
-          can_view_voice_members AS "canViewVoiceMembers", can_move_members AS "canMoveMembers", is_default AS "isDefault", sort_order AS "sortOrder"
+          can_view_voice_members AS "canViewVoiceMembers", can_move_members AS "canMoveMembers", can_moderate_members AS "canModerateMembers", is_default AS "isDefault", sort_order AS "sortOrder"
         FROM group_roles WHERE group_id = $1 ORDER BY sort_order ASC, LOWER(name)
       `, [groupId]);
       return result.rows.map(mapRole);
@@ -167,7 +171,7 @@ export function createPostgresGroupRoleRepository(database, { createId = randomU
   async function findRole(groupId, roleId, queryDatabase = database) {
     const result = await queryDatabase.query(`
       SELECT id, name, color, can_chat AS "canChat", can_stream AS "canStream", can_invite AS "canInvite",
-        can_view_voice_members AS "canViewVoiceMembers", can_move_members AS "canMoveMembers", is_default AS "isDefault", sort_order AS "sortOrder"
+        can_view_voice_members AS "canViewVoiceMembers", can_move_members AS "canMoveMembers", can_moderate_members AS "canModerateMembers", is_default AS "isDefault", sort_order AS "sortOrder"
       FROM group_roles WHERE id = $1 AND group_id = $2
     `, [roleId, groupId]);
     return mapRole(result.rows[0]);
@@ -186,12 +190,12 @@ export function createPostgresGroupRoleRepository(database, { createId = randomU
     }, transactionClient);
   }
 
-  async function updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers }) {
+  async function updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers }) {
     await database.query(`
       UPDATE group_roles SET name = $1, color = $2, can_chat = $3, can_stream = $4, can_invite = $5,
-        can_view_voice_members = $6, can_move_members = $7 WHERE id = $8 AND group_id = $9
-    `, [name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, roleId, groupId]);
-    return { ...(await findRole(groupId, roleId)), name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers };
+        can_view_voice_members = $6, can_move_members = $7, can_moderate_members = $8 WHERE id = $9 AND group_id = $10
+    `, [name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, canModerateMembers ? 1 : 0, roleId, groupId]);
+    return { ...(await findRole(groupId, roleId)), name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers };
   }
 
   async function member(groupId, userId, queryDatabase = database) {

@@ -6,6 +6,7 @@ function mapMember(member, compactAvatarData = (value) => value) {
     roleColor: member.roleColor || "#5865f2",
     roleSortOrder: member.roleSortOrder === null || member.roleSortOrder === undefined ? null : Number(member.roleSortOrder),
     canMoveMembers: member.role === "owner" || Boolean(member.canMoveMembers),
+    canModerateMembers: member.role === "owner" || Boolean(member.canModerateMembers),
     canChat: member.role === "owner" || Boolean(member.canChat),
     canStream: member.role === "owner" || Boolean(member.canStream),
     canInvite: member.role === "owner" || Boolean(member.canInvite),
@@ -15,7 +16,12 @@ function mapMember(member, compactAvatarData = (value) => value) {
 
 export function createGroupMemberRepository(database, { compactAvatarData = (value) => value } = {}) {
   function find(groupId, userId) {
-    return database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, userId) || null;
+    return database.prepare(`
+      SELECT group_members.role, group_members.role_id AS roleId, group_roles.sort_order AS roleSortOrder
+      FROM group_members
+      LEFT JOIN group_roles ON group_roles.id = group_members.role_id AND group_roles.group_id = group_members.group_id
+      WHERE group_members.group_id = ? AND group_members.user_id = ?
+    `).get(groupId, userId) || null;
   }
 
   function listMembers(groupId) {
@@ -27,7 +33,8 @@ export function createGroupMemberRepository(database, { compactAvatarData = (val
         COALESCE(group_roles.can_stream, group_member_permissions.can_stream, 1) AS canStream,
         COALESCE(group_roles.can_invite, group_member_permissions.can_invite, 1) AS canInvite,
         COALESCE(group_roles.can_view_voice_members, group_member_permissions.can_view_voice_members, 1) AS canViewVoiceMembers,
-        COALESCE(group_roles.can_move_members, 0) AS canMoveMembers, users.avatar_data AS avatarData
+        COALESCE(group_roles.can_move_members, 0) AS canMoveMembers,
+        COALESCE(group_roles.can_moderate_members, 0) AS canModerateMembers, users.avatar_data AS avatarData
       FROM group_members JOIN users ON users.id = group_members.user_id
       LEFT JOIN group_roles ON group_roles.id = group_members.role_id AND group_roles.group_id = group_members.group_id
       LEFT JOIN group_member_permissions ON group_member_permissions.group_id = group_members.group_id AND group_member_permissions.user_id = group_members.user_id
@@ -74,7 +81,12 @@ async function withPostgresTransaction(database, callback, useProvidedClient = f
 
 export function createPostgresGroupMemberRepository(database, { compactAvatarData = (value) => value, transactionClient = false } = {}) {
   async function find(groupId, userId) {
-    const result = await database.query("SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2", [groupId, userId]);
+    const result = await database.query(`
+      SELECT group_members.role, group_members.role_id AS "roleId", group_roles.sort_order AS "roleSortOrder"
+      FROM group_members
+      LEFT JOIN group_roles ON group_roles.id = group_members.role_id AND group_roles.group_id = group_members.group_id
+      WHERE group_members.group_id = $1 AND group_members.user_id = $2
+    `, [groupId, userId]);
     return result.rows[0] || null;
   }
 
@@ -87,7 +99,8 @@ export function createPostgresGroupMemberRepository(database, { compactAvatarDat
         COALESCE(group_roles.can_stream, group_member_permissions.can_stream, 1) AS "canStream",
         COALESCE(group_roles.can_invite, group_member_permissions.can_invite, 1) AS "canInvite",
         COALESCE(group_roles.can_view_voice_members, group_member_permissions.can_view_voice_members, 1) AS "canViewVoiceMembers",
-        COALESCE(group_roles.can_move_members, 0) AS "canMoveMembers", users.avatar_data AS "avatarData"
+        COALESCE(group_roles.can_move_members, 0) AS "canMoveMembers",
+        COALESCE(group_roles.can_moderate_members, 0) AS "canModerateMembers", users.avatar_data AS "avatarData"
       FROM group_members JOIN users ON users.id = group_members.user_id
       LEFT JOIN group_roles ON group_roles.id = group_members.role_id AND group_roles.group_id = group_members.group_id
       LEFT JOIN group_member_permissions ON group_member_permissions.group_id = group_members.group_id AND group_member_permissions.user_id = group_members.user_id

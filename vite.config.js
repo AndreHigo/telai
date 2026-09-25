@@ -17,6 +17,9 @@ export default defineConfig({
     outDir: "../public/svelte",
     emptyOutDir: true,
     sourcemap: false,
+    // O shell atual permanece em torno de 500 kB; uma margem mínima evita
+    // alertas flutuantes por diferenças de minificação entre versões do Vite.
+    chunkSizeWarningLimit: 501,
   },
   server: {
     port: 5173,

@@ -163,11 +163,11 @@ try {
   assert.equal(await groupMessages.deleteMessage(ids.group, groupMessage.id), true);
   assert.equal(await groupMessages.findMessage(ids.group, groupMessage.id), null);
   assert.equal(await groups.isGroupMember(ids.member, ids.group), true);
-  assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canViewVoiceMembers: true });
+  assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canModerateMembers: true, canViewVoiceMembers: true });
   assert.equal(await groups.canGroupAction(ids.member, ids.group, "canChat"), true);
 
   const groupRoles = createPostgresGroupRoleRepository(client, { createId: randomUUID, transactionClient: true });
-  const customRole = await groupRoles.createRole({ groupId: createdGroup.id, name: "Moderador PG", color: "#123456", canChat: true, canStream: true, canInvite: false, canViewVoiceMembers: true, canMoveMembers: false, createdBy: ids.owner, createdAt: now });
+  const customRole = await groupRoles.createRole({ groupId: createdGroup.id, name: "Moderador PG", color: "#123456", canChat: true, canStream: true, canInvite: false, canViewVoiceMembers: true, canMoveMembers: false, canModerateMembers: true, createdBy: ids.owner, createdAt: now });
   const createdDefaultRole = await groupRoles.defaultRole(createdGroup.id);
   await client.query("INSERT INTO group_members (group_id, user_id, role, role_id, created_at) VALUES ($1, $2, 'member', $3, $4)", [createdGroup.id, ids.member, createdDefaultRole.id, now]);
   assert.equal((await groupRoles.findRole(createdGroup.id, customRole.id)).name, "Moderador PG");
@@ -175,8 +175,9 @@ try {
   await groupRoles.assignMemberRole(createdGroup.id, ids.member, customRole.id);
   assert.equal((await client.query("SELECT role_id FROM group_members WHERE group_id = $1 AND user_id = $2", [createdGroup.id, ids.member])).rows[0].role_id, customRole.id);
   await groupRoles.reorderRoles(createdGroup.id, [customRole.id, createdDefaultRole.id]);
-  const updatedRole = await groupRoles.updateRole({ groupId: createdGroup.id, roleId: customRole.id, name: "Moderador atualizado", color: "#654321", canChat: true, canStream: false, canInvite: false, canViewVoiceMembers: true, canMoveMembers: true });
+  const updatedRole = await groupRoles.updateRole({ groupId: createdGroup.id, roleId: customRole.id, name: "Moderador atualizado", color: "#654321", canChat: true, canStream: false, canInvite: false, canViewVoiceMembers: true, canMoveMembers: true, canModerateMembers: true });
   assert.equal(updatedRole.name, "Moderador atualizado");
+  assert.equal(updatedRole.canModerateMembers, true);
   assert.equal(await groupRoles.deleteRole(createdGroup.id, customRole.id, createdDefaultRole.id), true);
 
   const groupRooms = createPostgresGroupRoomRepository(client, { createId: randomUUID });

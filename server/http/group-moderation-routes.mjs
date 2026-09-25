@@ -4,7 +4,7 @@ export function createGroupModerationRoutes({
   json,
   readJson,
   requireUser,
-  groupPermissionRepository,
+  groupPermissions,
   groupMemberRepository,
   groupModerationRepository,
   groupAuditRepository,
@@ -17,9 +17,10 @@ export function createGroupModerationRoutes({
     const user = requireUser(request, response);
     if (!user) return true;
     const groupId = match[1];
-    const owner = groupPermissionRepository.member(groupId, user.id);
-    if (owner?.role !== "owner") {
-      json(response, 403, { error: "Somente o dono pode moderar membros deste grupo." });
+    const actor = groupMemberRepository.find(groupId, user.id);
+    const actorPermissions = groupPermissions(groupId, user.id);
+    if (!actor || !actorPermissions?.canModerateMembers) {
+      json(response, 403, { error: "Você não tem permissão para moderar membros deste grupo." });
       return true;
     }
     try {
@@ -40,6 +41,14 @@ export function createGroupModerationRoutes({
       if (target && (target.role === "owner" || memberId === user.id)) {
         json(response, 400, { error: "O dono não pode ser moderado." });
         return true;
+      }
+      if (target && actor.role !== "owner") {
+        const actorOrder = Number.isFinite(Number(actor.roleSortOrder)) ? Number(actor.roleSortOrder) : Number.MAX_SAFE_INTEGER;
+        const targetOrder = Number.isFinite(Number(target.roleSortOrder)) ? Number(target.roleSortOrder) : Number.MAX_SAFE_INTEGER;
+        if (actorOrder >= targetOrder) {
+          json(response, 403, { error: "Você só pode moderar membros abaixo do seu cargo." });
+          return true;
+        }
       }
       const hasDuration = body.durationMinutes !== null && body.durationMinutes !== undefined && body.durationMinutes !== "";
       if (hasDuration && !Number.isFinite(Number(body.durationMinutes))) {
