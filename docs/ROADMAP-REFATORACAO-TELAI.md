@@ -56,8 +56,13 @@ frontend/src/
 - [x] Copiar o código-fonte para este checkout separado.
 - [x] Excluir dependências instaladas, banco, backups e artefatos gerados da base versionável.
 - [x] Registrar este roadmap.
-- [ ] Criar commit inicial da cópia limpa.
-- [ ] Registrar o estado do código-fonte que veio do clone real.
+- [x] Criar commit inicial da cópia limpa (`a55e478`).
+- [x] Registrar o estado do código-fonte que veio do clone real.
+
+Snapshot inicial: código copiado do checkout local do Telai/Mirante, remoto
+`https://github.com/AndreHigo/mirante.git`, preservando o estado funcional
+existente no momento da cópia. Esta branch é independente e ainda não foi
+enviada ao GitHub nem publicada em produção.
 
 ### Fase 1 — Monólito modular sem mudança de produto
 
@@ -110,4 +115,3 @@ Cada fase só será considerada concluída quando:
 3. Os testes aplicáveis passarem.
 4. O diff não carregar banco, instalador, `node_modules` ou temporários.
 5. A mudança tiver commit próprio e descrição clara.
-
