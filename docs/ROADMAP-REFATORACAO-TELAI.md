@@ -186,7 +186,10 @@ enviada ao GitHub nem publicada em produção.
 
 - [x] Permissões por grupo, cargo e canal.
   - [x] Criar overrides por cargo/canal, interface administrativa, e aplicar a visão, chat, voz e eventos em tempo real.
-- [ ] Hierarquia de cargos e auditoria administrativa.
+- [ ] Hierarquia de cargos.
+- [x] Auditoria administrativa.
+  - [x] Registrar mudanças de grupo, cargos, atribuições de membros, canais e overrides de permissão em SQLite/PostgreSQL.
+  - [x] Expor histórico paginado somente ao dono e apresentar as ações recentes na administração do grupo.
 - [x] Editar/excluir mensagens com autorização do autor/dono, sincronização por eventos e controles inline.
 - [ ] Anexos com armazenamento local controlado e posterior compatibilidade S3/MinIO.
 - [ ] Threads, busca, não lidas e notificações em tempo real.

@@ -18,6 +18,7 @@ export const IMPORT_ORDER = [
   ["group_roles", ["id"]],
   ["group_member_permissions", ["group_id", "user_id"]],
   ["group_room_permissions", ["group_id", "room_id", "role_id"]],
+  ["group_audit_logs", ["id"]],
   ["group_invites", ["token_hash"]],
   ["group_user_invites", ["id"]],
   ["group_join_requests", ["id"]],

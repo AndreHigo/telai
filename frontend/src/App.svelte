@@ -337,6 +337,8 @@
   let groupVoiceWorkspaceLoad = null;
   let GroupChannelPermissionsSettings = null;
   let groupChannelPermissionsSettingsLoad = null;
+  let GroupAuditLogSettings = null;
+  let groupAuditLogSettingsLoad = null;
   let groupEventGateway = null;
 
   function loadGroupVoiceWorkspace() {
@@ -360,6 +362,17 @@
   }
 
   $: if (settingsTab === "group" && !GroupChannelPermissionsSettings) void loadGroupChannelPermissionsSettings();
+
+  function loadGroupAuditLogSettings() {
+    if (GroupAuditLogSettings || groupAuditLogSettingsLoad) return groupAuditLogSettingsLoad;
+    groupAuditLogSettingsLoad = import("./features/settings/GroupAuditLogSettings.svelte")
+      .then((module) => { GroupAuditLogSettings = module.default; })
+      .catch((error) => reportClientError("group_audit_log_load_error", error))
+      .finally(() => { groupAuditLogSettingsLoad = null; });
+    return groupAuditLogSettingsLoad;
+  }
+
+  $: if (settingsTab === "group" && !GroupAuditLogSettings) void loadGroupAuditLogSettings();
   let voiceSoundContext = null;
   let pendingNotificationSound = false;
   let voiceActivityTimer;
@@ -661,6 +674,8 @@
   let groupSearchError = "";
   let groupJoinRequests = [];
   let groupJoinActionId = "";
+  let groupAuditEntries = [];
+  let groupAuditLoading = false;
   let pendingInviteToken = "";
   let pendingGroupRouteId = "";
   let pendingRoomRouteId = "";
@@ -2049,6 +2064,7 @@
       groupRoles = result.roles || [];
       groupInvites = result.invites || [];
       groupJoinRequests = result.joinRequests || [];
+      groupAuditEntries = result.auditLog?.entries || [];
       const firstRoom = (groupOverview?.rooms || []).find((room) => room.kind === "text" || room.kind === "voice");
       selectedRoomPermissionId = firstRoom?.id || "";
       if (selectedRoomPermissionId && selectedGroup?.role === "owner") await loadGroupRoomPermissions(selectedRoomPermissionId);
@@ -7340,6 +7356,7 @@
               <div class="invite-table-wrap"><table class="invite-table"><thead><tr><th>Link</th><th>Usos</th><th>Expiração</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>{#each activeGroupInvites as invite, index}<tr><td><code>telai.tv.br/convite/{index + 1}</code></td><td>{invite.uses}/{invite.maxUses}</td><td>{new Date(invite.expiresAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</td><td><button class="invite-delete-button" type="button" on:click={() => deleteGroupInvite(invite)} disabled={selectedGroup?.role !== "owner" || groupInviteBusyId === invite.tokenHash} aria-label="Revogar convite" title="Revogar convite">⌫</button></td></tr>{/each}{#if !activeGroupInvites.length}<tr><td class="invite-table-empty" colspan="4">Nenhum convite ativo no momento.</td></tr>{/if}</tbody></table></div>
              </section>
           {#if selectedGroup?.role === "owner"}<section class="settings-card join-requests-card"><div class="settings-card-heading"><div><p class="eyebrow">entrada no grupo</p><h2>Solicitações pendentes</h2><p class="muted">Aprove ou recuse quem pediu para entrar nesta comunidade.</p></div><span class="join-request-count">{groupJoinRequests.length}</span></div>{#if groupJoinRequests.length}<div class="join-request-list">{#each groupJoinRequests as joinRequest}<div class="join-request-row"><span class="member-avatar">{#if joinRequest.avatarData}<img src={joinRequest.avatarData} alt="" />{:else}{joinRequest.displayName?.slice(0, 1) || "M"}{/if}</span><span><strong>{joinRequest.displayName}</strong><small>@{joinRequest.username}</small></span><div class="join-request-actions"><button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={groupJoinActionId === joinRequest.id} on:click={() => respondToGroupJoinRequest(joinRequest, "rejected")}>Recusar</button><button class="primary rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={groupJoinActionId === joinRequest.id} on:click={() => respondToGroupJoinRequest(joinRequest, "approved")}>{groupJoinActionId === joinRequest.id ? "Salvando…" : "Aprovar"}</button></div></div>{/each}</div>{:else}<p class="muted settings-empty">Nenhuma solicitação pendente.</p>{/if}</section>{/if}
+          {#if selectedGroup?.role === "owner" && GroupAuditLogSettings}<svelte:component this={GroupAuditLogSettings} entries={groupAuditEntries} hasMore={false} loading={groupAuditLoading} />{/if}
           {#if groupAdminError}<p class="settings-error" role="alert">{groupAdminError}</p>{/if}
         {/if}
         </section>

@@ -207,6 +207,7 @@ async function main() {
     await evaluate(authenticatedWindow, () => [...document.querySelectorAll(".settings-nav button")].find((button) => button.textContent.includes("Grupo selecionado"))?.click());
     await waitFor("permissões por canal", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".channel-permission-panel"))));
     assert.equal(await evaluate(authenticatedWindow, () => Boolean(document.querySelector(".channel-permission-room-select select option"))), true, "seletor de canal não foi carregado");
+    await waitFor("auditoria administrativa", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".group-audit-panel"))));
     await clickNav(authenticatedWindow, "Ao vivo");
     for (const [width, height] of [[1440, 900], [1024, 768], [900, 650], [640, 800]]) layouts.push(await inspectLayout(authenticatedWindow, "Ao vivo", width, height));
     await clickNav(authenticatedWindow, "Seguindo");

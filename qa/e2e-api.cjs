@@ -332,6 +332,11 @@ async function main() {
     const afterDelete = await api(owner, `/api/groups/${groupId}/overview`);
     assert.ok(afterDelete.body.members.some((item) => item.id === member.user.id && item.roleId === defaultRole.id));
     assert.equal((await api(owner, `/api/groups/${groupId}/roles/${defaultRole.id}`, "DELETE")).response.status, 400);
+    const audit = await api(owner, `/api/groups/${groupId}/audit-log`);
+    assert.equal(audit.response.status, 200);
+    assert.ok(audit.body.entries.some((entry) => entry.action === "role_create"));
+    assert.ok(audit.body.entries.some((entry) => entry.action === "member_role_assign"));
+    assert.equal((await api(member, `/api/groups/${groupId}/audit-log`)).response.status, 403);
   });
   await check("direct invite and public invite", async () => {
     const invite = await api(owner, `/api/groups/${groupId}/member-invites`, "POST", { userId: outsider.user.id });

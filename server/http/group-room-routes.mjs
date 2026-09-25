@@ -8,6 +8,7 @@ export function createGroupRoomRoutes({
   groupRoomPermissionRepository,
   groupPermissionRepository,
   groupRoomRepository,
+  groupAuditRepository,
   roomSlugFor,
   parseVoiceRoomParticipantLimit,
 }) {
@@ -33,6 +34,7 @@ export function createGroupRoomRoutes({
           const duplicate = groupRoomRepository.findBySlug(groupId, slug);
           if (duplicate) return json(response, 409, { error: "Já existe uma sala com esse nome neste grupo." });
           const room = groupRoomRepository.createRoom({ groupId, name, slug, kind, maxParticipants, createdBy: user.id });
+          groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "room_create", targetType: "room", targetId: room.id, metadata: { name: room.name, kind: room.kind } });
           return json(response, 201, { room });
         } catch (error) {
           if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe uma sala com esse nome neste grupo." });
@@ -64,6 +66,7 @@ export function createGroupRoomRoutes({
       if (request.method === "DELETE") {
         groupRoomRepository.deleteRoom(groupId, roomId, room.kind);
         groupRoomPermissionRepository.removeForRoom(groupId, roomId);
+        groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "room_delete", targetType: "room", targetId: roomId, metadata: { name: room.name, kind: room.kind } });
         json(response, 200, { ok: true });
         return true;
       }
@@ -75,9 +78,13 @@ export function createGroupRoomRoutes({
         if (duplicate) return json(response, 409, { error: "Já existe um canal com esse nome neste grupo." });
         if (room.kind === "voice") {
           const maxParticipants = parseVoiceRoomParticipantLimit(body.maxParticipants, room.maxParticipants);
-          return json(response, 200, { room: groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug, maxParticipants }) });
+          const updatedRoom = groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug, maxParticipants });
+          groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "room_update", targetType: "room", targetId: roomId, metadata: { name, kind: room.kind } });
+          return json(response, 200, { room: updatedRoom });
         }
-        return json(response, 200, { room: groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug }) });
+        const updatedRoom = groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug });
+        groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "room_update", targetType: "room", targetId: roomId, metadata: { name, kind: room.kind } });
+        return json(response, 200, { room: updatedRoom });
       }).catch(() => json(response, 400, { error: "Não foi possível atualizar o canal." }));
       return true;
     }
@@ -111,6 +118,7 @@ export function createGroupRoomRoutes({
         }
         if (request.method === "DELETE" || body.reset === true) {
           groupRoomPermissionRepository.remove(groupId, roomId, roleId);
+          groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "room_permission_reset", targetType: "room", targetId: roomId, metadata: { roleId } });
           json(response, 200, { ok: true, roleId });
           return true;
         }
@@ -122,6 +130,7 @@ export function createGroupRoomRoutes({
           canChat: body.canChat !== false,
           canConnect: body.canConnect !== false,
         });
+        groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "room_permission_update", targetType: "room", targetId: roomId, metadata: { roleId, canView: permission.canView, canChat: permission.canChat, canConnect: permission.canConnect } });
         json(response, 200, { permission });
       } catch {
         json(response, 400, { error: "Não foi possível atualizar as permissões do canal." });

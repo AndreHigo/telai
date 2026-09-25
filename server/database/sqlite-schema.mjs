@@ -251,6 +251,17 @@ export const SQLITE_SCHEMA = `
     PRIMARY KEY (group_id, room_id, role_id)
   );
   CREATE INDEX IF NOT EXISTS group_room_permissions_room_idx ON group_room_permissions(group_id, room_id);
+  CREATE TABLE IF NOT EXISTS group_audit_logs (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    actor_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS group_audit_logs_group_idx ON group_audit_logs(group_id, created_at DESC, id DESC);
   CREATE TABLE IF NOT EXISTS group_messages (
     id TEXT PRIMARY KEY,
     group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,

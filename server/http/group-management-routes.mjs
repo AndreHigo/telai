@@ -11,6 +11,7 @@ export function createGroupManagementRoutes({
   isGroupMember,
   createNotification,
   slugFor,
+  groupAuditRepository,
 }) {
   return async function handleGroupManagementRoutes(request, response, requestUrl) {
     const groupJoinRequestMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/join-requests$/);
@@ -101,7 +102,9 @@ export function createGroupManagementRoutes({
         if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para o grupo." });
         const duplicate = groupSettingsRepository.findDuplicateSlug(slug, groupId);
         if (duplicate) return json(response, 409, { error: "Já existe um grupo com esse nome." });
-        return json(response, 200, { group: groupSettingsRepository.updateGroup(groupId, name, slug) });
+        const group = groupSettingsRepository.updateGroup(groupId, name, slug);
+        groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "group_update", targetType: "group", targetId: groupId, metadata: { name, slug } });
+        return json(response, 200, { group });
       }).catch(() => json(response, 400, { error: "Não foi possível salvar as configurações do grupo." }));
       return true;
     }
@@ -124,7 +127,8 @@ export function createGroupManagementRoutes({
       const roles = groupRoleRepository.listRoles(groupId);
       const invites = groupInviteRepository.listGroupInvites(groupId);
       const joinRequests = group.ownerId === user.id ? groupJoinRequestRepository.listPending(groupId) : [];
-      json(response, 200, { group, roles, invites, joinRequests });
+      const auditLog = group.ownerId === user.id ? groupAuditRepository?.list(groupId, { limit: 30 }) : { entries: [], nextBefore: null };
+      json(response, 200, { group, roles, invites, joinRequests, auditLog });
       return true;
     }
 

@@ -29,6 +29,10 @@ para configurar overrides por cargo (`canView`, `canChat` e `canConnect`).
 Esses overrides são aplicados no servidor ao overview, chat, voz e entrega de
 eventos; remover o override faz o cargo voltar a herdar as permissões do grupo.
 
+O dono também pode consultar `GET /api/v1/groups/{groupId}/audit-log`. A
+resposta contém `entries` com as ações administrativas recentes e
+`nextBefore`; use esse cursor em `before` para buscar páginas anteriores.
+
 O namespace ainda não representa uma promessa de compatibilidade eterna para
 cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
 incompatíveis devem ser introduzidas em outra versão e documentadas aqui.

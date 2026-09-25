@@ -20,6 +20,7 @@ import { createPostgresGroupJoinRequestRepository } from "../server/repositories
 import { createPostgresGroupRoleRepository } from "../server/repositories/group-roles.mjs";
 import { createPostgresGroupRoomRepository } from "../server/repositories/group-rooms.mjs";
 import { createPostgresGroupRoomPermissionRepository } from "../server/repositories/group-room-permissions.mjs";
+import { createPostgresGroupAuditRepository } from "../server/repositories/group-audit.mjs";
 import { createPostgresGroupPermissionRepository } from "../server/repositories/group-permissions.mjs";
 import { createPostgresGroupMemberRepository } from "../server/repositories/group-members.mjs";
 import { createPostgresStreamRepository } from "../server/repositories/streams.mjs";
@@ -191,6 +192,12 @@ try {
   const roomPermissions = createPostgresGroupRoomPermissionRepository(client);
   const roomAwareGroups = createPostgresGroupAccessRepository(client, { roomPermissionRepository: roomPermissions });
   assert.equal(await roomAwareGroups.canGroupRoomAction(ids.member, createdGroup.id, textRoom.id, "canChat"), true);
+
+  const audit = createPostgresGroupAuditRepository(client, { createId: randomUUID });
+  const auditEntry = await audit.record({ groupId: createdGroup.id, actorUserId: ids.owner, action: "role_update", targetType: "role", targetId: createdDefaultRole.id, metadata: { name: "Auditoria PG" }, createdAt: now });
+  assert.equal(auditEntry.actorUsername, ownerUsername);
+  assert.equal(auditEntry.metadata.name, "Auditoria PG");
+  assert.equal((await audit.list(createdGroup.id, { limit: 10 })).entries[0].id, auditEntry.id);
   const roomOverride = await roomPermissions.save({ groupId: createdGroup.id, roomId: textRoom.id, roleId: createdDefaultRole.id, canView: true, canChat: false, canConnect: true, updatedAt: now });
   assert.equal(roomOverride.canChat, false);
   assert.equal(await roomAwareGroups.canGroupRoomAction(ids.member, createdGroup.id, textRoom.id, "canChat"), false);
