@@ -21,3 +21,15 @@ export function normalizeMediaMode(value) {
 export function normalizeBroadcastQuality(value) {
   return Object.hasOwn(BROADCAST_QUALITY_PROFILES, value) ? value : "balanced";
 }
+
+export function hasTurnServer(configuration) {
+  const iceServers = Array.isArray(configuration) ? configuration : configuration?.iceServers;
+  return (iceServers || []).some((server) => {
+    const urls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
+    return urls.some((url) => /^turns?:/i.test(String(url || "")));
+  });
+}
+
+export function withRelayIceTransportPolicy(configuration) {
+  return { ...(configuration || {}), iceTransportPolicy: "relay" };
+}

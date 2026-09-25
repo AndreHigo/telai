@@ -1,3 +1,5 @@
+import { withRelayIceTransportPolicy } from "../../../../shared/media-contract.mjs";
+
 export function createVoicePeerRecoveryController({
   getState,
   refreshIceConfiguration,
@@ -54,7 +56,7 @@ export function createVoicePeerRecoveryController({
       const latest = state();
       if (latest.voicePeerConnections?.get(participantId) !== peer || peer.connectionState === "closed") return;
       const useRelay = forceRelay && Boolean(hasTurnServer?.());
-      const recoveryConfig = useRelay ? { ...latest.rtcConfig, iceTransportPolicy: "relay" } : latest.rtcConfig;
+      const recoveryConfig = useRelay ? withRelayIceTransportPolicy(latest.rtcConfig) : latest.rtcConfig;
       if (useRelay) {
         closePeer?.(participantId);
         const initiator = Boolean(shouldInitiate?.(participantId));

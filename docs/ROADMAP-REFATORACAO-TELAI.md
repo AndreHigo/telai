@@ -233,6 +233,7 @@ enviada ao GitHub nem publicada em produção.
 ### Fase 4 — Qualidade de mídia
 
 - [ ] Manter P2P para chamadas pequenas e TURN como fallback.
+  - [x] Formalizar no contrato compartilhado a detecção de TURN e a política `iceTransportPolicy: relay` usada somente na recuperação de peers.
 - [ ] Criar contrato de mídia independente do restante do backend.
   - [x] Centralizar modos P2P/relay e perfis de qualidade em `shared/media-contract.mjs`, consumido pelo cliente e backend sem alterar o layout.
 - [ ] Avaliar SFU (LiveKit ou mediasoup) com teste de carga real.

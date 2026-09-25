@@ -66,7 +66,7 @@
   import { createClientDiagnostics } from "./services/client-diagnostics.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
-  import { BROADCAST_QUALITY_PROFILES as qualityProfiles } from "../../shared/media-contract.mjs";
+  import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { AppWindowIcon, BrowserIcon, PlayIcon } from "@hugeicons/core-free-icons";
 
@@ -3093,10 +3093,7 @@
   }
 
   function voiceHasTurnServer() {
-    return (rtcConfig?.iceServers || []).some((server) => {
-      const urls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
-      return urls.some((url) => /^turns?:/i.test(String(url || "")));
-    });
+    return hasTurnServer(rtcConfig);
   }
 
   function stopVoicePeerHealthTimer() {
