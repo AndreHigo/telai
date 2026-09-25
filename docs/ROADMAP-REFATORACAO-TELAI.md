@@ -201,6 +201,7 @@ enviada ao GitHub nem publicada em produção.
   - [ ] Separar a tela de configurações por domínio e reduzir o markup restante do shell.
     - [x] Extrair navegação, cabeçalho, subnavegação interna e formulário de perfil do canal para `frontend/src/features/settings`.
     - [x] Extrair cartões de perfil, preferências, contas conectadas e administração de grupo.
+    - [x] Extrair a tela de configurações para `frontend/src/features/settings/SettingsPage.svelte`, preservando bindings, ações e identidade visual, com carregamento sob demanda.
     - [x] Extrair carregamento e persistência de perfil, canal, preferências gerais e preferências de voz para controlador em chunk separado, mantendo mídia e identidade visual no shell.
     - [x] Extrair cartão de notificações.
     - [x] Extrair carregamento, leitura e preferência de notificações para `frontend/src/features/notifications/controller.js`.

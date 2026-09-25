@@ -22,17 +22,6 @@
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
-  import SettingsCategoryNav from "./features/settings/SettingsCategoryNav.svelte";
-  import SettingsHeading from "./features/settings/SettingsHeading.svelte";
-  import ChannelProfileSettings from "./features/settings/ChannelProfileSettings.svelte";
-  import SettingsInternalNav from "./features/settings/SettingsInternalNav.svelte";
-  import AccountProfileSettings from "./features/settings/AccountProfileSettings.svelte";
-  import PreferencesSettings from "./features/settings/PreferencesSettings.svelte";
-  import LinkedAccountsSettings from "./features/settings/LinkedAccountsSettings.svelte";
-  import GroupAdministrationSettings from "./features/settings/GroupAdministrationSettings.svelte";
-  import GroupRolePermissionsPanel from "./features/settings/GroupRolePermissionsPanel.svelte";
-  import GroupAccessSettingsPanel from "./features/settings/GroupAccessSettingsPanel.svelte";
-  import NotificationPreferencesSettings from "./features/settings/NotificationPreferencesSettings.svelte";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
@@ -318,6 +307,8 @@
   let groupChannelPermissionsSettingsLoad = null;
   let GroupAuditLogSettings = null;
   let groupAuditLogSettingsLoad = null;
+  let SettingsPage = null;
+  let settingsPageLoad = null;
   let ProfileSettingsExtras = null;
   let profileSettingsExtrasLoad = null;
   let VoiceSettingsPanel = null;
@@ -420,6 +411,17 @@
   }
 
   $: if (settingsTab === "group" && !GroupAuditLogSettings) void loadGroupAuditLogSettings();
+
+  function loadSettingsPage() {
+    if (SettingsPage || settingsPageLoad) return settingsPageLoad;
+    settingsPageLoad = import("./features/settings/SettingsPage.svelte")
+      .then((module) => { SettingsPage = module.default; })
+      .catch((error) => reportClientError("settings_page_load_error", error))
+      .finally(() => { settingsPageLoad = null; });
+    return settingsPageLoad;
+  }
+
+  $: if (view === "settings" && !SettingsPage) void loadSettingsPage();
 
   function loadProfileSettingsExtras() {
     if (ProfileSettingsExtras || profileSettingsExtrasLoad) return profileSettingsExtrasLoad;
@@ -6086,158 +6088,169 @@
         {/if}
         </div>
       {:else if view === "settings"}
-        <section bind:this={settingsPageElement} class="settings-page window-page" class:settings-profile={settingsSection === "profile"} class:settings-channel={settingsSection === "channel"} class:settings-voice={settingsSection === "voice"} class:settings-group={settingsSection === "group"} class:settings-notifications={settingsSection === "notifications"}>
-          <SettingsCategoryNav
-            {settingsSection}
-            {selectedGroupId}
-            onSelectSection={selectSettingsSection}
-            onLoadGroupAdministration={loadGroupAdministration}
-          />
-          <SettingsHeading onBack={() => { view = settingsReturnView; }} />
-          {#if settingsSection === "channel"}<ChannelProfileSettings bind:channelDisplayName {channelAvatarData} {gameOptions} {channelGames} {channelError} {settingsBusy} onSave={saveChannelProfile} onAvatarChange={handleChannelAvatarChange} onClearAvatar={clearChannelAvatar} onToggleChannelGame={toggleChannelGame} />{/if}
-          <div class="settings-layout"><SettingsInternalNav {settingsTab} {selectedGroupId} onSelectTab={(tab) => settingsTab = tab} /><div class="settings-content">{#if settingsTab === "user"}<AccountProfileSettings {settingsBusy} {user} {settingsAvatarData} bind:settingsDisplayName {avatarError} onSave={saveProfile} onAvatarChange={handleAvatarChange} onClearAvatar={clearAvatar} /><PreferencesSettings {settingsBusy} bind:theme bind:selectedQuality bind:audioMode bind:buttonColor bind:inputBackgroundColor bind:backgroundColor onSave={savePreferences} /><LinkedAccountsSettings {user} {providers} />{:else}<GroupAdministrationSettings {selectedGroup} {settingsBusy} bind:groupSettingsName onSave={saveGroupSettings} />{/if}{#if settingsError}<p class="settings-error" role="alert">{settingsError}</p>{/if}</div></div>
-         {#if ProfileSettingsExtras}<svelte:component this={ProfileSettingsExtras}
-           {settingsSection}
-           {settingsTab}
-           {isDesktop}
-           {settingsBusy}
-           {preferencesResetBusy}
-           {preferencesResetConfirm}
-           {launchAtLogin}
-           {launchAtLoginBusy}
-           {launchAtLoginError}
-           {hardwareAccelerationMode}
-           {hardwareAccelerationBusy}
-           {hardwareAccelerationError}
-           onTogglePreferencesResetConfirm={() => preferencesResetConfirm = !preferencesResetConfirm}
-           onResetPreferences={resetPreferencesToDefaults}
-           onToggleLaunchAtLogin={toggleLaunchAtLogin}
-           onSetHardwareAcceleration={setHardwareAcceleration}
-         />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}
-          {#if settingsTab === "user" && settingsSection === "profile"}<AccountPrivacy user={user} />{/if}
-         {#if settingsSection === "voice"}
-          {#if VoiceSettingsPanel}<svelte:component this={VoiceSettingsPanel}
-            {voiceNoiseSuppressionStatus}
-            {voiceNativeProcessingDetails}
-            {voiceInputProfile}
-            {voiceAdvancedOptions}
-            {voiceTestRunning}
-            {voiceTestLevel}
-            {voiceTestError}
-            {voiceTestSpeakerStatus}
-            {voiceTestStatus}
-            {voiceDevicesBusy}
-            bind:selectedInputDeviceId
-            bind:selectedOutputDeviceId
-            {audioInputDevices}
-            {audioOutputDevices}
-            {voiceMicrophoneVolume}
-            {voiceOutputVolume}
-            {pushToTalkEnabled}
-            {pushToTalkCapturing}
-            {pushToTalkActive}
-            {pushToTalkKey}
-            {desktopPushToTalkGlobal}
-            {muteShortcutCapturing}
-            {muteShortcut}
-            {desktopMuteShortcutGlobal}
-            {voiceAdvancedOpen}
-            {soundPreferences}
-            {voiceDevicesError}
-            {voiceSensitivityAuto}
-            {voiceSensitivity}
-            onLoadAudioDevices={loadAudioDevices}
-            onApplyVoiceInputDevice={applyVoiceInputDevice}
-            onApplyVoiceOutputDevice={applyVoiceOutputDevice}
-            onSetVoiceMicrophoneVolume={setVoiceMicrophoneVolume}
-            onSetVoiceOutputVolume={setVoiceOutputVolume}
-            onApplyVoiceInputProfile={applyVoiceInputProfile}
-            onTogglePushToTalk={togglePushToTalk}
-            onStartPushToTalkCapture={startPushToTalkCapture}
-            onClearPushToTalkKey={clearPushToTalkKey}
-            onStartMuteShortcutCapture={startMuteShortcutCapture}
-            onClearMuteShortcut={clearMuteShortcut}
-            onToggleVoiceAdvanced={toggleVoiceAdvanced}
-            onUpdateVoiceAdvancedOption={updateVoiceAdvancedOption}
-            onHandleVoiceSoundEffectsChange={handleVoiceSoundEffectsChange}
-            onHandleSoundVolumeChange={handleSoundVolumeChange}
-            onPreviewVoiceSound={previewVoiceSound}
-            onHandleSoundPreferenceChange={handleSoundPreferenceChange}
-            onUpdateVoiceSensitivityAuto={updateVoiceSensitivityAuto}
-            onUpdateVoiceSensitivity={updateVoiceSensitivity}
-            onStartVoiceTest={startVoiceTest}
-            onStopVoiceTest={stopVoiceTest}
-            onTestVoiceSpeaker={testVoiceSpeaker}
-            {pushToTalkLabel}
-            {shortcutLabel}
-          />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}
+        {#if SettingsPage}
+        <svelte:component this={SettingsPage}
+          bind:settingsPageElement
+          {settingsSection}
+          {settingsTab}
+          {selectedGroupId}
+          {user}
+          {settingsBusy}
+          {settingsError}
+          onSelectSection={selectSettingsSection}
+          onLoadGroupAdministration={loadGroupAdministration}
+          onBack={() => { view = settingsReturnView; }}
+          onSelectTab={(tab) => settingsTab = tab}
+          bind:channelDisplayName
+          {channelAvatarData}
+          {gameOptions}
+          {channelGames}
+          {channelError}
+          onSaveChannelProfile={saveChannelProfile}
+          onChannelAvatarChange={handleChannelAvatarChange}
+          onClearChannelAvatar={clearChannelAvatar}
+          onToggleChannelGame={toggleChannelGame}
+          {settingsAvatarData}
+          bind:settingsDisplayName
+          {avatarError}
+          bind:theme
+          bind:selectedQuality
+          bind:audioMode
+          bind:buttonColor
+          bind:inputBackgroundColor
+          bind:backgroundColor
+          {providers}
+          {selectedGroup}
+          bind:groupSettingsName
+          onSaveProfile={saveProfile}
+          onAvatarChange={handleAvatarChange}
+          onClearAvatar={clearAvatar}
+          onSavePreferences={savePreferences}
+          onSaveGroupSettings={saveGroupSettings}
+          {ProfileSettingsExtras}
+          {isDesktop}
+          {preferencesResetBusy}
+          {preferencesResetConfirm}
+          {launchAtLogin}
+          {launchAtLoginBusy}
+          {launchAtLoginError}
+          {hardwareAccelerationMode}
+          {hardwareAccelerationBusy}
+          {hardwareAccelerationError}
+          onTogglePreferencesResetConfirm={() => preferencesResetConfirm = !preferencesResetConfirm}
+          onResetPreferences={resetPreferencesToDefaults}
+          onToggleLaunchAtLogin={toggleLaunchAtLogin}
+          onSetHardwareAcceleration={setHardwareAcceleration}
+          {VoiceSettingsPanel}
+          {voiceNoiseSuppressionStatus}
+          {voiceNativeProcessingDetails}
+          {voiceInputProfile}
+          {voiceAdvancedOptions}
+          {voiceTestRunning}
+          {voiceTestLevel}
+          {voiceTestError}
+          {voiceTestSpeakerStatus}
+          {voiceTestStatus}
+          {voiceDevicesBusy}
+          bind:selectedInputDeviceId
+          bind:selectedOutputDeviceId
+          {audioInputDevices}
+          {audioOutputDevices}
+          {voiceMicrophoneVolume}
+          {voiceOutputVolume}
+          {pushToTalkEnabled}
+          {pushToTalkCapturing}
+          {pushToTalkActive}
+          {pushToTalkKey}
+          {desktopPushToTalkGlobal}
+          {muteShortcutCapturing}
+          {muteShortcut}
+          {desktopMuteShortcutGlobal}
+          {voiceAdvancedOpen}
+          {soundPreferences}
+          {voiceDevicesError}
+          {voiceSensitivityAuto}
+          {voiceSensitivity}
+          onLoadAudioDevices={loadAudioDevices}
+          onApplyVoiceInputDevice={applyVoiceInputDevice}
+          onApplyVoiceOutputDevice={applyVoiceOutputDevice}
+          onSetVoiceMicrophoneVolume={setVoiceMicrophoneVolume}
+          onSetVoiceOutputVolume={setVoiceOutputVolume}
+          onApplyVoiceInputProfile={applyVoiceInputProfile}
+          onTogglePushToTalk={togglePushToTalk}
+          onStartPushToTalkCapture={startPushToTalkCapture}
+          onClearPushToTalkKey={clearPushToTalkKey}
+          onStartMuteShortcutCapture={startMuteShortcutCapture}
+          onClearMuteShortcut={clearMuteShortcut}
+          onToggleVoiceAdvanced={toggleVoiceAdvanced}
+          onUpdateVoiceAdvancedOption={updateVoiceAdvancedOption}
+          onHandleVoiceSoundEffectsChange={handleVoiceSoundEffectsChange}
+          onHandleSoundVolumeChange={handleSoundVolumeChange}
+          onPreviewVoiceSound={previewVoiceSound}
+          onHandleSoundPreferenceChange={handleSoundPreferenceChange}
+          onUpdateVoiceSensitivityAuto={updateVoiceSensitivityAuto}
+          onUpdateVoiceSensitivity={updateVoiceSensitivity}
+          onStartVoiceTest={startVoiceTest}
+          onStopVoiceTest={stopVoiceTest}
+          onTestVoiceSpeaker={testVoiceSpeaker}
+          {pushToTalkLabel}
+          {shortcutLabel}
+          {liveNotificationScopes}
+          onSetNotificationScope={setLiveNotificationScope}
+          {groupRoles}
+          {selectedRole}
+          bind:selectedRoleId
+          {groupMembers}
+          {rolePermissionOptions}
+          {filteredRoleMembers}
+          {roleOrderSaving}
+          {draggedRoleId}
+          {dragOverRoleId}
+          bind:newRoleName
+          bind:newRoleColor
+          bind:roleEditName
+          bind:roleEditColor
+          {roleEditBusy}
+          bind:roleMemberSearchQuery
+          {roleMemberActionId}
+          onCreateRole={createGroupRole}
+          onStartRoleDrag={startRoleDrag}
+          onRoleDragOver={handleRoleDragOver}
+          onDropRole={dropRole}
+          onEndRoleDrag={endRoleDrag}
+          onMoveRole={moveRole}
+          onDeleteRole={deleteGroupRole}
+          onSaveRoleDetails={saveGroupRoleDetails}
+          onUpdateRolePermission={updateRolePermission}
+          onSetRoleMember={setRoleMember}
+          {GroupChannelPermissionsSettings}
+          {GroupAuditLogSettings}
+          {rooms}
+          bind:selectedRoomPermissionId
+          {groupRoomPermissions}
+          {roomPermissionBusyKey}
+          {activeGroupInvites}
+          {groupInviteLink}
+          {groupInviteCreating}
+          {groupInviteBusyId}
+          {groupJoinRequests}
+          {groupJoinActionId}
+          {groupAuditEntries}
+          {groupAuditLoading}
+          {api}
+          {groupAdminError}
+          onLoadRoom={loadGroupRoomPermissions}
+          onUpdatePermission={updateGroupRoomPermission}
+          onResetPermission={resetGroupRoomPermission}
+          onCreateInvite={createGroupInvite}
+          onCopyInvite={copyGroupInvite}
+          onDeleteInvite={deleteGroupInvite}
+          onRespondJoinRequest={respondToGroupJoinRequest}
+          onModerationComplete={refreshGroupAfterModeration}
+        />
+        {:else}
+          <div class="workspace-loading"><span></span><span></span><span></span></div>
         {/if}
-        {#if settingsSection === "notifications"}
-          <NotificationPreferencesSettings {settingsBusy} {liveNotificationScopes} onSave={savePreferences} onSetScope={setLiveNotificationScope} />
-        {/if}
-        {#if settingsTab === "group" && selectedGroupId}
-          <GroupRolePermissionsPanel
-            {selectedGroup}
-            {groupRoles}
-            {selectedRole}
-            bind:selectedRoleId
-            {groupMembers}
-            {rolePermissionOptions}
-            {filteredRoleMembers}
-            {roleOrderSaving}
-            {draggedRoleId}
-            {dragOverRoleId}
-            bind:newRoleName
-            bind:newRoleColor
-            bind:roleEditName
-            bind:roleEditColor
-            {roleEditBusy}
-            bind:roleMemberSearchQuery
-            {roleMemberActionId}
-            onCreateRole={createGroupRole}
-            onStartRoleDrag={startRoleDrag}
-            onRoleDragOver={handleRoleDragOver}
-            onDropRole={dropRole}
-            onEndRoleDrag={endRoleDrag}
-            onMoveRole={moveRole}
-            onDeleteRole={deleteGroupRole}
-            onSaveRoleDetails={saveGroupRoleDetails}
-            onUpdateRolePermission={updateRolePermission}
-            onSetRoleMember={setRoleMember}
-          />
-          <GroupAccessSettingsPanel
-            {selectedGroup}
-            {GroupChannelPermissionsSettings}
-            {GroupAuditLogSettings}
-            {rooms}
-            bind:selectedRoomPermissionId
-            {groupRoles}
-            {groupRoomPermissions}
-            {roomPermissionBusyKey}
-            {activeGroupInvites}
-            {groupInviteLink}
-            {groupInviteCreating}
-            {groupInviteBusyId}
-            {groupMembers}
-            {user}
-            {groupJoinRequests}
-            {groupJoinActionId}
-            {groupAuditEntries}
-            {groupAuditLoading}
-            {api}
-            {selectedGroupId}
-            {groupAdminError}
-            onLoadRoom={loadGroupRoomPermissions}
-            onUpdatePermission={updateGroupRoomPermission}
-            onResetPermission={resetGroupRoomPermission}
-            onCreateInvite={createGroupInvite}
-            onCopyInvite={copyGroupInvite}
-            onDeleteInvite={deleteGroupInvite}
-            onRespondJoinRequest={respondToGroupJoinRequest}
-            onModerationComplete={refreshGroupAfterModeration}
-          />
-        {/if}
-        </section>
       {:else if view === "multistream"}
         <section class="multistream-page" aria-labelledby="multistream-title">
           <header class="multistream-page-heading">
