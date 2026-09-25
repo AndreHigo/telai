@@ -42,6 +42,7 @@ import { createMemberInviteRoutes } from "./server/http/member-invite-routes.mjs
 import { createAdminRoutes } from "./server/http/admin-routes.mjs";
 import { createAuthRoutes } from "./server/http/auth-routes.mjs";
 import { createObservabilityRoutes } from "./server/http/observability-routes.mjs";
+import { createGroupDiscoveryRoutes } from "./server/http/group-discovery-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -809,6 +810,15 @@ const groupPermissionRepository = createGroupPermissionRepository(database);
 const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
 const streamRepository = createStreamRepository(database, { createId: randomUUID });
 const groupSettingsRepository = createGroupSettingsRepository(database);
+const handleGroupDiscoveryRoutes = createGroupDiscoveryRoutes({
+  json,
+  readJson,
+  requireUser,
+  groupRepository,
+  groupSettingsRepository,
+  groupMemberRepository,
+  slugFor,
+});
 const userProfileRepository = createUserProfileRepository(database);
 const handleUserSettingsRoutes = createUserSettingsRoutes({
   json,
@@ -2322,55 +2332,7 @@ async function handleHttpRequest(request, response) {
   if (await handleAuthRoutes(request, response, requestUrl)) return;
   if (await handleUserSettingsRoutes(request, response, requestUrl)) return;
   if (await handleSocialRoutes(request, response, requestUrl)) return;
-  if (requestUrl.pathname === "/api/groups" && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    return json(response, 200, { groups: groupRepository.listGroups(user.id) });
-  }
-  if (requestUrl.pathname === "/api/groups/search" && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const query = String(requestUrl.searchParams.get("q") || "").trim().slice(0, 64);
-    if (query.length < 2) return json(response, 200, { groups: [] });
-    return json(response, 200, { groups: groupRepository.searchGroups(user.id, query) });
-  }
-  if (requestUrl.pathname === "/api/groups" && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    readJson(request).then((body) => {
-      const name = String(body.name || "").trim().slice(0, 64);
-      const slug = slugFor(body.slug || name);
-      if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para o grupo." });
-      try {
-        const group = groupRepository.createGroup({ name, slug, ownerId: user.id });
-        return json(response, 201, { group });
-      } catch (error) {
-        if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe um grupo com esse nome." });
-        throw error;
-      }
-    }).catch(() => json(response, 400, { error: "Não foi possível criar o grupo." }));
-    return;
-  }
-
-  const groupMembershipMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/membership$/);
-  if (groupMembershipMatch && request.method === "DELETE") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = groupMembershipMatch[1];
-    const group = groupSettingsRepository.findGroup(groupId);
-    if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    const membership = groupMemberRepository.find(groupId, user.id);
-    if (!membership) return json(response, 404, { error: "Você não participa deste grupo." });
-    if (membership.role === "owner" || group.ownerId === user.id) {
-      return json(response, 400, { error: "O dono não pode sair do próprio grupo. Transfira a propriedade ou exclua o grupo." });
-    }
-    try {
-      groupMemberRepository.leaveGroup(groupId, user.id);
-      return json(response, 200, { ok: true, group: { id: group.id, name: group.name } });
-    } catch (error) {
-      return json(response, 400, { error: "Não foi possível sair deste grupo agora." });
-    }
-  }
+  if (await handleGroupDiscoveryRoutes(request, response, requestUrl)) return;
   const groupDeleteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})$/);
   if (groupDeleteMatch && request.method === "DELETE") {
     const user = requireUser(request, response);
