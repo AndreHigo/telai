@@ -17,6 +17,7 @@
     "test:navigation": "node qa/test-navigation-controller.mjs",
     "test:release-notes": "node qa/test-release-notes-controller.mjs",
     "test:broadcast-audio-bridge": "node qa/test-broadcast-audio-bridge.mjs",
+    "test:broadcast-capture": "node qa/test-broadcast-capture-controller.mjs",
     "test:events": "node qa/e2e-events.cjs",
     "test:events-ui": "electron --no-sandbox qa/e2e-events-ui.cjs",
     "test:voice-activity": "node qa/test-voice-activity.cjs",

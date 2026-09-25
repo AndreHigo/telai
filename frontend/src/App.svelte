@@ -1635,6 +1635,44 @@
   async function startWindowAudioBridge(...args) { return (await getBroadcastAudioBridgeController()).startWindowAudio(...args); }
   async function startSystemAudioBridge(...args) { return (await getBroadcastAudioBridgeController()).startSystemAudio(...args); }
 
+  let broadcastCaptureControllerPromise = null;
+  function getBroadcastCaptureController() {
+    if (!broadcastCaptureControllerPromise) {
+      broadcastCaptureControllerPromise = import("./features/broadcast/capture-controller.js").then(({ createBroadcastCaptureController }) => createBroadcastCaptureController({
+        getDisplayMedia: (constraints) => navigator.mediaDevices.getDisplayMedia(constraints),
+        getQualityProfiles: () => qualityProfiles,
+        getSelectedVoiceAudioConstraints: () => selectedVoiceAudioConstraints(),
+        getState: () => ({
+          audioMode,
+          broadcastCameraDeviceId,
+          broadcastMicrophoneStream,
+          broadcastSelectionKind,
+          selectedInputDeviceId,
+        }),
+        getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia(constraints),
+        getDesktopBridge: () => window.miranteDesktop,
+        loadAudioDevices,
+        processVoiceInputStream,
+        rememberCapturedInputDevice,
+        reportClientError,
+        setState: (next) => {
+          if ("broadcastMicrophoneStream" in next) broadcastMicrophoneStream = next.broadcastMicrophoneStream;
+          if ("displaySourceFilter" in next) displaySourceFilter = next.displaySourceFilter;
+          if ("displaySourceSelection" in next) displaySourceSelection = next.displaySourceSelection;
+          if ("displaySources" in next) displaySources = next.displaySources;
+          if ("notice" in next) notice = next.notice;
+          if ("showDisplayPicker" in next) showDisplayPicker = next.showDisplayPicker;
+        },
+        stopVoiceInputStream,
+      }));
+    }
+    return broadcastCaptureControllerPromise;
+  }
+  async function captureBroadcastCameraStream(...args) { return (await getBroadcastCaptureController()).captureBroadcastCameraStream(...args); }
+  async function captureBroadcastMicrophoneStream(...args) { return (await getBroadcastCaptureController()).captureBroadcastMicrophoneStream(...args); }
+  async function captureDisplayStream(...args) { return (await getBroadcastCaptureController()).captureDisplayStream(...args); }
+  async function refreshBroadcastDevices(...args) { return (await getBroadcastCaptureController()).refreshBroadcastDevices(...args); }
+
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
     return list.scrollHeight - list.scrollTop - list.clientHeight <= 96;
@@ -4973,173 +5011,6 @@
 
   function requestCameraBroadcastStart() {
     requestBroadcastStart("camera");
-  }
-
-  function captureVideoConstraints(profile, { display = false } = {}) {
-    const constraints = {
-      width: { ideal: profile.width, max: profile.width },
-      height: { ideal: profile.height, max: profile.height },
-      frameRate: { ideal: profile.maxFramerate, max: profile.maxFramerate },
-    };
-    // Alguns Chromium entregam a tela inteira na resolução nativa do monitor
-    // e só reduzem depois no encoder. Solicitar o redimensionamento na origem
-    // evita trazer 4K para a composição quando a live é 720p/1080p.
-    if (display) constraints.resizeMode = { ideal: "crop-and-scale" };
-    return constraints;
-  }
-
-  function captureSettingsExceedProfile(track, profile) {
-    const settings = track?.getSettings?.() || {};
-    return [
-      [settings.width, profile.width],
-      [settings.height, profile.height],
-      [settings.frameRate, profile.maxFramerate],
-    ].some(([actual, maximum]) => Number.isFinite(Number(actual)) && Number(actual) > maximum + 1);
-  }
-
-  async function constrainCapturedVideoTrack(track, profile) {
-    if (!track) throw new Error("A fonte escolhida não forneceu vídeo.");
-    if (typeof track.applyConstraints !== "function") {
-      throw new Error("Seu navegador não permite limitar a captura desta janela. Atualize o navegador e tente novamente.");
-    }
-    const attempts = [profile, profile === qualityProfiles.economy ? null : qualityProfiles.economy].filter(Boolean);
-    let lastError = null;
-    for (const attempt of attempts) {
-      try {
-        await track.applyConstraints(captureVideoConstraints(attempt, { display: true }));
-        if (!captureSettingsExceedProfile(track, attempt)) {
-          if (attempt !== profile) notice = "A captura foi ajustada para o modo econômico para manter o navegador estável.";
-          return attempt;
-        }
-        lastError = new Error("O navegador manteve a janela acima do limite solicitado.");
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw new Error(lastError?.name === "OverconstrainedError"
-      ? "O navegador não conseguiu reduzir a resolução desta janela. Escolha Econômica ou feche outros jogos e tente novamente."
-      : "Não foi possível preparar a captura desta janela com segurança. Tente novamente em qualidade Econômica.");
-  }
-
-  async function constrainCapturedStream(stream, profile) {
-    try {
-      await constrainCapturedVideoTrack(stream?.getVideoTracks?.()[0], profile);
-      return stream;
-    } catch (error) {
-      stream?.getTracks?.().forEach((track) => track.stop());
-      throw error;
-    }
-  }
-
-  function displayMediaConstraints(profile) {
-    const desktopSystemAudio = Boolean(window.miranteDesktop?.isDesktop && audioMode === "system");
-    return {
-      video: captureVideoConstraints(profile, { display: true }),
-      // No desktop, o áudio do computador inteiro passa pelo bridge WASAPI
-      // filtrado para não vazar as janelas do Telai e do Discord.
-      audio: audioMode === "none" || desktopSystemAudio
-        ? false
-        : { suppressLocalAudioPlayback: false },
-      systemAudio: audioMode === "system" ? "include" : "exclude",
-      windowAudio: audioMode === "system" ? "system" : "window",
-      selfBrowserSurface: "exclude",
-      surfaceSwitching: "include",
-    };
-  }
-
-  async function captureDisplayStream(profile) {
-    const constraints = displayMediaConstraints(profile);
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
-      return constrainCapturedStream(stream, profile);
-    } catch (error) {
-      const canUseLegacyDesktopCapture = window.miranteDesktop?.isDesktop
-        && typeof window.miranteDesktop.getDisplayMediaSources === "function"
-        && ["NotSupportedError", "NotReadableError", "TypeError"].includes(error?.name);
-      if (!canUseLegacyDesktopCapture) throw error;
-    }
-
-    // Compatibilidade para versões do Windows/Electron que não conseguem
-    // iniciar o fluxo moderno de getDisplayMedia.
-    const sources = await window.miranteDesktop.getDisplayMediaSources();
-    if (!sources?.length) throw new Error("Nenhuma tela ou janela disponível para compartilhar.");
-    const source = await new Promise((resolve, reject) => {
-      displaySources = sources;
-      displaySourceFilter = broadcastSelectionKind === "screen" ? "screen" : "window";
-      showDisplayPicker = true;
-      displaySourceSelection = { resolve, reject };
-    });
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        // O fallback legado precisa pedir explicitamente o loopback do
-        // desktop; sem esta trilha a tela inteira chega ao WebRTC sem áudio.
-        audio: audioMode === "system" && !window.miranteDesktop?.isDesktop
-          ? { mandatory: { chromeMediaSource: "desktop" } }
-          : false,
-        video: {
-          mandatory: {
-            chromeMediaSource: "desktop",
-            chromeMediaSourceId: source.id,
-            minWidth: profile.width,
-            maxWidth: profile.width,
-            minHeight: profile.height,
-            maxHeight: profile.height,
-            maxFrameRate: profile.maxFramerate,
-          },
-        },
-      });
-      return constrainCapturedStream(stream, profile);
-    } catch (error) {
-      if (!["NotSupportedError", "NotReadableError", "TrackStartError"].includes(error?.name)) throw error;
-      throw new Error("O sistema não conseguiu iniciar a captura desta tela ou janela. Tente novamente ou atualize o aplicativo.");
-    } finally {
-      showDisplayPicker = false;
-      displaySources = [];
-      displaySourceFilter = "all";
-    }
-  }
-
-  async function refreshBroadcastDevices() {
-    try {
-      const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      permissionStream.getTracks().forEach((track) => track.stop());
-    } catch (error) {
-      if (error?.name !== "NotAllowedError") reportClientError("broadcast_camera_permission_refresh", error);
-    }
-    await loadAudioDevices(true);
-  }
-
-  async function captureBroadcastMicrophoneStream() {
-    const requestedInputDeviceId = selectedInputDeviceId;
-    const rawStream = await navigator.mediaDevices.getUserMedia({ audio: selectedVoiceAudioConstraints(), video: false });
-    const microphoneTrack = rawStream.getAudioTracks()[0];
-    if (!microphoneTrack) {
-      rawStream.getTracks().forEach((track) => track.stop());
-      throw new Error("Nenhum microfone foi encontrado para a transmissão.");
-    }
-    try {
-      rememberCapturedInputDevice(microphoneTrack, requestedInputDeviceId);
-      // A transmissão usa o mesmo microfone já capturado, sem criar um
-      // segundo pipeline de processamento de áudio.
-      const processedStream = await processVoiceInputStream(rawStream);
-      broadcastMicrophoneStream = processedStream;
-      return processedStream;
-    } catch (error) {
-      stopVoiceInputStream(rawStream);
-      throw error;
-    }
-  }
-
-  async function captureBroadcastCameraStream(profile) {
-    const video = captureVideoConstraints(profile);
-    if (broadcastCameraDeviceId) video.deviceId = { exact: broadcastCameraDeviceId };
-    const stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
-    const track = stream.getVideoTracks()[0];
-    if (!track) {
-      stream.getTracks().forEach((item) => item.stop());
-      throw new Error("A câmera escolhida não forneceu vídeo.");
-    }
-    return stream;
   }
 
   async function stopBroadcastAudioMix() {
