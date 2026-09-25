@@ -118,6 +118,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair hashing de senha e token de sessão para `server/auth/crypto.mjs`, mantendo o formato e a validação existentes.
 - [x] Extrair buckets, políticas e limpeza de rate limit HTTP para `server/http/rate-limit.mjs`.
 - [x] Extrair configuração de limites, buckets voláteis e limites de transporte para `server/config/limits.mjs`, mantendo clamps e valores padrão.
+- [x] Centralizar a seleção dos repositórios SQLite/PostgreSQL e do repositório de manutenção em `server/database/runtime-repositories.mjs`, mantendo o bootstrap HTTP/gateway agnóstico ao driver.
 - [x] Extrair métricas locais e diagnósticos de cliente para `server/http/observability-routes.mjs`.
 - [x] Extrair o runtime de logs sanitizados, contadores HTTP e identificação de observabilidade local para `server/observability/runtime.mjs`.
 - [x] Extrair o snapshot de métricas, proteções e diagnóstico para `server/observability/snapshot.mjs`, mantendo o envelope de `/metrics`.
