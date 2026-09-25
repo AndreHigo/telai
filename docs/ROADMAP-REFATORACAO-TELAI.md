@@ -92,6 +92,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair a camada de apresentação da transmissão para `frontend/src/features/broadcast`.
 - [x] Extrair o pipeline de entrada de voz para `frontend/src/services/media` sem alterar os filtros atuais.
 - [x] Extrair captura, fallback e seleção do microfone para `frontend/src/services/media`.
+- [x] Extrair sincronização, `replaceTrack` e renegociação do áudio local para `frontend/src/services/media`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
 
 ### Fase 2 — Contratos e tempo real
