@@ -287,6 +287,11 @@ enviada ao GitHub nem publicada em produção.
   - [x] Persistir webhooks por grupo/canal com token armazenado somente como hash e gestão restrita ao dono do grupo.
   - [x] Executar mensagens sem sessão, publicar evento em tempo real e preservar autoria no histórico SQLite/PostgreSQL.
 - [ ] Tokens de aplicação e bots.
+  - [x] Persistir aplicações e identidades de bot separadas do usuário humano em SQLite/PostgreSQL.
+  - [x] Criar tokens aleatórios armazenados somente como hash, com listagem de metadados e revogação.
+  - [x] Instalar/remover o bot em grupos autorizados pelo dono e manter a associação no banco.
+  - [x] Publicar mensagens autenticadas por token e propagar o evento pelo gateway.
+  - [ ] Adicionar gerenciamento visual e ampliar a superfície de permissões, comandos e eventos.
 - [ ] Comandos, componentes e modais.
 - [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.
 - [x] Criar migration baseline e importador offline SQLite → PostgreSQL.
