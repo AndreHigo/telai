@@ -20,6 +20,7 @@
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
   import { createViewportController } from "./features/shell/viewport-controller.js";
+  import { createRouteController } from "./features/shell/route-controller.js";
   import SettingsCategoryNav from "./features/settings/SettingsCategoryNav.svelte";
   import SettingsHeading from "./features/settings/SettingsHeading.svelte";
   import ChannelProfileSettings from "./features/settings/ChannelProfileSettings.svelte";
@@ -816,6 +817,20 @@
     dark: { button: "#5b5fea", input: "#0d1728", background: "#070b16" },
     light: { button: "#4256d6", input: "#ffffff", background: "#f7f8fc" },
   };
+
+  const routeController = createRouteController({
+    getState: () => ({ isViewer }),
+    setState: (next) => {
+      if ("authError" in next) authError = next.authError;
+      if ("isViewer" in next) isViewer = next.isViewer;
+      if ("pendingInviteToken" in next) pendingInviteToken = next.pendingInviteToken;
+      if ("pendingGroupRouteId" in next) pendingGroupRouteId = next.pendingGroupRouteId;
+      if ("pendingRoomRouteId" in next) pendingRoomRouteId = next.pendingRoomRouteId;
+      if ("viewerRoomId" in next) viewerRoomId = next.viewerRoomId;
+      if ("viewerStreamPath" in next) viewerStreamPath = next.viewerStreamPath;
+    },
+  });
+  const { canonicalizeAuthenticatedRoute, detectViewerRoute, replaceBrowserPath } = routeController;
 
   $: selectedGroup = groups.find((group) => group.id === selectedGroupId) || null;
   $: normalizedGroupPickerQuery = groupPickerQuery.trim().toLocaleLowerCase();
@@ -5793,53 +5808,6 @@
     localStorage.setItem("mirante-theme", theme);
     window.miranteDesktop?.setTheme?.(theme);
     if (user) api("/api/auth/preferences", { method: "PATCH", body: JSON.stringify({ theme, defaultQuality: selectedQuality, defaultAudio: audioMode, buttonColor, inputBackgroundColor, backgroundColor, pushToTalkKey }) }).catch(() => {});
-  }
-
-  function replaceBrowserPath(pathname, { preserveQuery = true } = {}) {
-    const url = new URL(window.location.href);
-    url.pathname = pathname;
-    if (!preserveQuery) url.search = "";
-    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
-  }
-
-  function canonicalizeAuthenticatedRoute() {
-    if (isViewer) return;
-    const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
-    if (pathname === "/login") replaceBrowserPath("/");
-  }
-
-  function detectViewerRoute() {
-    const url = new URL(window.location.href);
-    pendingInviteToken = url.searchParams.get("invite") || "";
-    pendingGroupRouteId = url.searchParams.get("group") || "";
-    pendingRoomRouteId = url.searchParams.get("room") || "";
-    const queryAuthError = url.searchParams.get("auth_error");
-    if (queryAuthError) {
-      authError = {
-        "login-required": "Entre para vincular uma conta externa.",
-        "oauth-denied": "O acesso externo foi cancelado.",
-        "oauth-failed": "Não foi possível concluir o acesso externo.",
-      }[queryAuthError] || "Não foi possível concluir o acesso externo.";
-      url.searchParams.delete("auth_error");
-      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
-    }
-    const queryRoom = url.searchParams.get("room");
-    if (url.searchParams.get("mode") === "viewer" && queryRoom) {
-      isViewer = true;
-      viewerRoomId = queryRoom;
-      viewerStreamPath = "";
-      return;
-    }
-    const parts = url.pathname.split("/").filter(Boolean);
-    const reserved = new Set(["login", "svelte", "download", "updates"]);
-    const friendly = [1, 2].includes(parts.length)
-      && parts.every((part) => /^[a-zA-Z0-9_.-]+$/.test(part))
-      && !reserved.has(parts[0].toLowerCase());
-    if (friendly) {
-      isViewer = true;
-      viewerRoomId = "";
-      viewerStreamPath = url.pathname;
-    }
   }
 
 </script>

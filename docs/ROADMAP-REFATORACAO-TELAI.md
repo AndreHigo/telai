@@ -167,6 +167,7 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
   - [ ] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
     - [x] Extrair seleção de telas, abertura do workspace de grupos e navegação da sidebar para `frontend/src/features/shell/navigation-controller.js` em chunk lazy, preservando o layout.
+    - [x] Extrair parsing de rotas públicas, visualizador, convites pendentes e canonicalização de login para `frontend/src/features/shell/route-controller.js`, preservando URLs e layout.
     - [x] Extrair o controle do breakpoint responsivo e fechamento da sidebar para `frontend/src/features/shell/viewport-controller.js`, preservando o layout.
     - [x] Extrair submissão de login/cadastro e início de OAuth para `frontend/src/features/auth/controller.js`, preservando payloads e navegação existentes.
     - [x] Extrair abertura e navegação da tela de configurações para `frontend/src/features/settings/navigation-controller.js`, preservando bindings e carregamentos existentes.
