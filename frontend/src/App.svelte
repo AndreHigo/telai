@@ -9,6 +9,7 @@
   import BroadcastPage from "./features/broadcast/BroadcastPage.svelte";
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
+  import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
@@ -7185,18 +7186,12 @@
       />
       {#if notice}<div class="app-notice" role="status">{notice}</div>{/if}
       {#if voiceReconnectVisible && voiceReconnectSession}
-        <section class="voice-reconnect-banner" role="status" aria-live="polite">
-          <span class="voice-reconnect-banner-icon telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("volume")} size={19} strokeWidth={1.8} /></span>
-          <div class="voice-reconnect-copy">
-            <span class="voice-reconnect-kicker">Conexão interrompida</span>
-            <strong>Voltar para a sala de voz?</strong>
-            <p><b>{voiceReconnectSession.groupName}</b><span aria-hidden="true"> · </span>{voiceReconnectSession.roomName}<span class="voice-reconnect-status">{voiceReconnectBusy ? "Reconectando…" : navigator.onLine ? "A sala continua disponível." : "Aguardando a internet voltar."}</span></p>
-          </div>
-          <div class="voice-reconnect-actions">
-            <button class="primary rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={() => void reconnectSavedVoiceRoom()} disabled={voiceReconnectBusy || !navigator.onLine}>{voiceReconnectBusy ? "Reconectando…" : "Reconectar"}</button>
-            <button class="outline rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={clearVoiceReconnectSession} disabled={voiceReconnectBusy}>Descartar</button>
-          </div>
-        </section>
+        <VoiceReconnectBanner
+          session={voiceReconnectSession}
+          busy={voiceReconnectBusy}
+          onReconnect={() => void reconnectSavedVoiceRoom()}
+          onDismiss={clearVoiceReconnectSession}
+        />
       {/if}
       {#if view === "home"}
         <div class="home-view">
