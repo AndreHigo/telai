@@ -71,6 +71,7 @@
   } from "./services/media/voice-device-utils.js";
   import { createClientDiagnostics } from "./services/client-diagnostics.js";
   import { createClientPollingController } from "./services/client-polling.js";
+  import { createMaintenanceController } from "./features/shell/maintenance-controller.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
@@ -180,6 +181,7 @@
   let maintenanceNotice = null;
   let maintenanceRemainingSeconds = 0;
   let maintenanceReloadKey = "";
+  const maintenanceController = createMaintenanceController();
   let providers = authState.getState().providers;
   let authMode = authState.getState().authMode;
   let authBusy = authState.getState().authBusy;
@@ -391,6 +393,12 @@
     registerUsername = next.registerUsername;
     registerPassword = next.registerPassword;
     registerLegalAccepted = next.registerLegalAccepted;
+  });
+
+  const unsubscribeMaintenanceState = maintenanceController.subscribe((next) => {
+    maintenanceNotice = next.notice;
+    maintenanceRemainingSeconds = next.remainingSeconds;
+    maintenanceReloadKey = next.reloadKey;
   });
 
   const viewportController = createViewportController({
@@ -930,8 +938,6 @@
   let notificationsRefreshInFlight = notificationState.getState().notificationsRefreshInFlight;
   let groupOverviewRefreshInFlight = groupState.getState().groupOverviewRefreshInFlight;
   let groupPresenceRefreshInFlight = groupState.getState().groupPresenceRefreshInFlight;
-  let maintenanceRefreshInFlight = false;
-
   const unsubscribeNotificationState = notificationState.subscribe((next) => {
     notifications = next.notifications;
     notificationUnreadCount = next.notificationUnreadCount;
@@ -2210,68 +2216,8 @@
     }
   }
 
-  function maintenanceWasReloaded(id) {
-    if (!id) return false;
-    try { return sessionStorage.getItem(`telai-maintenance-reloaded:${id}`) === "1"; } catch { return false; }
-  }
-
-  function updateMaintenanceCountdown() {
-    if (!maintenanceNotice) {
-      maintenanceRemainingSeconds = 0;
-      return;
-    }
-    const startsAt = Date.parse(maintenanceNotice.startsAt);
-    if (!Number.isFinite(startsAt)) {
-      maintenanceNotice = null;
-      maintenanceRemainingSeconds = 0;
-      return;
-    }
-    if (maintenanceWasReloaded(maintenanceNotice.id) && startsAt <= Date.now()) {
-      maintenanceNotice = null;
-      maintenanceRemainingSeconds = 0;
-      return;
-    }
-    maintenanceRemainingSeconds = Math.max(0, Math.ceil((startsAt - Date.now()) / 1000));
-    if (maintenanceRemainingSeconds > 0 || maintenanceReloadKey === maintenanceNotice.id) return;
-    const storageKey = `telai-maintenance-reloaded:${maintenanceNotice.id}`;
-    let alreadyReloaded = false;
-    try { alreadyReloaded = sessionStorage.getItem(storageKey) === "1"; } catch {}
-    if (alreadyReloaded) {
-      maintenanceReloadKey = maintenanceNotice.id;
-      maintenanceNotice = null;
-      maintenanceRemainingSeconds = 0;
-      return;
-    }
-    try { sessionStorage.setItem(storageKey, "1"); } catch {}
-    maintenanceReloadKey = maintenanceNotice.id;
-    window.setTimeout(() => window.location.reload(), 500);
-  }
-
-  async function loadMaintenance() {
-    if (maintenanceRefreshInFlight) return;
-    maintenanceRefreshInFlight = true;
-    try {
-      const response = await fetch("/api/maintenance", { cache: "no-store" });
-      if (!response.ok) {
-        maintenanceNotice = null;
-        maintenanceRemainingSeconds = 0;
-        return;
-      }
-      const body = await response.json().catch(() => ({}));
-      const nextNotice = body.notice || null;
-      maintenanceNotice = nextNotice && maintenanceWasReloaded(nextNotice.id) && Date.parse(nextNotice.startsAt) <= Date.now()
-        ? null
-        : nextNotice;
-      if (!maintenanceNotice) maintenanceReloadKey = "";
-      updateMaintenanceCountdown();
-    } catch {
-      maintenanceNotice = null;
-      maintenanceRemainingSeconds = 0;
-      maintenanceReloadKey = "";
-    } finally {
-      maintenanceRefreshInFlight = false;
-    }
-  }
+  const updateMaintenanceCountdown = (...args) => maintenanceController.updateCountdown(...args);
+  const loadMaintenance = (...args) => maintenanceController.load(...args);
 
   async function openNotifications() {
     setNavigationState({ view: "notifications" });
@@ -5686,6 +5632,7 @@
   onDestroy(() => {
     unsubscribeNavigationState();
     unsubscribeAuthState();
+    unsubscribeMaintenanceState();
     unsubscribeNotificationState();
     unsubscribeSocialState();
     unsubscribeSettingsState();
