@@ -1,3 +1,5 @@
+import { normalizeBroadcastQuality } from "../../shared/media-contract.mjs";
+
 export function createBroadcastMessageHandler({
   send,
   rooms,
@@ -113,7 +115,7 @@ export function createBroadcastMessageHandler({
 
     if (message.type === "quality-lock") {
       const room = rooms.get(socket.roomId);
-      const quality = ["high", "balanced", "economy"].includes(message.quality) ? message.quality : "balanced";
+      const quality = normalizeBroadcastQuality(message.quality);
       const target = room?.viewers.get(String(message.target || ""));
       if (room?.host !== socket || !target) return true;
       send(target, { type: "quality-lock", quality });

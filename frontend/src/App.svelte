@@ -54,6 +54,7 @@
   import { createClientDiagnostics } from "./services/client-diagnostics.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
+  import { BROADCAST_QUALITY_PROFILES as qualityProfiles } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { AppWindowIcon, BrowserIcon, PlayIcon } from "@hugeicons/core-free-icons";
 
@@ -888,12 +889,6 @@
     const noticeAtDisplay = notice;
     setTimeout(() => { if (notice === noticeAtDisplay) notice = ""; }, 5000);
   }
-
-  const qualityProfiles = {
-    economy: { label: "Econômica", width: 960, height: 540, maxFramerate: 30, maxBitrate: 1_200_000 },
-    balanced: { label: "Equilibrada", width: 1280, height: 720, maxFramerate: 30, maxBitrate: 2_500_000 },
-    high: { label: "Alta", width: 1920, height: 1080, maxFramerate: 60, maxBitrate: 6_000_000 },
-  };
 
   const api = createApiClient({ reportError: reportClientError });
   const notificationController = createNotificationController({

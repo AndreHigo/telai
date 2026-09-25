@@ -1,3 +1,5 @@
+import { normalizeBroadcastQuality } from "../../shared/media-contract.mjs";
+
 export function createUserSettingsRoutes({
   json,
   readJson,
@@ -83,7 +85,7 @@ export function createUserSettingsRoutes({
           ? (["dark", "light"].includes(body.theme) ? body.theme : "dark")
           : (existing?.theme || "dark");
         const defaultQuality = Object.prototype.hasOwnProperty.call(body, "defaultQuality")
-          ? (["economy", "balanced", "high"].includes(body.defaultQuality) ? body.defaultQuality : "balanced")
+          ? normalizeBroadcastQuality(body.defaultQuality)
           : (existing?.defaultQuality || "balanced");
         const defaultAudio = Object.prototype.hasOwnProperty.call(body, "defaultAudio")
           ? (["source", "system"].includes(body.defaultAudio) ? body.defaultAudio : "source")

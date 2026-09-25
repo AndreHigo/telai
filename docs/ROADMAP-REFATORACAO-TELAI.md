@@ -221,6 +221,7 @@ enviada ao GitHub nem publicada em produção.
 
 - [ ] Manter P2P para chamadas pequenas e TURN como fallback.
 - [ ] Criar contrato de mídia independente do restante do backend.
+  - [x] Centralizar modos P2P/relay e perfis de qualidade em `shared/media-contract.mjs`, consumido pelo cliente e backend sem alterar o layout.
 - [ ] Avaliar SFU (LiveKit ou mediasoup) com teste de carga real.
 - [ ] Avaliar codecs, bitrate adaptativo, simulcast/SVC e TURN adequados à VPS, preservando a interface atual.
 - [ ] Substituir o P2P por uma arquitetura de mídia escalável somente após benchmark de custo, latência, CPU e qualidade.

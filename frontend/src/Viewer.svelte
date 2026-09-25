@@ -1,5 +1,6 @@
 <script>
   import { onDestroy, onMount, tick } from "svelte";
+  import { BROADCAST_QUALITY_LABELS as qualityLabels } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import {
     AlertCircleIcon,
@@ -221,8 +222,6 @@
       oscillator.stop(now + offset + 0.12);
     }
   }
-
-  const qualityLabels = { auto: "Automática", high: "Alta", balanced: "Equilibrada", economy: "Econômica" };
 
   async function resolveStream() {
     if (streamData) {
