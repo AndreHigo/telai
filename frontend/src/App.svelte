@@ -1008,6 +1008,46 @@
   async function savePreferences(...args) { return (await getSettingsController()).savePreferences(...args); }
   async function resetPreferencesToDefaults(...args) { return (await getSettingsController()).resetPreferencesToDefaults(...args); }
 
+  let socialControllerPromise = null;
+  function getSocialController() {
+    if (!socialControllerPromise) {
+      socialControllerPromise = import("./features/social/controller.js").then(({ createSocialController }) => createSocialController({
+        api,
+        getUser: () => user,
+        loadStreams,
+        setNotice: (message) => { notice = message; },
+        getState: () => ({
+          social,
+          socialSearchQuery,
+          socialSearchResults,
+          socialSearchBusy,
+          socialError,
+          socialActionId,
+          socialRefreshInFlight,
+          streams,
+        }),
+        setState: (next) => {
+          if ("social" in next) social = next.social;
+          if ("socialSearchResults" in next) socialSearchResults = next.socialSearchResults;
+          if ("socialSearchBusy" in next) socialSearchBusy = next.socialSearchBusy;
+          if ("socialError" in next) socialError = next.socialError;
+          if ("socialActionId" in next) socialActionId = next.socialActionId;
+          if ("socialRefreshInFlight" in next) socialRefreshInFlight = next.socialRefreshInFlight;
+          if ("streams" in next) streams = next.streams;
+        },
+      }));
+    }
+    return socialControllerPromise;
+  }
+  async function loadSocial(...args) { return (await getSocialController()).loadSocial(...args); }
+  async function searchSocialUsers(...args) { return (await getSocialController()).searchSocialUsers(...args); }
+  async function sendFriendRequest(...args) { return (await getSocialController()).sendFriendRequest(...args); }
+  async function respondToFriendRequest(...args) { return (await getSocialController()).respondToFriendRequest(...args); }
+  async function cancelFriendRequest(...args) { return (await getSocialController()).cancelFriendRequest(...args); }
+  async function removeFriend(...args) { return (await getSocialController()).removeFriend(...args); }
+  async function toggleFollowUser(...args) { return (await getSocialController()).toggleFollowUser(...args); }
+  async function toggleFollowStream(...args) { return (await getSocialController()).toggleFollowStream(...args); }
+
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
     return list.scrollHeight - list.scrollTop - list.clientHeight <= 96;
@@ -1035,57 +1075,6 @@
     }
   }
 
-  async function loadSocial() {
-    if (socialRefreshInFlight) return;
-    socialRefreshInFlight = true;
-    try {
-      social = await api("/api/social");
-    } finally {
-      socialRefreshInFlight = false;
-    }
-  }
-
-  async function searchSocialUsers() {
-    if (socialSearchBusy) return;
-    const query = socialSearchQuery.trim();
-    socialError = "";
-    if (query.length < 2) {
-      socialSearchResults = [];
-      if (query) socialError = "Digite pelo menos 2 caracteres para pesquisar.";
-      return;
-    }
-    socialSearchBusy = true;
-    try {
-      const result = await api(`/api/users/search?q=${encodeURIComponent(query)}`);
-      socialSearchResults = result.users || [];
-      if (!socialSearchResults.length) socialError = "Nenhuma pessoa encontrada.";
-    } catch (error) {
-      socialError = error.message;
-    } finally {
-      socialSearchBusy = false;
-    }
-  }
-
-  async function sendFriendRequest(target) {
-    if (!target?.id || socialActionId) return;
-    socialActionId = target.id;
-    socialError = "";
-    let sent = false;
-    try {
-      await api(`/api/friends/${encodeURIComponent(target.id)}`, { method: "POST" });
-      socialSearchResults = socialSearchResults.map((item) => item.id === target.id ? { ...item, friendshipStatus: "pending_sent" } : item);
-      await loadSocial();
-      notice = `Solicitação enviada para ${target.displayName}.`;
-      sent = true;
-    } catch (error) {
-      socialError = error.message;
-      notice = error.message;
-    } finally {
-      socialActionId = "";
-    }
-    return sent;
-  }
-
   async function sendFriendRequestFromContext(target) {
     const friendTarget = {
       id: target?.userId || target?.id,
@@ -1093,84 +1082,6 @@
     };
     if (!friendTarget.id || friendTarget.id === user?.id) return;
     if (await sendFriendRequest(friendTarget)) closeVoiceContextMenu();
-  }
-
-  async function respondToFriendRequest(request, action) {
-    if (!request?.id || socialActionId) return;
-    socialActionId = request.id;
-    socialError = "";
-    try {
-      await api(`/api/friends/requests/${encodeURIComponent(request.id)}/${action}`, { method: "POST" });
-      await loadSocial();
-      notice = action === "accept" ? `${request.displayName} agora está na sua lista de amigos.` : "Solicitação recusada.";
-    } catch (error) {
-      socialError = error.message;
-    } finally {
-      socialActionId = "";
-    }
-  }
-
-  async function cancelFriendRequest(request) {
-    if (!request?.id || socialActionId) return;
-    socialActionId = request.id;
-    socialError = "";
-    try {
-      await api(`/api/friends/requests/${encodeURIComponent(request.id)}`, { method: "DELETE" });
-      await loadSocial();
-    } catch (error) {
-      socialError = error.message;
-    } finally {
-      socialActionId = "";
-    }
-  }
-
-  async function removeFriend(friend) {
-    if (!friend?.id || socialActionId) return;
-    socialActionId = friend.id;
-    socialError = "";
-    try {
-      await api(`/api/friends/${encodeURIComponent(friend.id)}`, { method: "DELETE" });
-      await loadSocial();
-      notice = `${friend.displayName} foi removido dos seus amigos.`;
-    } catch (error) {
-      socialError = error.message;
-    } finally {
-      socialActionId = "";
-    }
-  }
-
-  async function toggleFollowUser(target) {
-    if (!target?.id || socialActionId) return;
-    socialActionId = `follow:${target.id}`;
-    socialError = "";
-    const nextFollowing = !target.following;
-    try {
-      await api(`/api/users/${encodeURIComponent(target.id)}/follow`, { method: nextFollowing ? "POST" : "DELETE" });
-      socialSearchResults = socialSearchResults.map((item) => item.id === target.id ? { ...item, following: nextFollowing } : item);
-      await loadSocial();
-      notice = nextFollowing ? `Você está seguindo ${target.displayName}.` : `Você deixou de seguir ${target.displayName}.`;
-    } catch (error) {
-      socialError = error.message;
-    } finally {
-      socialActionId = "";
-    }
-  }
-
-  async function toggleFollowStream(stream) {
-    if (!stream?.id || stream.channelUsername === user?.username || socialActionId) return;
-    socialActionId = `stream-follow:${stream.id}`;
-    socialError = "";
-    const nextFollowing = !Boolean(stream.following);
-    try {
-      await api(`/api/streams/${encodeURIComponent(stream.id)}/follow`, { method: nextFollowing ? "POST" : "DELETE" });
-      streams = streams.map((item) => item.id === stream.id ? { ...item, following: nextFollowing } : item);
-      await loadSocial();
-      notice = nextFollowing ? `Você está seguindo ${stream.channelName}.` : `Você deixou de seguir ${stream.channelName}.`;
-    } catch (error) {
-      socialError = error.message;
-    } finally {
-      socialActionId = "";
-    }
   }
 
   async function refresh() {
