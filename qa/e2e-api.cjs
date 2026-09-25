@@ -106,6 +106,7 @@ async function main() {
     assert.ok(openApi.body.paths["/groups/{groupId}/messages"].post);
     assert.ok(openApi.body.paths["/groups/{groupId}/attachments/{attachmentId}"].get);
     assert.ok(openApi.body.paths["/groups/{groupId}/rooms/{roomId}/read"].post);
+    assert.ok(openApi.body.paths["/users/{userId}/block"].post);
     const missingVersionedRoute = await request("/api/v1/route-that-does-not-exist");
     assert.equal(missingVersionedRoute.response.status, 404);
     assert.equal(missingVersionedRoute.body.code, "not_found");
@@ -140,6 +141,26 @@ async function main() {
     assert.equal((await api(member, "/api/users/" + owner.user.id + "/follow", "POST")).body.following, true);
     assert.ok((await api(member, "/api/social")).body.following.some((item) => item.id === owner.user.id));
     assert.equal((await api(member, "/api/users/" + owner.user.id + "/follow", "DELETE")).body.following, false);
+  });
+  await check("bloqueio de usuário e proteção de conversa", async () => {
+    const blocked = await api(member, `/api/users/${owner.user.id}/block`, "POST");
+    assert.equal(blocked.response.status, 200);
+    assert.equal(blocked.body.blocked, true);
+    const memberSocial = await api(member, "/api/social");
+    assert.ok(memberSocial.body.blocked.some((item) => item.id === owner.user.id));
+    assert.equal(memberSocial.body.friends.some((item) => item.id === owner.user.id), false);
+    const search = await api(member, `/api/users/search?q=${encodeURIComponent(owner.user.username)}`);
+    assert.equal(search.body.users.some((item) => item.id === owner.user.id), false);
+    assert.equal((await api(member, `/api/friends/${owner.user.id}`, "POST")).response.status, 403);
+    assert.equal((await api(member, `/api/users/${owner.user.id}/follow`, "POST")).response.status, 403);
+    const conversation = await api(member, "/api/direct/conversations", "POST", { userId: owner.user.id });
+    assert.equal(conversation.response.status, 403);
+    const existingConversation = await api(member, "/api/direct/conversations", "GET");
+    assert.ok(existingConversation.body.conversations.length >= 1);
+    const conversationId = existingConversation.body.conversations[0].id;
+    assert.equal((await api(member, `/api/direct/conversations/${conversationId}/messages`, "POST", { body: "bloqueada" })).response.status, 403);
+    assert.equal((await api(member, `/api/users/${owner.user.id}/block`, "DELETE")).body.blocked, false);
+    assert.ok((await api(member, `/api/users/search?q=${encodeURIComponent(owner.user.username)}`)).body.users.some((item) => item.id === owner.user.id));
   });
   await check("consentimento e direitos da conta", async () => {
     assert.equal((await request("/api/auth/register", { method: "POST", body: JSON.stringify({ username: `qanoaccept${suffix}`.slice(0, 32), displayName: "QA No Consent", password: "SenhaQA123!" }) })).response.status, 400);

@@ -29,6 +29,7 @@ export const IMPORT_ORDER = [
   ["stream_chat_messages", ["id"]],
   ["follows", ["follower_id", "followed_id"]],
   ["friendships", ["user_id", "friend_id"]],
+  ["user_blocks", ["blocker_id", "blocked_id"]],
   ["friend_requests", ["id"]],
   ["group_messages", ["id"]],
   ["group_room_reads", ["group_id", "user_id", "room_key"]],

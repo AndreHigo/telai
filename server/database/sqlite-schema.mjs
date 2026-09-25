@@ -204,6 +204,13 @@ export const SQLITE_SCHEMA = `
     PRIMARY KEY (user_id, friend_id),
     CHECK(user_id <> friend_id)
   );
+  CREATE TABLE IF NOT EXISTS user_blocks (
+    blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (blocker_id, blocked_id),
+    CHECK(blocker_id <> blocked_id)
+  );
   CREATE TABLE IF NOT EXISTS friend_requests (
     id TEXT PRIMARY KEY,
     sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -215,6 +222,8 @@ export const SQLITE_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS friendships_user_idx ON friendships(user_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS friendships_friend_idx ON friendships(friend_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS user_blocks_blocker_idx ON user_blocks(blocker_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS user_blocks_blocked_idx ON user_blocks(blocked_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS friend_requests_recipient_idx ON friend_requests(recipient_id, status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS friend_requests_sender_idx ON friend_requests(sender_id, status, updated_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS friend_requests_pending_pair_idx ON friend_requests(sender_id, recipient_id) WHERE status = 'pending';

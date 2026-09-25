@@ -457,6 +457,7 @@ function createNotification(notification) {
   const result = persistNotification(notification);
   return result && typeof result.then === "function" ? result.then(publish) : publish(result);
 }
+const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
 const handleDirectRoutes = createDirectRoutes({
   json,
   readJson,
@@ -464,6 +465,7 @@ const handleDirectRoutes = createDirectRoutes({
   directConversationRepository,
   directConversationForUser,
   directConversationPayload,
+  isBlocked: socialRepository.isBlocked,
   createNotification,
   errorLog,
 });
@@ -504,7 +506,6 @@ const { liveNotificationPresentation, syncNotificationsForUser } = createNotific
   canAccessStream,
 });
 const accountRepository = createAccountRepository(database, { legalPolicyVersion, createId: randomUUID });
-const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
 const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialRepository, createNotification });
 const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
 const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });

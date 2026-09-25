@@ -47,6 +47,7 @@ export function createAccountRepository(database, { legalPolicyVersion, createId
         ORDER BY direct_messages.created_at
       `).all(userId),
       follows: database.prepare("SELECT follower_id AS followerId, followed_id AS followedId, created_at AS createdAt FROM follows WHERE follower_id = ? OR followed_id = ? ORDER BY created_at").all(userId, userId),
+      blocks: database.prepare("SELECT blocker_id AS blockerId, blocked_id AS blockedId, created_at AS createdAt FROM user_blocks WHERE blocker_id = ? OR blocked_id = ? ORDER BY created_at").all(userId, userId),
     };
   }
 
@@ -95,6 +96,16 @@ export function createAccountRepository(database, { legalPolicyVersion, createId
         AND (CASE WHEN follower_id = ? THEN ? ELSE follower_id END) <> (CASE WHEN followed_id = ? THEN ? ELSE followed_id END)
       `).run(sourceId, targetId, sourceId, targetId, sourceId, sourceId, sourceId, targetId, sourceId, targetId);
       database.prepare("DELETE FROM follows WHERE follower_id = ? OR followed_id = ?").run(sourceId, sourceId);
+      database.prepare(`
+        INSERT OR IGNORE INTO user_blocks (blocker_id, blocked_id, created_at)
+        SELECT CASE WHEN blocker_id = ? THEN ? ELSE blocker_id END,
+               CASE WHEN blocked_id = ? THEN ? ELSE blocked_id END,
+               created_at
+        FROM user_blocks
+        WHERE (blocker_id = ? OR blocked_id = ?)
+          AND (CASE WHEN blocker_id = ? THEN ? ELSE blocker_id END) <> (CASE WHEN blocked_id = ? THEN ? ELSE blocked_id END)
+      `).run(sourceId, targetId, sourceId, targetId, sourceId, sourceId, sourceId, targetId, sourceId, targetId);
+      database.prepare("DELETE FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?").run(sourceId, sourceId);
       database.prepare("UPDATE oauth_accounts SET user_id = ? WHERE user_id = ?").run(targetId, sourceId);
       database.prepare("UPDATE user_preferences SET user_id = ? WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM user_preferences WHERE user_id = ?)").run(targetId, sourceId, targetId);
       database.prepare("DELETE FROM sessions WHERE user_id = ?").run(sourceId);
@@ -140,7 +151,7 @@ export function createPostgresAccountRepository(database, { legalPolicyVersion, 
     if (!account) return null;
     const query = async (text, values = [userId]) => (await database.query(text, values)).rows;
     const one = async (text, values = [userId]) => (await database.query(text, values)).rows[0] || null;
-    const [consents, linkedAccounts, preferences, voicePreferences, channelProfile, memberships, ownedGroups, permissions, joinRequests, invitationsReceived, notifications, streams, streamMessages, groupMessages, directConversations, directMessages, follows] = await Promise.all([
+    const [consents, linkedAccounts, preferences, voicePreferences, channelProfile, memberships, ownedGroups, permissions, joinRequests, invitationsReceived, notifications, streams, streamMessages, groupMessages, directConversations, directMessages, follows, blocks] = await Promise.all([
       query('SELECT consent_type AS type, policy_version AS "policyVersion", accepted_at AS "acceptedAt" FROM user_consents WHERE user_id = $1 ORDER BY accepted_at'),
       query('SELECT provider, email, created_at AS "createdAt", updated_at AS "updatedAt" FROM oauth_accounts WHERE user_id = $1 ORDER BY provider'),
       query('SELECT theme, default_quality AS "defaultQuality", default_audio AS "defaultAudio", button_color AS "buttonColor", input_background_color AS "inputBackgroundColor", background_color AS "backgroundColor", push_to_talk_key AS "pushToTalkKey", mute_shortcut AS "muteShortcut", live_notification_scope AS "liveNotificationScope", voice_microphone_volume AS "voiceMicrophoneVolume", voice_output_volume AS "voiceOutputVolume", preferred_input_device_id AS "preferredInputDeviceId", preferred_output_device_id AS "preferredOutputDeviceId", updated_at AS "updatedAt" FROM user_preferences WHERE user_id = $1'),
@@ -158,13 +169,14 @@ export function createPostgresAccountRepository(database, { legalPolicyVersion, 
       query('SELECT direct_conversations.id, direct_conversations.created_at AS "createdAt", direct_conversations.updated_at AS "updatedAt" FROM direct_conversations JOIN direct_conversation_members ON direct_conversation_members.conversation_id = direct_conversations.id WHERE direct_conversation_members.user_id = $1 ORDER BY direct_conversations.updated_at'),
       query('SELECT direct_messages.id, direct_messages.conversation_id AS "conversationId", direct_messages.sender_id AS "senderId", direct_messages.body, direct_messages.created_at AS "createdAt", direct_messages.read_at AS "readAt" FROM direct_messages JOIN direct_conversation_members ON direct_conversation_members.conversation_id = direct_messages.conversation_id WHERE direct_conversation_members.user_id = $1 ORDER BY direct_messages.created_at'),
       query('SELECT follower_id AS "followerId", followed_id AS "followedId", created_at AS "createdAt" FROM follows WHERE follower_id = $1 OR followed_id = $1 ORDER BY created_at'),
+      query('SELECT blocker_id AS "blockerId", blocked_id AS "blockedId", created_at AS "createdAt" FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1 ORDER BY created_at'),
     ]);
     return {
       exportVersion: "1", exportedAt: new Date().toISOString(),
       legal: { policyVersion: legalPolicyVersion, consents }, account, linkedAccounts, preferences,
       voicePreferences: voicePreferences.map((item) => ({ ...item, locallyMuted: Boolean(item.locallyMuted) })),
       channelProfile, memberships, ownedGroups, permissions, joinRequests, invitationsReceived,
-      notifications, streams, streamMessages, groupMessages, directConversations, directMessages, follows,
+      notifications, streams, streamMessages, groupMessages, directConversations, directMessages, follows, blocks,
     };
   }
 
@@ -207,6 +219,15 @@ export function createPostgresAccountRepository(database, { legalPolicyVersion, 
         ON CONFLICT (follower_id, followed_id) DO NOTHING
       `, [sourceId, targetId]);
       await client.query("DELETE FROM follows WHERE follower_id = $1 OR followed_id = $1", [sourceId]);
+      await client.query(`
+        INSERT INTO user_blocks (blocker_id, blocked_id, created_at)
+        SELECT CASE WHEN blocker_id = $1 THEN $2 ELSE blocker_id END,
+          CASE WHEN blocked_id = $1 THEN $2 ELSE blocked_id END, created_at
+        FROM user_blocks WHERE (blocker_id = $1 OR blocked_id = $1)
+          AND (CASE WHEN blocker_id = $1 THEN $2 ELSE blocker_id END) <> (CASE WHEN blocked_id = $1 THEN $2 ELSE blocked_id END)
+        ON CONFLICT (blocker_id, blocked_id) DO NOTHING
+      `, [sourceId, targetId]);
+      await client.query("DELETE FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1", [sourceId]);
       await client.query("UPDATE oauth_accounts SET user_id = $1 WHERE user_id = $2", [targetId, sourceId]);
       await client.query("UPDATE user_preferences SET user_id = $1 WHERE user_id = $2 AND NOT EXISTS (SELECT 1 FROM user_preferences WHERE user_id = $1)", [targetId, sourceId]);
       await client.query("DELETE FROM sessions WHERE user_id = $1", [sourceId]);

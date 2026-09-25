@@ -142,6 +142,12 @@ try {
   assert.equal((await social.searchUsers(ids.owner, memberUsername))[0].following, true);
   assert.equal(await social.removeFriendship(ids.owner, ids.member), true);
   await social.setFollowing(ids.owner, ids.member, false, now);
+  assert.equal(await social.setBlocked(ids.owner, ids.member, true, now), true);
+  assert.equal(await social.isBlocked(ids.owner, ids.member), true);
+  assert.equal(await social.isBlocked(ids.member, ids.owner), true);
+  assert.equal((await social.listSocial(ids.owner)).blocked.some((item) => item.id === ids.member), true);
+  assert.equal(await social.setBlocked(ids.owner, ids.member, false, now), true);
+  assert.equal(await social.isBlocked(ids.owner, ids.member), false);
 
   const groups = createPostgresGroupAccessRepository(client);
   const groupSetup = createPostgresGroupSetupRepository(client, { transactionClient: true });

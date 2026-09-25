@@ -20,10 +20,16 @@ export function createSocialRepository(database, { compactAvatarData = (value) =
         (SELECT id FROM friend_requests WHERE sender_id = ? AND recipient_id = users.id AND status = 'pending' LIMIT 1) AS friendRequestId,
         EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = users.id) AS following
       FROM users
-      WHERE users.id <> ? AND (users.username LIKE ? COLLATE NOCASE OR users.display_name LIKE ? COLLATE NOCASE)
+      WHERE users.id <> ?
+        AND NOT EXISTS (
+          SELECT 1 FROM user_blocks
+          WHERE (user_blocks.blocker_id = ? AND user_blocks.blocked_id = users.id)
+             OR (user_blocks.blocker_id = users.id AND user_blocks.blocked_id = ?)
+        )
+        AND (users.username LIKE ? COLLATE NOCASE OR users.display_name LIKE ? COLLATE NOCASE)
       ORDER BY CASE WHEN users.username = ? COLLATE NOCASE THEN 0 ELSE 1 END, users.display_name COLLATE NOCASE
       LIMIT 20
-    `).all(userId, userId, userId, userId, userId, userId, userId, like, like, query).map((item) => ({
+    `).all(userId, userId, userId, userId, userId, userId, userId, userId, userId, like, like, query).map((item) => ({
       ...mapAvatar(item, compactAvatarData),
       following: Boolean(item.following),
     }));
@@ -70,12 +76,20 @@ export function createSocialRepository(database, { compactAvatarData = (value) =
       avatarData: compactAvatarData(item.avatarData),
       channelAvatarData: compactAvatarData(item.channelAvatarData),
     }));
+    const blocked = database.prepare(`
+      SELECT users.id, users.username, users.display_name AS displayName, users.avatar_data AS avatarData,
+        user_blocks.created_at AS createdAt
+      FROM user_blocks JOIN users ON users.id = user_blocks.blocked_id
+      WHERE user_blocks.blocker_id = ?
+      ORDER BY users.display_name COLLATE NOCASE
+    `).all(userId).map((item) => mapAvatar(item, compactAvatarData));
     return {
       friends,
       incomingRequests,
       outgoingRequests,
       following,
-      counts: { friends: friends.length, incomingRequests: incomingRequests.length, following: following.length },
+      blocked,
+      counts: { friends: friends.length, incomingRequests: incomingRequests.length, following: following.length, blocked: blocked.length },
     };
   }
 
@@ -152,7 +166,45 @@ export function createSocialRepository(database, { compactAvatarData = (value) =
     }
   }
 
-  return { searchUsers, listSocial, pendingFriendRequest, decideFriendRequest, cancelFriendRequest, targetUser, friendshipExists, pendingRequest, createFriendRequest, removeFriendship, userExists, setFollowing };
+  function isBlocked(userId, targetUserId) {
+    return Boolean(database.prepare(`
+      SELECT 1 FROM user_blocks
+      WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)
+      LIMIT 1
+    `).get(userId, targetUserId, targetUserId, userId));
+  }
+
+  function listBlocked(userId) {
+    return database.prepare(`
+      SELECT users.id, users.username, users.display_name AS displayName, users.avatar_data AS avatarData,
+        user_blocks.created_at AS createdAt
+      FROM user_blocks JOIN users ON users.id = user_blocks.blocked_id
+      WHERE user_blocks.blocker_id = ?
+      ORDER BY users.display_name COLLATE NOCASE
+    `).all(userId).map((item) => mapAvatar(item, compactAvatarData));
+  }
+
+  function setBlocked(userId, targetUserId, blocked, createdAt = new Date().toISOString()) {
+    if (userId === targetUserId) return false;
+    try {
+      database.exec("BEGIN IMMEDIATE");
+      if (blocked) {
+        database.prepare("INSERT OR IGNORE INTO user_blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?)").run(userId, targetUserId, createdAt);
+        database.prepare("DELETE FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)").run(userId, targetUserId, targetUserId, userId);
+        database.prepare("UPDATE friend_requests SET status = 'canceled', updated_at = ? WHERE status = 'pending' AND ((sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?))").run(createdAt, userId, targetUserId, targetUserId, userId);
+        database.prepare("DELETE FROM follows WHERE (follower_id = ? AND followed_id = ?) OR (follower_id = ? AND followed_id = ?)").run(userId, targetUserId, targetUserId, userId);
+      } else {
+        database.prepare("DELETE FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?").run(userId, targetUserId);
+      }
+      database.exec("COMMIT");
+      return true;
+    } catch (error) {
+      try { database.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
+
+  return { searchUsers, listSocial, pendingFriendRequest, decideFriendRequest, cancelFriendRequest, targetUser, friendshipExists, pendingRequest, createFriendRequest, removeFriendship, userExists, setFollowing, isBlocked, listBlocked, setBlocked };
 }
 
 async function withPostgresTransaction(database, callback, useProvidedClient = false) {
@@ -188,7 +240,13 @@ export function createPostgresSocialRepository(database, { compactAvatarData = (
         (SELECT id FROM friend_requests WHERE sender_id = $1 AND recipient_id = users.id AND status = 'pending' LIMIT 1) AS "friendRequestId",
         EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND followed_id = users.id) AS following
       FROM users
-      WHERE users.id <> $1 AND (users.username ILIKE $2 OR users.display_name ILIKE $2)
+      WHERE users.id <> $1
+        AND NOT EXISTS (
+          SELECT 1 FROM user_blocks
+          WHERE (user_blocks.blocker_id = $1 AND user_blocks.blocked_id = users.id)
+             OR (user_blocks.blocker_id = users.id AND user_blocks.blocked_id = $1)
+        )
+        AND (users.username ILIKE $2 OR users.display_name ILIKE $2)
       ORDER BY CASE WHEN LOWER(users.username) = LOWER($3) THEN 0 ELSE 1 END, LOWER(users.display_name)
       LIMIT 20
     `, [userId, like, query]);
@@ -196,7 +254,7 @@ export function createPostgresSocialRepository(database, { compactAvatarData = (
   }
 
   async function listSocial(userId) {
-    const [friendsResult, incomingResult, outgoingResult, followingResult] = await Promise.all([
+    const [friendsResult, incomingResult, outgoingResult, followingResult, blockedResult] = await Promise.all([
       database.query(`
         SELECT users.id, users.username, users.display_name AS "displayName", users.avatar_data AS "avatarData", friendships.created_at AS "createdAt"
         FROM friendships JOIN users ON users.id = friendships.friend_id WHERE friendships.user_id = $1
@@ -229,12 +287,20 @@ export function createPostgresSocialRepository(database, { compactAvatarData = (
         WHERE follows.follower_id = $1
         ORDER BY LOWER(COALESCE(channel_profiles.display_name, users.display_name))
       `, [userId]),
+      database.query(`
+        SELECT users.id, users.username, users.display_name AS "displayName", users.avatar_data AS "avatarData",
+          user_blocks.created_at AS "createdAt"
+        FROM user_blocks JOIN users ON users.id = user_blocks.blocked_id
+        WHERE user_blocks.blocker_id = $1
+        ORDER BY LOWER(users.display_name)
+      `, [userId]),
     ]);
     const friends = friendsResult.rows.map((item) => mapPostgresAvatar(item, compactAvatarData));
     const incomingRequests = incomingResult.rows.map((item) => mapPostgresAvatar(item, compactAvatarData));
     const outgoingRequests = outgoingResult.rows.map((item) => mapPostgresAvatar(item, compactAvatarData));
     const following = followingResult.rows.map((item) => ({ ...item, avatarData: compactAvatarData(item.avatarData), channelAvatarData: compactAvatarData(item.channelAvatarData) }));
-    return { friends, incomingRequests, outgoingRequests, following, counts: { friends: friends.length, incomingRequests: incomingRequests.length, following: following.length } };
+    const blocked = blockedResult.rows.map((item) => mapPostgresAvatar(item, compactAvatarData));
+    return { friends, incomingRequests, outgoingRequests, following, blocked, counts: { friends: friends.length, incomingRequests: incomingRequests.length, following: following.length, blocked: blocked.length } };
   }
 
   async function pendingFriendRequest(requestId, recipientId) {
@@ -302,5 +368,36 @@ export function createPostgresSocialRepository(database, { compactAvatarData = (
     else await database.query("DELETE FROM follows WHERE follower_id = $1 AND followed_id = $2", [userId, targetUserId]);
   }
 
-  return { searchUsers, listSocial, pendingFriendRequest, decideFriendRequest, cancelFriendRequest, targetUser, friendshipExists, pendingRequest, createFriendRequest, removeFriendship, userExists, setFollowing };
+  async function isBlocked(userId, targetUserId) {
+    const result = await database.query("SELECT 1 FROM user_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1", [userId, targetUserId]);
+    return result.rowCount > 0;
+  }
+
+  async function listBlocked(userId) {
+    const result = await database.query(`
+      SELECT users.id, users.username, users.display_name AS "displayName", users.avatar_data AS "avatarData",
+        user_blocks.created_at AS "createdAt"
+      FROM user_blocks JOIN users ON users.id = user_blocks.blocked_id
+      WHERE user_blocks.blocker_id = $1
+      ORDER BY LOWER(users.display_name)
+    `, [userId]);
+    return result.rows.map((item) => mapPostgresAvatar(item, compactAvatarData));
+  }
+
+  async function setBlocked(userId, targetUserId, blocked, createdAt = new Date().toISOString()) {
+    if (userId === targetUserId) return false;
+    return withPostgresTransaction(database, async (client) => {
+      if (blocked) {
+        await client.query("INSERT INTO user_blocks (blocker_id, blocked_id, created_at) VALUES ($1, $2, $3) ON CONFLICT (blocker_id, blocked_id) DO NOTHING", [userId, targetUserId, createdAt]);
+        await client.query("DELETE FROM friendships WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)", [userId, targetUserId]);
+        await client.query("UPDATE friend_requests SET status = 'canceled', updated_at = $1 WHERE status = 'pending' AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))", [createdAt, userId, targetUserId]);
+        await client.query("DELETE FROM follows WHERE (follower_id = $1 AND followed_id = $2) OR (follower_id = $2 AND followed_id = $1)", [userId, targetUserId]);
+      } else {
+        await client.query("DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2", [userId, targetUserId]);
+      }
+      return true;
+    }, transactionClient);
+  }
+
+  return { searchUsers, listSocial, pendingFriendRequest, decideFriendRequest, cancelFriendRequest, targetUser, friendshipExists, pendingRequest, createFriendRequest, removeFriendship, userExists, setFollowing, isBlocked, listBlocked, setBlocked };
 }

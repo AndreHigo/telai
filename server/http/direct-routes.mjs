@@ -5,6 +5,7 @@ export function createDirectRoutes({
   directConversationRepository,
   directConversationForUser,
   directConversationPayload,
+  isBlocked,
   createNotification,
   errorLog,
 }) {
@@ -24,6 +25,7 @@ export function createDirectRoutes({
         if (!targetUserId || targetUserId === user.id) return json(response, 400, { error: "Escolha outra pessoa para iniciar a conversa." });
         const target = directConversationRepository.findUser(targetUserId);
         if (!target) return json(response, 404, { error: "Usuário não encontrado." });
+        if (isBlocked?.(user.id, targetUserId)) return json(response, 403, { error: "Não é possível iniciar uma conversa com este usuário." });
         const conversationId = directConversationRepository.createConversation(user.id, targetUserId);
         return json(response, 201, { conversation: directConversationPayload(conversationId, user.id) });
       }).catch((error) => {
@@ -76,6 +78,11 @@ export function createDirectRoutes({
       const conversationId = directMessagesMatch[1];
       if (!directConversationForUser(conversationId, user.id)) {
         json(response, 404, { error: "Conversa não encontrada." });
+        return true;
+      }
+      const recipient = directConversationRepository.recipientForMessage?.(conversationId, user.id);
+      if (recipient && isBlocked?.(user.id, recipient.id)) {
+        json(response, 403, { error: "Não é possível enviar mensagens para este usuário." });
         return true;
       }
       readJson(request).then((body) => {

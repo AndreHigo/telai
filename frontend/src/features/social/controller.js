@@ -124,6 +124,21 @@ export function createSocialController({
     }
   }
 
+  async function toggleBlockUser(target, nextBlocked = !Boolean(target?.blocked)) {
+    const current = state();
+    if (!target?.id || current.socialActionId) return;
+    setState({ socialActionId: `block:${target.id}`, socialError: "" });
+    try {
+      await api(`/api/users/${encodeURIComponent(target.id)}/block`, { method: nextBlocked ? "POST" : "DELETE" });
+      await loadSocial();
+      setNotice(nextBlocked ? `${target.displayName} foi bloqueado.` : `${target.displayName} foi desbloqueado.`);
+    } catch (error) {
+      setState({ socialError: error.message });
+    } finally {
+      setState({ socialActionId: "" });
+    }
+  }
+
   async function toggleFollowStream(stream) {
     const current = state();
     if (!stream?.id || stream.channelUsername === getUser()?.username || current.socialActionId) return;
@@ -149,6 +164,7 @@ export function createSocialController({
     cancelFriendRequest,
     removeFriend,
     toggleFollowUser,
+    toggleBlockUser,
     toggleFollowStream,
   };
 }

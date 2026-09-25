@@ -64,6 +64,10 @@ const paths = {
   "/account/delete": pathItem("Conta", { post: ["deleteAccount", "Exclui a conta e seus dados"] }),
   "/users/search": pathItem("Social", { get: ["searchUsers", "Busca usuários"] }),
   "/social": pathItem("Social", { get: ["getSocialGraph", "Retorna amizades, solicitações e follows"] }),
+  "/users/{userId}/block": pathItem("Social", {
+    post: ["blockUser", "Bloqueia um usuário"],
+    delete: ["unblockUser", "Desbloqueia um usuário"],
+  }),
   "/friends/{userId}": pathItem("Social", {
     post: ["sendFriendRequest", "Envia uma solicitação de amizade", { methods: ["201"] }],
     delete: ["removeFriend", "Remove uma amizade"],

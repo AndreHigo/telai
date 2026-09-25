@@ -51,6 +51,11 @@ membros também podem usar a rota, mas somente contra cargos inferiores na ordem
 do grupo. Banimentos e silêncios aceitam `durationMinutes` e `reason`; a
 autorização e o bloqueio de mensagens são aplicados no servidor.
 
+`POST /api/v1/users/{userId}/block` bloqueia uma conta, remove amizades,
+solicitações pendentes e follows entre as duas contas e impede novas
+interações sociais ou mensagens diretas. `DELETE` na mesma rota desbloqueia a
+conta; a lista de bloqueados é retornada em `GET /api/v1/social`.
+
 Mensagens de grupo também aceitam `attachments` no POST. Cada mensagem pode
 ter até 4 anexos, com no máximo 8 MB por arquivo e 20 MB no conjunto. Nesta
 fase são aceitos imagens, PDF, texto simples, áudio e vídeo nos tipos

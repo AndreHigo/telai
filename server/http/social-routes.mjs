@@ -72,6 +72,10 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
         json(response, 400, { error: "Você não pode adicionar a si mesmo." });
         return true;
       }
+      if (socialRepository.isBlocked(user.id, targetUserId)) {
+        json(response, 403, { error: "Não é possível interagir com este usuário." });
+        return true;
+      }
       const target = socialRepository.targetUser(targetUserId);
       if (!target) {
         json(response, 404, { error: "Usuário não encontrado." });
@@ -108,6 +112,25 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
       return true;
     }
 
+    const blockTargetMatch = requestUrl.pathname.match(/^\/api\/users\/([\w-]{16,64})\/block$/);
+    if (blockTargetMatch && ["POST", "DELETE"].includes(request.method)) {
+      const user = requireUser(request, response);
+      if (!user) return true;
+      const targetUserId = blockTargetMatch[1];
+      if (targetUserId === user.id) {
+        json(response, 400, { error: "Você não pode bloquear a si mesmo." });
+        return true;
+      }
+      if (!socialRepository.userExists(targetUserId)) {
+        json(response, 404, { error: "Usuário não encontrado." });
+        return true;
+      }
+      const blocked = request.method === "POST";
+      socialRepository.setBlocked(user.id, targetUserId, blocked);
+      json(response, 200, { ok: true, blocked });
+      return true;
+    }
+
     const userFollowMatch = requestUrl.pathname.match(/^\/api\/users\/([\w-]{16,64})\/follow$/);
     if (userFollowMatch && ["POST", "DELETE"].includes(request.method)) {
       const user = requireUser(request, response);
@@ -115,6 +138,10 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
       const targetUserId = userFollowMatch[1];
       if (targetUserId === user.id) {
         json(response, 400, { error: "Você não pode seguir o próprio canal." });
+        return true;
+      }
+      if (socialRepository.isBlocked(user.id, targetUserId)) {
+        json(response, 403, { error: "Não é possível interagir com este usuário." });
         return true;
       }
       if (!socialRepository.userExists(targetUserId)) {

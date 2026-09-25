@@ -202,7 +202,8 @@ enviada ao GitHub nem publicada em produção.
   - [x] Buscar mensagens por grupo/canal com limite de resultados e modal leve no frontend.
   - [x] Adicionar threads de uma camada com respostas persistentes, limite de 100 itens e painel carregado sob demanda.
   - [x] Entregar notificações pessoais persistidas pelo gateway `/events`, com atualização otimista e leitura sincronizada.
-- [ ] Moderação básica: bloquear, expulsar, banir e silenciar.
+- [x] Moderação básica: bloquear, expulsar, banir e silenciar.
+  - [x] Bloquear e desbloquear usuários, removendo vínculos sociais e impedindo novas mensagens diretas.
   - [x] Expulsar, banir, silenciar, remover silêncio e desfazer banimento no servidor, com auditoria e desconexão de voz/eventos.
   - [x] Permissão de moderação por cargo com respeito à hierarquia.
 

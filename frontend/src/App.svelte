@@ -813,7 +813,7 @@
   let directConversationRefreshInFlight = false;
   let directConversationRefreshQueued = false;
   let directConversationRefreshId = "";
-  let social = { friends: [], incomingRequests: [], outgoingRequests: [], following: [], counts: { friends: 0, incomingRequests: 0, following: 0 } };
+  let social = { friends: [], incomingRequests: [], outgoingRequests: [], following: [], blocked: [], counts: { friends: 0, incomingRequests: 0, following: 0, blocked: 0 } };
   let socialSearchQuery = "";
   let socialSearchOpen = false;
   let socialRequestsOpen = false;
@@ -1420,6 +1420,7 @@
   async function cancelFriendRequest(...args) { return (await getSocialController()).cancelFriendRequest(...args); }
   async function removeFriend(...args) { return (await getSocialController()).removeFriend(...args); }
   async function toggleFollowUser(...args) { return (await getSocialController()).toggleFollowUser(...args); }
+  async function toggleBlockUser(...args) { return (await getSocialController()).toggleBlockUser(...args); }
   async function toggleFollowStream(...args) { return (await getSocialController()).toggleFollowStream(...args); }
 
   function shouldKeepGroupMessagesAtBottom(list) {
@@ -7071,6 +7072,7 @@
           onCancelFriendRequest={cancelFriendRequest}
           onSendFriendRequest={sendFriendRequest}
           onToggleFollowUser={toggleFollowUser}
+          onToggleBlockUser={toggleBlockUser}
           onRespondToFriendRequest={respondToFriendRequest}
           onRemoveFriend={removeFriend}
           onNavigateHome={() => selectView("home")}
