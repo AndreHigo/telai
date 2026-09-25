@@ -105,12 +105,14 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair busca social, amizades, solicitações e follows para `server/http/social-routes.mjs`.
 - [x] Extrair listagem, leitura e sincronização de notificações para `server/http/notification-routes.mjs`.
 - [x] Extrair apresentação contextual de lives e sincronização de notificações para `server/notifications/runtime.mjs`.
+- [x] Extrair persistência e publicação de notificações para `server/notifications/service.mjs`, mantendo o evento pessoal `/events`.
 - [x] Extrair criação, leitura e envio de conversas diretas para `server/http/direct-routes.mjs`.
 - [x] Extrair convites de membro e resgate de convites para `server/http/member-invite-routes.mjs`.
 - [x] Extrair manutenção e API administrativa para `server/http/admin-routes.mjs`, mantendo a página `/admin` no servidor principal.
 - [x] Extrair autenticação de operador, consultas paginadas e visão do painel para `server/admin/runtime.mjs`.
 - [x] Extrair sessão, consentimento, cadastro, login, logout e operações de conta para `server/http/auth-routes.mjs`, mantendo OAuth no gateway.
 - [x] Extrair o runtime de sessão, cookies, rate limit de login, PKCE e identidade OAuth para `server/auth/runtime.mjs`.
+- [x] Extrair a guarda HTTP autenticada para `server/auth/guards.mjs`, mantendo o envelope 401 e o contrato síncrono/assíncrono.
 - [x] Extrair hashing de senha e token de sessão para `server/auth/crypto.mjs`, mantendo o formato e a validação existentes.
 - [x] Extrair buckets, políticas e limpeza de rate limit HTTP para `server/http/rate-limit.mjs`.
 - [x] Extrair métricas locais e diagnósticos de cliente para `server/http/observability-routes.mjs`.

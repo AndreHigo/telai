@@ -17,6 +17,7 @@ import { createBroadcastRuntime } from "./server/gateway/broadcast-runtime.mjs";
 import { createIceConfiguration } from "./server/media/ice-configuration.mjs";
 import { createLocalAttachmentStorage } from "./server/media/attachments.mjs";
 import { createAuthRuntime } from "./server/auth/runtime.mjs";
+import { createRequireUser } from "./server/auth/guards.mjs";
 import { hashPassword, hashSessionToken } from "./server/auth/crypto.mjs";
 import { createStreamRuntime } from "./server/domain/streams/runtime.mjs";
 import { createVoiceRuntime } from "./server/domain/voice/runtime.mjs";
@@ -28,6 +29,7 @@ import { createUserPreferenceRepository, createPostgresUserPreferenceRepository 
 import { createNotificationSyncService } from "./server/services/notification-sync.mjs";
 import { createPostgresNotificationSyncService } from "./server/services/postgres-notification-sync.mjs";
 import { createNotificationRuntime, liveNotificationContext } from "./server/notifications/runtime.mjs";
+import { createNotificationService } from "./server/notifications/service.mjs";
 import { openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { SQLITE_SCHEMA } from "./server/database/sqlite-schema.mjs";
 import { ensureCompatibilityColumns, ensureCompatibilityIndexes } from "./server/database/sqlite-compatibility.mjs";
@@ -381,28 +383,15 @@ const notificationRepository = databaseDriver === "postgres"
   ? createPostgresNotificationRepository(database)
   : createNotificationRepository(database);
 const { createNotification: persistNotification } = notificationRepository;
-function createNotification(notification) {
-  const publish = (result) => {
-    if (!result?.created || !eventGateway) return result;
-    eventGateway.publishUserEvent(notification.userId, {
-      type: "notification-created",
-      notification: {
-        id: result.id,
-        type: notification.type,
-        entityId: notification.entityId,
-        groupId: notification.groupId || null,
-        title: notification.title,
-        body: notification.body,
-        createdAt: notification.createdAt || new Date().toISOString(),
-        readAt: null,
-        unread: true,
-      },
-    });
-    return result;
-  };
-  const result = persistNotification(notification);
-  return result && typeof result.then === "function" ? result.then(publish) : publish(result);
-}
+const { createNotification } = createNotificationService({
+  persistNotification,
+  publishUserEvent: (userId, event) => eventGateway?.publishUserEvent(userId, event),
+});
+let currentUserAsync;
+const requireUser = createRequireUser({
+  currentUser: (...args) => currentUserAsync(...args),
+  json,
+});
 const socialRepository = databaseDriver === "postgres"
   ? createPostgresSocialRepository(database, { compactAvatarData, createId: randomUUID })
   : createSocialRepository(database, { compactAvatarData, createId: randomUUID });
@@ -666,7 +655,7 @@ const {
   clearLoginFailure,
   createSession,
   currentUser,
-  currentUserAsync,
+  currentUserAsync: resolvedCurrentUserAsync,
   deleteUserAccount,
   expiredSessionCookie,
   fetchOAuthIdentity,
@@ -702,6 +691,7 @@ const {
   errorLog,
   getWebsocketServer: () => websocketServer,
 });
+currentUserAsync = resolvedCurrentUserAsync;
 const handleStreamRoutes = createStreamRoutes({
   json,
   readJson,
@@ -942,12 +932,6 @@ const handleObservabilityRoutes = createObservabilityRoutes({
 });
 
 const mergeUsers = (targetId, sourceId) => accountRepository.mergeUsers(targetId, sourceId);
-
-async function requireUser(request, response) {
-  const user = await currentUserAsync(request);
-  if (!user) json(response, 401, { error: "Entre com sua conta para continuar." });
-  return user;
-}
 
 await groupSetupRepository.initializeExistingGroups();
 
