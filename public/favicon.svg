@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Telai</title>
+  <desc id="desc">Monitor com botão de reprodução e sinal de transmissão.</desc>
+  <path d="M9 18.5c0-2.2 1.8-4 4-4h28c2.2 0 4 1.8 4 4v20c0 2.2-1.8 4-4 4H13c-2.2 0-4-1.8-4-4z" fill="none" stroke="#071b45" stroke-width="3.1"/>
+  <path d="M24 42.5v8.5m-9 4h27" fill="none" stroke="#071b45" stroke-width="3.1" stroke-linecap="round"/>
+  <path d="m20 22 12 6.5L20 35z" fill="#255be8"/>
+  <circle cx="39.5" cy="14.5" r="2.8" fill="#ff634a"/>
+  <path d="M43 12a9 9 0 0 1 9 9M43 6a15 15 0 0 1 15 15" fill="none" stroke="#ff634a" stroke-width="2.7" stroke-linecap="round"/>
+</svg>

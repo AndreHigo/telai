@@ -1,0 +1,85 @@
+services:
+  mirante:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+      MEDIA_MODE: ${MEDIA_MODE:-p2p}
+      MIRANTE_DB_PATH: /data/mirante-tv.sqlite
+      PUBLIC_BASE_URL: https://${DOMAIN:?configure DOMAIN in deploy/.env}
+      STUN_URL: ${STUN_URL:-stun:${DOMAIN}:3478}
+      TURN_URL: ${TURN_URL:-turn:${DOMAIN}:3478?transport=udp}
+      TURN_SECRET: ${TURN_SECRET:-}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    expose:
+      - "8787"
+    volumes:
+      - ../data:/data
+      # O instalador e os metadados do updater ficam fora do Git.
+      - ../release:/app/release:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mirante
+
+  coturn:
+    image: coturn/coturn:4.6
+    restart: unless-stopped
+    # No host Linux, o modo host evita um docker-proxy para cada porta de
+    # relay publicada. Publicar um intervalo grande cria milhares de
+    # processos e pode esgotar a memória da VPS.
+    network_mode: host
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    environment:
+      TURN_SECRET: ${TURN_SECRET:-}
+      TURN_REALM: ${DOMAIN:?configure DOMAIN in deploy/.env}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:?configure TURN_EXTERNAL_IP in deploy/.env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        turnserver -n --log-file=stdout --listening-port=3478
+        --min-port=49160 --max-port=51160 --fingerprint --use-auth-secret
+        --static-auth-secret "$$TURN_SECRET" --realm "$$TURN_REALM"
+        --external-ip=$$TURN_EXTERNAL_IP
+        --no-cli --no-tls --no-dtls
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      mirante:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?configure DOMAIN in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - mirante
+
+networks:
+  mirante:
+
+volumes:
+  caddy_data:
+  caddy_config:

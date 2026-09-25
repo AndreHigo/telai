@@ -1,0 +1,13 @@
+{
+  "appUrl": "https://telai.tv.br",
+  "allowedOrigins": [
+    "https://telai.tv.br",
+    "https://mirante-tv.duckdns.org"
+  ],
+  "startLocalServer": false,
+  "mediaMode": "p2p",
+  "networkMode": "local",
+  "localServerHost": "127.0.0.1",
+  "publicBaseUrl": "",
+  "windowTitle": "Telai"
+}

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Telai · Roadmap para sair do beta</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:#070b16;color:#edf3ff;--panel:#101d36;--line:#29456f;--muted:#9eb4dc;--blue:#7779ff;--green:#55e2a0;--orange:#ff765c;--yellow:#ffd166;--red:#ff7e73}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 82% 0,#243a83 0,transparent 34%),#070b16}.wrap{width:min(1220px,calc(100% - 36px));margin:auto}.top{border-bottom:1px solid #263e67;padding:28px 0 22px}.eyebrow{color:var(--orange);font-size:11px;font-weight:900;letter-spacing:.2em;text-transform:uppercase}.top h1{font-size:clamp(34px,5vw,64px);letter-spacing:-.07em;line-height:.98;margin:14px 0}.top p,.muted{color:var(--muted);line-height:1.65}.meta{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}.chip{border:1px solid #45659b;border-radius:99px;color:#cbd8f5;font-size:12px;font-weight:800;padding:7px 11px}.summary{display:grid;gap:12px;grid-template-columns:repeat(4,1fr);margin:25px 0}.summary article,.section{background:rgba(16,29,54,.9);border:1px solid var(--line);border-radius:15px}.summary article{padding:18px}.summary strong{display:block;font-size:28px}.summary span{color:var(--muted);font-size:12px}.section{margin:14px 0;padding:22px}.section h2{font-size:24px;letter-spacing:-.04em;margin:0 0 8px}.section>p{color:var(--muted);line-height:1.6;margin:0 0 17px}.table-wrap{overflow:auto}.table{border-collapse:collapse;min-width:780px;width:100%}.table th,.table td{border-top:1px solid #263e67;padding:13px 10px;text-align:left;vertical-align:top}.table th{color:#9eb4dc;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.table td{font-size:13px;line-height:1.5}.table td:first-child{font-weight:900;white-space:nowrap}.table a{color:#b8c1ff}.status{border-radius:99px;display:inline-block;font-size:11px;font-weight:900;padding:5px 8px;white-space:nowrap}.done{background:rgba(85,226,160,.14);color:var(--green)}.partial{background:rgba(255,209,102,.14);color:var(--yellow)}.blocked{background:rgba(255,126,115,.13);color:var(--red)}.planned{background:rgba(158,180,220,.13);color:#b9c9e8}.next{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}.next article{border-left:3px solid var(--blue);padding:5px 0 5px 14px}.next strong{display:block;margin-bottom:6px}.next p{color:var(--muted);font-size:13px;line-height:1.55;margin:0}.foot{color:#8298bd;font-size:12px;padding:12px 0 42px}@media(max-width:800px){.summary{grid-template-columns:repeat(2,1fr)}.next{grid-template-columns:1fr}}@media(max-width:500px){.wrap{width:min(100% - 24px,1220px)}.summary{grid-template-columns:1fr 1fr}.summary article{padding:14px}.summary strong{font-size:23px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div class="eyebrow">Central de lançamento</div>
+      <h1>Roadmap para sair do beta</h1>
+      <p>Auditoria do Telai feita em 09/09/2026. Esta página separa o que foi validado no código local do que ainda depende de produção, fornecedores, outras máquinas ou decisão de produto.</p>
+      <div class="meta"><span class="chip">main: f934d50</span><span class="chip">33 issues abertas no início da auditoria</span><span class="chip">sem novos branches por issue</span></div>
+    </header>
+
+    <section class="summary" aria-label="Resumo da auditoria">
+      <article><strong>8</strong><span>suítes locais aprovadas</span></article>
+      <article><strong>1</strong><span>alerta de dependência corrigido no lockfile</span></article>
+      <article><strong>33</strong><span>issues analisadas</span></article>
+      <article><strong>6</strong><span>issues fechadas com evidência local</span></article>
+    </section>
+
+    <section class="section">
+      <h2>O que já está validado localmente</h2>
+      <p>Build frontend, mídia local, notificações, auditoria responsiva, SEO, painel administrativo, bandeja e observabilidade passaram. API, build e instalador passam no CI; a captura de mídia nativa fica como gate local/Windows porque o runner Linux headless não fornece o pixel buffer X11 necessário.</p>
+      <div class="next">
+        <article><strong>Qualidade e segurança</strong><p>CSP, permissões de mídia, rate limits, auditoria de logs, páginas públicas, robots e sitemap já têm cobertura no código.</p></article>
+        <article><strong>Produto</strong><p>Admin paginado, controles de voz, separação entre mute local e mute da sala, privacidade somente em Perfil e landing pública estão no código.</p></article>
+        <article><strong>Release</strong><p>Foi adicionado um quality gate reproduzível para build, sintaxe, API, auditoria web/notificações, dependências e smoke build do instalador Windows. A suíte de mídia continua local/Windows.</p></article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Issues e motivo do status</h2>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Issue</th><th>Status</th><th>Motivo</th></tr></thead><tbody>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/50">#50 · Voz intermitente</a></td><td><span class="status partial">Parcial</span></td><td>A recuperação de peer foi corrigida para recriar a conexão quando necessário. Ainda falta validação real com web + Electron e rede instável.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/53">#53 · Auditoria integral</a></td><td><span class="status partial">Parcial</span></td><td>Os testes locais passaram e o erro de setConfiguration foi tratado. A auditoria externa de voz, múltiplas máquinas e produção ainda é necessária.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/54">#54 · Reconexão de voz</a></td><td><span class="status partial">Parcial</span></td><td>Há recuperação automática de rede e persistência de intenção, mas falta ensaio real após reinício do app e queda de WebSocket.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/55">#55 · Microfone sem sender</a></td><td><span class="status partial">Parcial</span></td><td>O fluxo garante sender/faixa em mais cenários e tem fallback de dispositivo. Ainda falta validação com duas contas em navegador e Electron.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/47">#47 · Tela preta</a></td><td><span class="status partial">Parcial</span></td><td>Existem estados de recuperação do viewer, mas é preciso provar perda de frames e recuperação automática em rede real.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/43">#43 · Beep de fala</a></td><td><span class="status done">Fechada</span></td><td>O beep de atividade foi removido; detecção, borda de fala, build e testes locais passaram.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/42">#42 · Borda no Electron</a></td><td><span class="status partial">Parcial</span></td><td>O estado passou a ser reativo no Svelte e o web-audit passou. Falta confirmação visual dentro do app instalado.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/70">#70 · Demora da live</a></td><td><span class="status done">Fechada</span></td><td>Viewer público recebeu recuperação P2P, fila ICE, confirmação de vídeo e chat com altura limitada; API, mídia e auditoria web passaram.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/72">#72 · Qualidade entregue</a></td><td><span class="status done">Fechada</span></td><td>O perfil do transmissor é autoritativo, bloqueia elevação de qualidade no viewer e aplica limites de captura/encoder; testes passaram.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/57">#57 · SEO</a></td><td><span class="status partial">Parcial</span></td><td>Landing, metadados, robots, sitemap e páginas públicas passaram localmente. Search Console e métricas externas ainda não foram configurados.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/60">#60 · Landing pública</a></td><td><span class="status done">Código pronto</span></td><td>A landing responsiva existe e o SEO audit passou. A aprovação final de texto/direção visual continua manual.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/31">#31 · Dependências Electron</a></td><td><span class="status done">Fechada</span></td><td>O lockfile força js-yaml 4.3.2, o audit não reporta vulnerabilidades e o smoke build do instalador passou no CI.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/27">#27 · CI/CD</a></td><td><span class="status partial">Parcial</span></td><td>Workflow de quality gates adicionado: build, sintaxe, API, auditoria web/notificações, dependências e instalador passam. Captura de mídia nativa permanece gate local/Windows; ainda falta proteção de branch/release.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/22">#22 · Hardening HTTP</a></td><td><span class="status partial">Parcial</span></td><td>CSP, Permissions-Policy, X-Frame-Options, nosniff e Referrer-Policy estão no servidor; HSTS depende do Caddy em produção.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/23">#23 · Abuso/API</a></td><td><span class="status partial">Parcial</span></td><td>Rate limits, 429, limites de payload e autorização existem. Falta teste de carga controlado e revisão formal de CSRF/produção.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/25">#25 · LGPD</a></td><td><span class="status partial">Parcial</span></td><td>Consentimento, exportação, exclusão e documentos públicos existem. Revisão jurídica e política de retenção ainda faltam.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/26">#26 · Operação</a></td><td><span class="status partial">Parcial</span></td><td>Logs, métricas e health check existem. Backup/restauração, alerta externo e runbook de produção ainda não foram comprovados.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/29">#29 · Domínio/update</a></td><td><span class="status partial">Parcial</span></td><td>Telai é o domínio e o updater está configurado, mas feed, release pública e validação de rollback dependem da operação externa.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/32">#32 · Gate do beta</a></td><td><span class="status planned">Pendente</span></td><td>É o gate final: só pode ser decidido depois dos testes reais, segurança, jurídico, suporte, release e rollback.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/33">#33 · Crash do Electron</a></td><td><span class="status blocked">Externo</span></td><td>Requer reproduzir no Windows com o instalador e obter evidência de crash após troca/encerramento de captura nativa.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/34">#34 · Crash ao capturar jogo</a></td><td><span class="status blocked">Externo</span></td><td>Requer máquina/jogo afetado, WER ou dump e validação com GPU/driver específicos; não é seguro declarar correção sem isso.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/38">#38 · Instalador assinado</a></td><td><span class="status blocked">Externo</span></td><td>Assinatura exige certificado de código e publicação confiável, que não podem ser inventados no ambiente local.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/39">#39 · Capacidade</a></td><td><span class="status blocked">Externo</span></td><td>Precisa teste controlado de carga em VPS com limites, métricas e plano de rollback.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/41">#41 · Feed 0.2.55</a></td><td><span class="status blocked">Externo</span></td><td>Depende de publicar artefato e latest.yml no repositório/servidor de downloads e testar o updater instalado.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/40">#40 · Rastreabilidade</a></td><td><span class="status partial">Parcial</span></td><td>Há testes e histórico documentados, mas a auditoria completa precisa ser atualizada após este ciclo e executada no CI.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/37">#37 · Moderação</a></td><td><span class="status partial">Parcial</span></td><td>Permissões de grupo e moderação de voz existem; denúncias, bloqueio e remoção de conteúdo ainda não foram implementados.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/36">#36 · Login desktop</a></td><td><span class="status partial">Parcial</span></td><td>O login/session funciona nos testes; atualização, reinício e persistência em instalação real ainda precisam de validação.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/28">#28 · Mídia entre máquinas</a></td><td><span class="status blocked">Externo</span></td><td>Testes locais não substituem NAT, TURN e máquinas/redes independentes.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/24">#24 · Cobrança</a></td><td><span class="status planned">Decisão de produto</span></td><td>Requer escolha de planos, provedor, impostos e política comercial antes de implementar.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/56">#56 · E-mail e 2FA</a></td><td><span class="status planned">Decisão/fornecedor</span></td><td>Requer provedor transacional, fluxo de recuperação e decisão entre TOTP/passkey.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/73">#73 · Conta em web + Electron</a></td><td><span class="status partial">Parcial</span></td><td>Há substituição de sessão de voz e limpeza de presença, mas a validação alternada entre dois clientes ainda falta.</td></tr>
+        <tr><td><a href="https://github.com/AndreHigo/mirante/issues/83">#83 · Auditoria de arquivos/textos</a></td><td><span class="status done">Fechada</span></td><td>Auditoria concluída: nenhum arquivo rastreado foi removido sem prova; textos visíveis foram revisados e o remoto ficou apenas com main/development.</td></tr>
+      </tbody></table></div>
+    </section>
+
+    <section class="section"><h2>Ordem recomendada para sair do beta</h2><div class="next"><article><strong>1. Fechar o ciclo técnico</strong><p>Executar CI, corrigir qualquer falha, validar voz/lives em duas máquinas e testar o instalador instalado.</p></article><article><strong>2. Fechar operação e confiança</strong><p>Publicar feed/instalador, configurar backup e alerta, revisar Caddy/HSTS, rodar carga e registrar rollback.</p></article><article><strong>3. Decidir Go/No-Go</strong><p>Concluir jurídico/LGPD, suporte, eventual cobrança e aceitar formalmente as limitações que permanecerem.</p></article></div></section>
+    <p class="foot">Documento interno do Telai. A página é noindex e não substitui a validação em produção, a revisão jurídica ou a aprovação da release.</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Artefatos e dados ficam fora da imagem e entram somente por volumes.
+release
+data
+
+# Não enviar metadados do Git nem dependências locais para o daemon.
+.git
+.gitignore
+node_modules
+npm-debug.log*
+pnpm-debug.log*

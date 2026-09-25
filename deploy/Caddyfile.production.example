@@ -1,0 +1,17 @@
+telai.tv.br {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+    log {
+        output file /var/log/caddy/telai-access.log {
+            roll_size 50MiB
+            roll_keep 5
+            roll_keep_for 168h
+        }
+        format json
+    }
+
+    @internalMetrics path /metrics
+    respond @internalMetrics 404
+    reverse_proxy 127.0.0.1:8787
+}

@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /svelte/
+Disallow: /login
+Disallow: /api/
+Disallow: /settings
+Disallow: /admin
+Disallow: /api/admin/
+Disallow: /convite/
+Disallow: /invite/
+Disallow: /?room=
+Sitemap: https://telai.tv.br/sitemap.xml

@@ -1,0 +1,27 @@
+services:
+  mirante:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - .env
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    expose:
+      - "8787"
+    ports:
+      # O Caddy termina HTTPS; o app não fica exposto diretamente na internet.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - ../data:/data
+      # O instalador é opcional e fica fora do Git; publique-o em /opt/mirante/release.
+      - ../release:/app/release:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
+    <title>Administração Telai</title>
+    <link rel="stylesheet" href="/admin/admin.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">operação privada</p>
+          <h1>Administração Telai</h1>
+          <p class="muted">Visão global de contas, grupos e transmissões em andamento.</p>
+        </div>
+        <button id="refresh" class="button primary" type="button">Atualizar</button>
+      </header>
+      <p id="status" class="status" role="status">Carregando painel…</p>
+      <nav class="admin-nav" aria-label="Seções administrativas">
+        <button class="admin-nav-button active" type="button" data-view="summary">Resumo</button>
+        <button class="admin-nav-button" type="button" data-view="streams">Lives abertas</button>
+        <button class="admin-nav-button" type="button" data-view="groups">Grupos</button>
+        <button class="admin-nav-button" type="button" data-view="accounts">Contas</button>
+        <button class="admin-nav-button hidden" id="members-nav" type="button" data-view="members">Membros</button>
+      </nav>
+      <section class="admin-view" data-page="summary">
+        <section id="summary" class="summary" aria-label="Resumo do site"></section>
+        <section class="panel overview-note"><p class="eyebrow">painel separado</p><h2>Escolha uma seção para consultar os detalhes</h2><p class="muted">Lives, grupos, membros e contas ficam em páginas próprias, com carregamento e paginação independentes.</p></section>
+      </section>
+      <section class="admin-view hidden" data-page="streams">
+        <section class="panel"><div class="panel-heading"><div><p class="eyebrow">tempo real</p><h2>Lives abertas</h2></div><span id="stream-count" class="badge">0</span></div><div class="table-wrap"><table><thead><tr><th>Transmissão</th><th>ID</th><th>Responsável</th><th>Escopo</th><th>Início</th><th>Estado</th><th>Espectadores</th></tr></thead><tbody id="streams"></tbody></table></div><div id="streams-pagination"></div></section>
+      </section>
+      <section class="admin-view hidden" data-page="groups">
+        <section class="panel"><div class="panel-heading"><div><p class="eyebrow">comunidades</p><h2>Grupos</h2></div><span id="group-count" class="badge">0</span></div><div class="table-wrap"><table><thead><tr><th>Grupo</th><th>Dono</th><th>Membros</th><th>Lives</th><th></th></tr></thead><tbody id="groups"></tbody></table></div><div id="groups-pagination"></div></section>
+      </section>
+      <section class="admin-view hidden" data-page="accounts">
+        <section class="panel"><div class="panel-heading"><div><p class="eyebrow">cadastro</p><h2>Contas</h2><p class="muted">As contas são carregadas por página para manter o painel leve.</p></div><span id="account-count" class="badge">0</span></div><div class="table-wrap"><table><thead><tr><th>Conta</th><th>E-mail</th><th>Grupos</th><th>Criada em</th><th>Sessão</th></tr></thead><tbody id="accounts"></tbody></table></div><div id="accounts-pagination"></div></section>
+      </section>
+      <section class="admin-view hidden" data-page="members">
+        <section class="panel"><div class="panel-heading"><div><p class="eyebrow">membros do grupo</p><h2 id="members-title">Grupo</h2><p id="members-subtitle" class="muted"></p></div><button id="back-to-groups" class="button" type="button">Voltar para grupos</button></div><div class="table-wrap"><table><thead><tr><th>Membro</th><th>Usuário</th><th>Função</th><th>Entrou em</th></tr></thead><tbody id="members"></tbody></table></div><div id="members-pagination"></div></section>
+      </section>
+    </main>
+    <script src="/admin/admin.js" defer></script>
+  </body>
+</html>

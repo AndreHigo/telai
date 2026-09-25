@@ -1,0 +1,24 @@
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+.runtime/
+release/
+public/svelte/
+node_modules/
+deploy/.env
+deploy/.env.*
+!deploy/.env.example
+!deploy/.env.public.example
+.env
+*.pem
+*.key
+*.crt
+*.p12
+*.log
+npm-debug.log*
+
+# Artefatos locais de testes, relatórios e pacotes de deploy.
+.tmp-*
+.deploy-*.tar*
+output/
+tmp/

@@ -1,0 +1,27 @@
+services:
+  # TURN entra apenas como fallback quando a conexão direta WebRTC não é
+  # possível. O modo P2P continua sendo usado primeiro pelo navegador.
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    # Na VPS Linux, host networking deixa o intervalo UDP de relay acessível
+    # sem o Docker reescrever as portas.
+    network_mode: host
+    command:
+      - -n
+      - --log-file=stdout
+      - --no-cli
+      - --fingerprint
+      - --realm=${TURN_REALM:-telai.tv.br}
+      - --listening-ip=0.0.0.0
+      - --external-ip=${TURN_EXTERNAL_IP:?defina TURN_EXTERNAL_IP no deploy/.env}
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=51160
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET:?defina TURN_SECRET no deploy/.env}

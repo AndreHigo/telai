@@ -1,0 +1,78 @@
+{
+  "name": "telai",
+  "version": "0.2.68",
+  "author": "Telai",
+  "private": true,
+  "description": "Telai: transmissões privadas de tela, câmera e jogos.",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "desktop": "electron .",
+    "dev:frontend": "vite --config vite.config.js",
+    "build:frontend": "vite build --config vite.config.js",
+    "test:api": "node qa/run-api.cjs",
+    "test:voice-activity": "node qa/test-voice-activity.cjs",
+    "test:security": "node qa/e2e-rate-limit.cjs",
+    "test:notifications": "electron --no-sandbox qa/e2e-notifications.cjs",
+    "test:web-audit": "electron --no-sandbox qa/e2e-web-audit.cjs",
+    "test:media": "electron --no-sandbox qa/e2e-media.cjs",
+    "test:seo": "node qa/e2e-seo.cjs",
+    "test:admin": "node qa/e2e-admin.cjs",
+    "test:tray": "electron --no-sandbox qa/e2e-tray.cjs",
+    "generate:tray-icons": "electron --no-sandbox qa/generate-tray-icons.cjs",
+    "test:observability": "node qa/e2e-observability.cjs",
+    "dist": "npm run build:frontend && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@hugeicons/core-free-icons": "^4.3.3",
+    "@hugeicons/svelte": "^1.1.5",
+    "@kokapuk/application-loopback": "1.0.2",
+    "electron-updater": "6.8.9",
+    "loopback-capture": "3.0.2",
+    "nodemailer": "^10.0.10",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
+    "svelte": "^5.57.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.2"
+  },
+  "build": {
+    "appId": "com.mirante.share",
+    "productName": "Telai",
+    "npmRebuild": false,
+    "icon": "public/telai-app-icon.png",
+    "files": [
+      "electron/**/*",
+      "server.mjs",
+      "public/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Telai-Setup-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "AndreHigo",
+      "repo": "telai-downloads",
+      "releaseType": "release"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
