@@ -17,8 +17,8 @@ export function createGroupModerationRoutes({
     const user = requireUser(request, response);
     if (!user) return true;
     const groupId = match[1];
-    const actor = groupMemberRepository.find(groupId, user.id);
-    const actorPermissions = groupPermissions(groupId, user.id);
+    const actor = await groupMemberRepository.find(groupId, user.id);
+    const actorPermissions = await groupPermissions(groupId, user.id);
     if (!actor || !actorPermissions?.canModerateMembers) {
       json(response, 403, { error: "Você não tem permissão para moderar membros deste grupo." });
       return true;
@@ -32,8 +32,8 @@ export function createGroupModerationRoutes({
         json(response, 400, { error: "Informe uma ação e um membro válidos." });
         return true;
       }
-      const target = groupMemberRepository.find(groupId, memberId);
-      const canRemoveBan = action === "unban" && groupModerationRepository.isBanned(groupId, memberId);
+      const target = await groupMemberRepository.find(groupId, memberId);
+      const canRemoveBan = action === "unban" && await groupModerationRepository.isBanned(groupId, memberId);
       if (!target && !canRemoveBan) {
         json(response, 404, { error: "Membro não encontrado neste grupo." });
         return true;
@@ -56,9 +56,9 @@ export function createGroupModerationRoutes({
         return true;
       }
       const durationMinutes = hasDuration ? Math.max(1, Math.min(Math.round(Number(body.durationMinutes)), 43_200)) : null;
-      const result = groupModerationRepository.apply({ groupId, actorUserId: user.id, userId: memberId, action, reason, durationMinutes, now: new Date().toISOString() });
+      const result = await groupModerationRepository.apply({ groupId, actorUserId: user.id, userId: memberId, action, reason, durationMinutes, now: new Date().toISOString() });
       if (action === "kick" || action === "ban") disconnectGroupUser(groupId, memberId, action === "ban" ? "ban" : "kick");
-      groupAuditRepository?.record({ groupId, actorUserId: user.id, action: `member_${action}`, targetType: "member", targetId: memberId, metadata: { reason, durationMinutes, expiresAt: result.expiresAt } });
+      await groupAuditRepository?.record({ groupId, actorUserId: user.id, action: `member_${action}`, targetType: "member", targetId: memberId, metadata: { reason, durationMinutes, expiresAt: result.expiresAt } });
       publishGroupEvent(groupId, { type: "group-member-moderated", userId: memberId, action, reason, expiresAt: result.expiresAt });
       json(response, 200, { ok: true, ...result });
     } catch {

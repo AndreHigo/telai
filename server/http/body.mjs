@@ -29,6 +29,9 @@ export function json(response, status, body) {
       "Cache-Control": "no-store",
     })
     .end(JSON.stringify(normalizeResponseBody(status, body)));
+  // Permite que rotas assíncronas usem `return json(...)` sem deixar o
+  // dispatcher continuar até a resposta 404 da API.
+  return true;
 }
 
 export async function readJson(request, maxLength = 16 * 1024) {

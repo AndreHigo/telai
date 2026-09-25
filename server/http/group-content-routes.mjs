@@ -22,11 +22,11 @@ export function createGroupContentRoutes({
       const user = requireUser(request, response);
       if (!user) return true;
       const [, groupId, attachmentId] = groupAttachmentMatch;
-      if (!isGroupMember(user.id, groupId)) {
+      if (!await isGroupMember(user.id, groupId)) {
         json(response, 403, { error: "Você não participa deste grupo." });
         return true;
       }
-      const attachment = groupAttachmentRepository.find(groupId, attachmentId);
+      const attachment = await groupAttachmentRepository.find(groupId, attachmentId);
       if (!attachment) {
         json(response, 404, { error: "Anexo não encontrado." });
         return true;
@@ -51,15 +51,15 @@ export function createGroupContentRoutes({
       const user = requireUser(request, response);
       if (!user) return true;
       const groupId = groupMessageMatch[1];
-      if (!isGroupMember(user.id, groupId)) {
+      if (!await isGroupMember(user.id, groupId)) {
         json(response, 403, { error: "Você não participa deste grupo." });
         return true;
       }
-      if (groupModerationRepository?.isMuted(groupId, user.id)) {
+      if (await groupModerationRepository?.isMuted(groupId, user.id)) {
         json(response, 403, { error: "Você está silenciado neste grupo." });
         return true;
       }
-      if (!canGroupAction(user.id, groupId, "canChat")) {
+      if (!await canGroupAction(user.id, groupId, "canChat")) {
         json(response, 403, { error: "Você não tem permissão para enviar mensagens neste grupo." });
         return true;
       }
@@ -72,7 +72,7 @@ export function createGroupContentRoutes({
           return true;
         }
         const requestedRoomId = String(body.roomId || "");
-        const room = groupMessageRepository.findTextRoom(groupId, requestedRoomId);
+        const room = await groupMessageRepository.findTextRoom(groupId, requestedRoomId);
         if (requestedRoomId && !room) {
           json(response, 400, { error: "Essa sala não existe neste grupo." });
           return true;
@@ -81,12 +81,12 @@ export function createGroupContentRoutes({
           json(response, 400, { error: "Salas de transmissão não recebem mensagens de chat." });
           return true;
         }
-        if (!canGroupRoomAction(user.id, groupId, room?.id || null, "canChat")) {
+        if (!await canGroupRoomAction(user.id, groupId, room?.id || null, "canChat")) {
           json(response, 403, { error: "Você não tem permissão para conversar neste canal." });
           return true;
         }
         const requestedParentMessageId = String(body.parentMessageId || "").trim();
-        const parentMessage = requestedParentMessageId ? groupMessageRepository.findMessage(groupId, requestedParentMessageId) : null;
+        const parentMessage = requestedParentMessageId ? await groupMessageRepository.findMessage(groupId, requestedParentMessageId) : null;
         if (requestedParentMessageId && (!parentMessage || parentMessage.parentMessageId || (parentMessage.roomId || null) !== (room?.id || null))) {
           json(response, 400, { error: "A resposta precisa apontar para uma mensagem principal deste canal." });
           return true;
@@ -100,14 +100,14 @@ export function createGroupContentRoutes({
             stored.push({ ...attachment, id, storageKey });
           }
           const createdAt = new Date().toISOString();
-          createdMessage = groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, parentMessageId: parentMessage?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt });
-          const rows = groupAttachmentRepository.createAttachments({ groupId, messageId: createdMessage.id, attachments: stored, createdAt });
+          createdMessage = await groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, parentMessageId: parentMessage?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt });
+          const rows = await groupAttachmentRepository.createAttachments({ groupId, messageId: createdMessage.id, attachments: stored, createdAt });
           createdMessage.attachments = rows.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor));
           publishGroupEvent(groupId, { type: "group-message", message: createdMessage });
           json(response, 201, { message: createdMessage });
         } catch (error) {
           if (createdMessage?.id) {
-            try { groupMessageRepository.deleteMessage(groupId, createdMessage.id); } catch {}
+            try { await groupMessageRepository.deleteMessage(groupId, createdMessage.id); } catch {}
           }
           await Promise.all(stored.map((attachment) => attachmentStorage.remove(attachment.storageKey).catch(() => {})));
           throw error;
@@ -124,24 +124,24 @@ export function createGroupContentRoutes({
       if (!user) return true;
       const groupId = groupMessageMutationMatch[1];
       const messageId = groupMessageMutationMatch[2];
-      if (!isGroupMember(user.id, groupId)) {
+      if (!await isGroupMember(user.id, groupId)) {
         json(response, 403, { error: "Você não participa deste grupo." });
         return true;
       }
-      const message = groupMessageRepository.findMessage(groupId, messageId);
+      const message = await groupMessageRepository.findMessage(groupId, messageId);
       if (!message) {
         json(response, 404, { error: "Mensagem não encontrada." });
         return true;
       }
-      const membership = groupPermissionRepository.member(groupId, user.id);
+      const membership = await groupPermissionRepository.member(groupId, user.id);
       const canModerate = membership?.role === "owner";
       if (message.userId !== user.id && !canModerate) {
         json(response, 403, { error: "Você só pode alterar suas próprias mensagens." });
         return true;
       }
       if (request.method === "DELETE") {
-        const attachments = groupAttachmentRepository.listForMessage(groupId, messageId);
-        if (!groupMessageRepository.deleteMessage(groupId, messageId)) {
+        const attachments = await groupAttachmentRepository.listForMessage(groupId, messageId);
+        if (!await groupMessageRepository.deleteMessage(groupId, messageId)) {
           json(response, 404, { error: "Mensagem não encontrada." });
           return true;
         }
@@ -157,12 +157,12 @@ export function createGroupContentRoutes({
           json(response, 400, { error: "A mensagem não pode ficar vazia." });
           return true;
         }
-        const updated = groupMessageRepository.updateMessage({ groupId, messageId, body: nextBody });
+        const updated = await groupMessageRepository.updateMessage({ groupId, messageId, body: nextBody });
         if (!updated) {
           json(response, 404, { error: "Mensagem não encontrada." });
           return true;
         }
-        const attachments = groupAttachmentRepository.listForMessage(groupId, updated.id);
+        const attachments = await groupAttachmentRepository.listForMessage(groupId, updated.id);
         const publicUpdated = { ...updated, attachments: attachments.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor)) };
         publishGroupEvent(groupId, { type: "group-message-updated", message: publicUpdated });
         json(response, 200, { message: publicUpdated });
@@ -177,26 +177,29 @@ export function createGroupContentRoutes({
       const user = requireUser(request, response);
       if (!user) return true;
       const groupId = groupPermissionsMatch[1];
-      const owner = groupPermissionRepository.member(groupId, user.id);
+      const owner = await groupPermissionRepository.member(groupId, user.id);
       if (owner?.role !== "owner") {
         json(response, 403, { error: "Somente o dono pode alterar permissões." });
         return true;
       }
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const memberId = String(body.userId || "");
-        const member = groupPermissionRepository.member(groupId, memberId);
+        const member = await groupPermissionRepository.member(groupId, memberId);
         if (!member) return json(response, 404, { error: "Membro não encontrado neste grupo." });
         if (member.role === "owner") return json(response, 400, { error: "As permissões do dono são sempre completas." });
         const canChat = body.canChat === false ? 0 : 1;
         const canStream = body.canStream === false ? 0 : 1;
         const canInvite = body.canInvite === false ? 0 : 1;
-        groupPermissionRepository.ensure(groupId, memberId);
-        const currentPermissions = groupPermissionRepository.current(groupId, memberId);
+        await groupPermissionRepository.ensure(groupId, memberId);
+        const currentPermissions = await groupPermissionRepository.current(groupId, memberId);
         const canViewVoiceMembers = body.canViewVoiceMembers === undefined
           ? (currentPermissions?.canViewVoiceMembers ?? 1)
           : body.canViewVoiceMembers === false ? 0 : 1;
-        return json(response, 200, { permissions: groupPermissionRepository.update({ groupId, userId: memberId, canChat, canStream, canInvite, canViewVoiceMembers }) });
-      }).catch(() => json(response, 400, { error: "Não foi possível atualizar as permissões." }));
+        return json(response, 200, { permissions: await groupPermissionRepository.update({ groupId, userId: memberId, canChat, canStream, canInvite, canViewVoiceMembers }) });
+      } catch {
+        return json(response, 400, { error: "Não foi possível atualizar as permissões." });
+      }
       return true;
     }
 

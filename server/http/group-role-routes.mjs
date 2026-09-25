@@ -5,12 +5,13 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
       const user = requireUser(request, response);
       if (!user) return true;
       const groupId = groupRoleCreateMatch[1];
-      const owner = groupPermissionRepository.member(groupId, user.id);
+      const owner = await groupPermissionRepository.member(groupId, user.id);
       if (owner?.role !== "owner") {
         json(response, 403, { error: "Somente o dono pode criar cargos." });
         return true;
       }
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const name = String(body.name || "").trim().slice(0, 32);
         const color = /^#[0-9a-f]{6}$/i.test(String(body.color || "")) ? String(body.color).toLowerCase() : "#5865f2";
         if (name.length < 2) return json(response, 400, { error: "Informe um nome válido para o cargo." });
@@ -22,14 +23,16 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
         const canModerateMembers = body.canModerateMembers === true;
         let role;
         try {
-          role = groupRoleRepository.createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers, createdBy: user.id });
-          groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_create", targetType: "role", targetId: role.id, metadata: { name: role.name } });
+          role = await groupRoleRepository.createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers, createdBy: user.id });
+          await groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_create", targetType: "role", targetId: role.id, metadata: { name: role.name } });
         } catch (error) {
           if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe um cargo com esse nome." });
           throw error;
         }
         return json(response, 201, { role });
-      }).catch(() => json(response, 400, { error: "Não foi possível criar o cargo." }));
+      } catch {
+        return json(response, 400, { error: "Não foi possível criar o cargo." });
+      }
       return true;
     }
 
@@ -38,21 +41,24 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
       const user = requireUser(request, response);
       if (!user) return true;
       const groupId = groupRoleOrderMatch[1];
-      const owner = groupPermissionRepository.member(groupId, user.id);
+      const owner = await groupPermissionRepository.member(groupId, user.id);
       if (owner?.role !== "owner") {
         json(response, 403, { error: "Somente o dono pode ordenar cargos." });
         return true;
       }
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const roleIds = Array.isArray(body.roleIds) ? body.roleIds.map((roleId) => String(roleId || "").trim()) : null;
-        const knownRoleIds = new Set(groupRoleRepository.listRoleIds(groupId));
+        const knownRoleIds = new Set(await groupRoleRepository.listRoleIds(groupId));
         if (!roleIds || roleIds.length !== knownRoleIds.size || roleIds.some((roleId) => !roleId || !knownRoleIds.has(roleId)) || new Set(roleIds).size !== roleIds.length) {
           return json(response, 400, { error: "A ordem precisa conter todos os cargos do grupo uma única vez." });
         }
-        const orderedRoles = groupRoleRepository.reorderRoles(groupId, roleIds);
-        groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_reorder", targetType: "role", metadata: { roleIds } });
+        const orderedRoles = await groupRoleRepository.reorderRoles(groupId, roleIds);
+        await groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_reorder", targetType: "role", metadata: { roleIds } });
         return json(response, 200, { roles: orderedRoles });
-      }).catch(() => json(response, 400, { error: "Não foi possível salvar a ordem dos cargos." }));
+      } catch {
+        return json(response, 400, { error: "Não foi possível salvar a ordem dos cargos." });
+      }
       return true;
     }
 
@@ -61,12 +67,12 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
       const user = requireUser(request, response);
       if (!user) return true;
       const [, groupId, roleId] = groupRoleMatch;
-      const owner = groupPermissionRepository.member(groupId, user.id);
+      const owner = await groupPermissionRepository.member(groupId, user.id);
       if (owner?.role !== "owner") {
         json(response, 403, { error: "Somente o dono pode administrar cargos." });
         return true;
       }
-      const role = groupRoleRepository.findRole(groupId, roleId);
+      const role = await groupRoleRepository.findRole(groupId, roleId);
       if (!role) {
         json(response, 404, { error: "Cargo não encontrado neste grupo." });
         return true;
@@ -76,17 +82,18 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
           json(response, 400, { error: "O cargo padrão não pode ser removido." });
           return true;
         }
-        const defaultRole = groupRoleRepository.defaultRole(groupId);
+        const defaultRole = await groupRoleRepository.defaultRole(groupId);
         if (!defaultRole) {
           json(response, 500, { error: "O grupo não possui um cargo padrão disponível." });
           return true;
         }
-        groupRoleRepository.deleteRole(groupId, roleId, defaultRole.id);
-        groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_delete", targetType: "role", targetId: roleId, metadata: { name: role.name, fallbackRoleId: defaultRole.id } });
+        await groupRoleRepository.deleteRole(groupId, roleId, defaultRole.id);
+        await groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_delete", targetType: "role", targetId: roleId, metadata: { name: role.name, fallbackRoleId: defaultRole.id } });
         json(response, 200, { ok: true, fallbackRoleId: defaultRole.id });
         return true;
       }
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const name = String(body.name || role.name).trim().slice(0, 32);
         const color = /^#[0-9a-f]{6}$/i.test(String(body.color || role.color)) ? String(body.color || role.color).toLowerCase() : role.color;
         const canChat = body.canChat === undefined ? Boolean(role.canChat) : body.canChat === true;
@@ -97,14 +104,16 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
         const canModerateMembers = body.canModerateMembers === undefined ? Boolean(role.canModerateMembers) : body.canModerateMembers === true;
         if (name.length < 2) return json(response, 400, { error: "Informe um nome válido para o cargo." });
         try {
-          const updatedRole = groupRoleRepository.updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers });
-          groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_update", targetType: "role", targetId: roleId, metadata: { name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers } });
+          const updatedRole = await groupRoleRepository.updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers });
+          await groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "role_update", targetType: "role", targetId: roleId, metadata: { name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, canModerateMembers } });
           return json(response, 200, { role: updatedRole });
         } catch (error) {
           if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe um cargo com esse nome." });
           throw error;
         }
-      }).catch(() => json(response, 400, { error: "Não foi possível atualizar o cargo." }));
+      } catch {
+        return json(response, 400, { error: "Não foi possível atualizar o cargo." });
+      }
       return true;
     }
 
@@ -113,12 +122,12 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
       const user = requireUser(request, response);
       if (!user) return true;
       const [, groupId, memberId] = groupMemberRoleMatch;
-      const owner = groupPermissionRepository.member(groupId, user.id);
+      const owner = await groupPermissionRepository.member(groupId, user.id);
       if (owner?.role !== "owner") {
         json(response, 403, { error: "Somente o dono pode atribuir cargos." });
         return true;
       }
-      const member = groupRoleRepository.member(groupId, memberId);
+      const member = await groupRoleRepository.member(groupId, memberId);
       if (!member) {
         json(response, 404, { error: "Membro não encontrado neste grupo." });
         return true;
@@ -127,13 +136,16 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
         json(response, 400, { error: "O dono mantém o cargo de dono." });
         return true;
       }
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const roleId = String(body.roleId || "").trim();
-        if (roleId && !groupRoleRepository.roleBelongs(groupId, roleId)) return json(response, 400, { error: "Esse cargo não pertence ao grupo." });
-        groupRoleRepository.assignMemberRole(groupId, memberId, roleId);
-        groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "member_role_assign", targetType: "member", targetId: memberId, metadata: { roleId: roleId || null } });
+        if (roleId && !await groupRoleRepository.roleBelongs(groupId, roleId)) return json(response, 400, { error: "Esse cargo não pertence ao grupo." });
+        await groupRoleRepository.assignMemberRole(groupId, memberId, roleId);
+        await groupAuditRepository?.record({ groupId, actorUserId: user.id, action: "member_role_assign", targetType: "member", targetId: memberId, metadata: { roleId: roleId || null } });
         return json(response, 200, { roleId: roleId || null });
-      }).catch(() => json(response, 400, { error: "Não foi possível atribuir o cargo." }));
+      } catch {
+        return json(response, 400, { error: "Não foi possível atribuir o cargo." });
+      }
       return true;
     }
 
