@@ -44,6 +44,7 @@
   import { createVoiceAudioTestController } from "./features/voice/audio-test-controller.js";
   import { createVoiceRemotePlaybackController } from "./features/voice/remote-playback-controller.js";
   import { createVoiceParticipantPreferencesController } from "./features/voice/participant-preferences-controller.js";
+  import { createVoiceInputLifecycleController } from "./features/voice/input-lifecycle-controller.js";
   import { createVoiceSoundController, readSoundPreferences, SOUND_PREFERENCE_DEFAULTS } from "./features/voice/sound-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
@@ -279,9 +280,7 @@
   let voiceRemoteAudioBindings = new Map();
   let voiceRemotePlaybackTimers = new Map();
   let voicePlaybackBlocked = false;
-  let voiceInputRecoveryInFlight = false;
   let voiceInputSelectionRevision = 0;
-  let voiceBoundInputTracks = new WeakSet();
   let voiceInputDeviceByStream = new WeakMap();
   let voiceReconnectSession = null;
   let voiceReconnectVisible = false;
@@ -1008,6 +1007,40 @@
       voiceTestStatus = next.status;
       voiceTestSpeakerStatus = next.speakerStatus;
     },
+  });
+  const voiceInputLifecycleController = createVoiceInputLifecycleController({
+    getState: () => ({
+      voiceState,
+      voiceLocalStream,
+      voiceMuted,
+      voiceMutedByCaptureFailure,
+      voiceServerMuted,
+      voiceError,
+      voiceClientId,
+      voiceRoomId,
+      voiceParticipants,
+      selectedInputDeviceId,
+    }),
+    setState: (next) => {
+      if ("voiceLocalStream" in next) voiceLocalStream = next.voiceLocalStream;
+      if ("voiceMuted" in next) voiceMuted = next.voiceMuted;
+      if ("voiceMutedByCaptureFailure" in next) voiceMutedByCaptureFailure = next.voiceMutedByCaptureFailure;
+      if ("voiceParticipants" in next) voiceParticipants = next.voiceParticipants;
+      if ("voiceError" in next) voiceError = next.voiceError;
+    },
+    captureInputStream: () => captureVoiceInputStream(),
+    stopInputStream: (stream) => stopVoiceInputStream(stream),
+    syncLocalTrackToPeers: () => syncVoiceLocalTrackToPeers(),
+    attachVoiceActivityStream: (participantId, stream) => attachVoiceActivityStream(participantId, stream),
+    clearVoiceActivityAnalyzer: (participantId) => clearVoiceActivityAnalyzer(participantId),
+    ensureVoiceActivityTimer: () => ensureVoiceActivityTimer(),
+    applyInputDevice: (deviceId) => applyVoiceInputDevice(deviceId),
+    getVoiceTestRunning: () => voiceTestRunning,
+    stopVoiceTest: () => stopVoiceTest(),
+    startVoiceTest: () => startVoiceTest(),
+    upsertVoiceRoomParticipant: (roomId, participant) => upsertVoiceRoomParticipant(roomId, participant),
+    sendVoiceMuteState: (muted) => sendVoice({ type: "voice-mute-state", muted }),
+    reportClientError,
   });
   const voiceRemotePlaybackController = createVoiceRemotePlaybackController({
     audioByParticipant: voiceRemoteAudio,
@@ -2306,7 +2339,7 @@
     const updatedLocalGain = updateVoiceMicrophoneGain(voiceLocalStream);
     updateVoiceMicrophoneGain(voiceAudioTestController.getState().stream);
     updateVoiceMicrophoneGain(broadcastMicrophoneStream);
-    if (updatedLocalGain || !voiceLocalStream || voiceInputRecoveryInFlight) return;
+    if (updatedLocalGain || !voiceLocalStream || voiceInputLifecycleController.isRecoveryInFlight()) return;
     try {
       const previousStream = voiceLocalStream;
       const nextStream = await processVoiceInputStream(previousStream);
@@ -2334,15 +2367,7 @@
     return captured.stream;
   }
 
-  function bindVoiceLocalTrack(track) {
-    if (!track || voiceBoundInputTracks.has(track)) return;
-    voiceBoundInputTracks.add(track);
-    track.addEventListener("ended", () => {
-      if (voiceLocalStream?.getAudioTracks?.()[0] !== track) return;
-      if (!["connected", "connecting"].includes(voiceState)) return;
-      void recoverVoiceInputTrack("track_ended");
-    }, { once: true });
-  }
+  const bindVoiceLocalTrack = (track) => voiceInputLifecycleController.bindLocalTrack(track);
 
   async function negotiateVoicePeer(participantId, peer, reason = "audio_track_added") {
     return voiceTrackSyncService.negotiate(participantId, peer, reason);
@@ -2352,58 +2377,9 @@
     return voiceTrackSyncService.sync({ negotiateMissing });
   }
 
-  async function recoverVoiceInputTrack(reason = "track_unavailable") {
-    if (voiceInputRecoveryInFlight || !["connected", "connecting"].includes(voiceState)) return false;
-    voiceInputRecoveryInFlight = true;
-    const previousStream = voiceLocalStream;
-    try {
-      const nextStream = await captureVoiceInputStream();
-      if (!["connected", "connecting"].includes(voiceState)) {
-        nextStream.getTracks().forEach((track) => track.stop());
-        return false;
-      }
-      voiceLocalStream = nextStream;
-      const track = nextStream.getAudioTracks()[0];
-      const shouldRestoreAfterCaptureFailure = voiceMutedByCaptureFailure || voiceError.startsWith("Você entrou sem microfone");
-      if (shouldRestoreAfterCaptureFailure) {
-        voiceMuted = false;
-        voiceMutedByCaptureFailure = false;
-      }
-      track.enabled = !(voiceMuted || voiceServerMuted);
-      bindVoiceLocalTrack(track);
-      await syncVoiceLocalTrackToPeers();
-      stopVoiceInputStream(previousStream);
-      clearVoiceActivityAnalyzer(voiceClientId);
-      void attachVoiceActivityStream(voiceClientId, voiceLocalStream);
-      ensureVoiceActivityTimer();
-      if (shouldRestoreAfterCaptureFailure) {
-        const local = voiceParticipants.get(voiceClientId);
-        if (local) {
-          const updated = { ...local, muted: voiceMuted || voiceServerMuted, serverMuted: voiceServerMuted };
-          voiceParticipants = new Map(voiceParticipants).set(voiceClientId, updated);
-          upsertVoiceRoomParticipant(voiceRoomId, updated);
-        }
-        sendVoice({ type: "voice-mute-state", muted: voiceMuted });
-        voiceError = "";
-      }
-      reportClientError("voice_input_track_recovered", new Error("A captura do microfone foi recuperada automaticamente."), { reason, deviceSelected: Boolean(selectedInputDeviceId) });
-      return true;
-    } catch (error) {
-      reportClientError("voice_input_track_recovery_error", error, { reason, deviceSelected: Boolean(selectedInputDeviceId) });
-      voiceError = error.name === "NotAllowedError" ? "Permita o microfone para continuar falando." : "O microfone ficou indisponível. Verifique o dispositivo de entrada.";
-      return false;
-    } finally {
-      voiceInputRecoveryInFlight = false;
-    }
-  }
+  const recoverVoiceInputTrack = (reason = "track_unavailable") => voiceInputLifecycleController.recover(reason);
 
-  async function reapplyVoiceInputSettings() {
-    if (voiceTestRunning) {
-      stopVoiceTest();
-      await startVoiceTest();
-    }
-    if (voiceState === "connected") await applyVoiceInputDevice(selectedInputDeviceId);
-  }
+  const reapplyVoiceInputSettings = () => voiceInputLifecycleController.reapplySettings();
 
   async function applyVoiceInputProfile(nextProfile) {
     voiceInputProfile = ["isolation", "studio", "custom"].includes(nextProfile) ? nextProfile : "isolation";

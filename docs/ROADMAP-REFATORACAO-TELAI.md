@@ -191,6 +191,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair o teste de microfone, medidor de nível e teste de alto-falante para `frontend/src/features/voice/audio-test-controller.js`, mantendo o estado visual e o pipeline de captura no shell.
     - [x] Extrair criação, retry, autoplay, volume e saída selecionada dos áudios remotos para `frontend/src/features/voice/remote-playback-controller.js`, mantendo o estado visual e o ciclo de peers no shell.
     - [x] Extrair resolução, volume individual, mudo local e persistência das preferências de participantes para `frontend/src/features/voice/participant-preferences-controller.js`, mantendo o estado visual no shell.
+    - [x] Extrair recuperação, bind e reaplicação da trilha local de voz para `frontend/src/features/voice/input-lifecycle-controller.js`, mantendo captura, sincronização e estado visual no shell.
     - [x] Extrair notas de atualização e seu estado de leitura para `frontend/src/features/shell/release-notes-controller.js` em chunk lazy.
     - [x] Extrair atualização, inicialização com o sistema, aceleração gráfica e seletores de captura Electron para `frontend/src/features/shell/desktop-controller.js` em chunk lazy.
     - [x] Extrair transporte WebSocket, pares WebRTC, ICE, renegociação e chat do host para `frontend/src/features/broadcast/transport-controller.js` em chunk lazy.
