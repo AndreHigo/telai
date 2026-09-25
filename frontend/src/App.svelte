@@ -11,6 +11,11 @@
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
   import { createApiClient } from "./services/api.js";
+  import {
+    createSelectedVoiceAudioConstraints,
+    createVoiceAudioConstraints,
+    createVoiceInputPipeline,
+  } from "./services/media/voice-input.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { HugeiconsIcon } from "@hugeicons/svelte";
@@ -461,7 +466,6 @@
     : "native";
   // Mantém as instâncias de processamento para atualizar ganho e liberar
   // corretamente os recursos de cada microfone/teste.
-  let voiceInputResources = new Map();
   let voiceNoiseSuppressionStatus = "idle";
   let voiceNativeProcessingDetails = {
     echoCancellation: null,
@@ -489,6 +493,14 @@
       return { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
     }
   })();
+  const voiceInputPipeline = createVoiceInputPipeline({
+    getAudioContext: () => window.AudioContext || window.webkitAudioContext,
+    shouldProcess: () => shouldProcessVoiceInput(),
+    getMicrophoneVolume: () => voiceMicrophoneVolume,
+    onNativeProcessingDetails: (details) => { voiceNativeProcessingDetails = details; },
+    onNoiseSuppressionStatus: (status) => { voiceNoiseSuppressionStatus = status; },
+    onProcessingError: (error) => reportClientError("voice_input_volume_processing_error", error, { profile: voiceInputProfile }),
+  });
   let voiceDevicesBusy = false;
   let voiceDevicesError = "";
   let voiceTestStream = null;
@@ -1662,23 +1674,11 @@
   }
 
   function voiceAudioConstraints() {
-    const profile = voiceInputProfile === "studio"
-      ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-      : voiceInputProfile === "custom"
-        ? voiceAdvancedOptions
-        : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-    return {
-      echoCancellation: profile.echoCancellation,
-      noiseSuppression: profile.noiseSuppression,
-      autoGainControl: profile.autoGainControl,
-      channelCount: 1,
-    };
+    return createVoiceAudioConstraints(voiceInputProfile, voiceAdvancedOptions);
   }
 
   function selectedVoiceAudioConstraints() {
-    const constraints = voiceAudioConstraints();
-    if (selectedInputDeviceId) constraints.deviceId = { exact: selectedInputDeviceId };
-    return constraints;
+    return createSelectedVoiceAudioConstraints(voiceInputProfile, voiceAdvancedOptions, selectedInputDeviceId);
   }
 
   function rememberCapturedInputDevice(track, requestedDeviceId = selectedInputDeviceId) {
@@ -1704,7 +1704,7 @@
   function voiceInputStreamMatchesSelectedDevice(stream, requestedDeviceId = selectedInputDeviceId) {
     if (!requestedDeviceId) return true;
     const remembered = voiceInputDeviceByStream.get(stream);
-    const sourceTrack = voiceInputResources.get(stream)?.rawStream?.getAudioTracks?.()[0] || stream?.getAudioTracks?.()[0];
+    const sourceTrack = voiceInputPipeline.getResource(stream)?.rawStream?.getAudioTracks?.()[0] || stream?.getAudioTracks?.()[0];
     const actualDeviceId = remembered?.actualDeviceId || String(sourceTrack?.getSettings?.().deviceId || "").trim();
     return !actualDeviceId || actualDeviceId === requestedDeviceId;
   }
@@ -1713,73 +1713,16 @@
     return voiceInputProfile === "isolation" || (voiceInputProfile === "custom" && voiceAdvancedOptions.noiseSuppression);
   }
 
-  function readNativeVoiceProcessingDetails(track) {
-    const settings = track?.getSettings?.() || {};
-    return {
-      echoCancellation: typeof settings.echoCancellation === "boolean" ? settings.echoCancellation : null,
-      noiseSuppression: typeof settings.noiseSuppression === "boolean" ? settings.noiseSuppression : null,
-      autoGainControl: typeof settings.autoGainControl === "boolean" ? settings.autoGainControl : null,
-      sampleRate: Number.isFinite(settings.sampleRate) ? settings.sampleRate : null,
-      channelCount: Number.isFinite(settings.channelCount) ? settings.channelCount : null,
-    };
-  }
-
-  function confirmNativeVoiceProcessing(track) {
-    if (!track || !shouldProcessVoiceInput()) return;
-    // getUserMedia já solicita os filtros no track novo. Aqui confirmamos o
-    // que o Chromium/Electron realmente negociou, sem reaplicar constraints
-    // em drivers que rejeitam mudanças depois da captura.
-    voiceNativeProcessingDetails = readNativeVoiceProcessingDetails(track);
-    voiceNoiseSuppressionStatus = "native";
-  }
-
   async function processVoiceInputStream(rawStream) {
-    const shouldApplyMicrophoneVolume = voiceMicrophoneVolume < 0.999;
-    const shouldUseNativeSuppression = shouldProcessVoiceInput();
-    if (shouldUseNativeSuppression) confirmNativeVoiceProcessing(rawStream?.getAudioTracks?.()[0]);
-    else voiceNoiseSuppressionStatus = "off";
-    if (!shouldApplyMicrophoneVolume) return rawStream;
-    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextConstructor) return rawStream;
-    let context;
-    try {
-      context = new AudioContextConstructor({ latencyHint: "interactive" });
-      await context.resume();
-      const source = context.createMediaStreamSource(rawStream);
-      const microphoneGain = context.createGain();
-      microphoneGain.gain.setValueAtTime(voiceMicrophoneVolume, context.currentTime);
-      const destination = context.createMediaStreamDestination();
-      source.connect(microphoneGain);
-      microphoneGain.connect(destination);
-      const processedStream = destination.stream;
-      voiceInputResources.set(processedStream, { rawStream, context, source, microphoneGain, destination });
-      return processedStream;
-    } catch (error) {
-      try { await context?.close(); } catch {}
-      reportClientError("voice_input_volume_processing_error", error, { profile: voiceInputProfile });
-      return rawStream;
-    }
+    return voiceInputPipeline.process(rawStream);
   }
 
   function stopVoiceInputStream(stream) {
-    if (!stream) return;
-    const resource = voiceInputResources.get(stream);
-    try { stream.getTracks().forEach((track) => track.stop()); } catch {}
-    if (!resource) return;
-    try { resource.rawStream?.getTracks().forEach((track) => track.stop()); } catch {}
-    try { resource.source?.disconnect(); } catch {}
-    try { resource.destination?.disconnect?.(); } catch {}
-    void resource.context?.close().catch(() => {});
-    voiceInputResources.delete(stream);
+    voiceInputPipeline.stop(stream);
   }
 
   function updateVoiceMicrophoneGain(stream = voiceLocalStream) {
-    const gain = voiceInputResources.get(stream)?.microphoneGain;
-    if (!gain) return false;
-    const now = gain.context.currentTime;
-    gain.gain.cancelScheduledValues(now);
-    gain.gain.setTargetAtTime(voiceMicrophoneVolume, now, 0.015);
-    return true;
+    return voiceInputPipeline.updateGain(stream, voiceMicrophoneVolume);
   }
 
   async function setVoiceMicrophoneVolume(value) {
@@ -1804,7 +1747,7 @@
       nextTrack.enabled = !(voiceMuted || voiceServerMuted);
       bindVoiceLocalTrack(nextTrack);
       await syncVoiceLocalTrackToPeers();
-      const resource = voiceInputResources.get(nextStream);
+      const resource = voiceInputPipeline.getResource(nextStream);
       if (resource) resource.rawStream = null;
       previousStream.getTracks().forEach((track) => track.stop());
       clearVoiceActivityAnalyzer(voiceClientId);

@@ -90,6 +90,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair a tela de canais seguidos para `frontend/src/features/social`.
 - [x] Extrair a feature de mensagens diretas para `frontend/src/features/direct`.
 - [x] Extrair a camada de apresentação da transmissão para `frontend/src/features/broadcast`.
+- [x] Extrair o pipeline de entrada de voz para `frontend/src/services/media` sem alterar os filtros atuais.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
 
 ### Fase 2 — Contratos e tempo real
