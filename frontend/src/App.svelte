@@ -223,13 +223,7 @@
   let activeDisplayProcessId = null;
   let broadcastSourceSwitching = false;
   let broadcastMediaSwitching = false;
-  let windowAudioContext = null;
-  let windowAudioProcessor = null;
-  let windowAudioDestination = null;
-  let windowAudioUnsubscribe = null;
   let windowAudioStatusUnsubscribe = null;
-  let windowAudioQueue = [];
-  let windowAudioQueuedFrames = 0;
   let viewerCount = 0;
   let peerConnections = new Map();
   let pendingBroadcastCandidates = new Map();
@@ -1626,6 +1620,20 @@
   async function createBroadcastVideoComposition(...args) { return (await getBroadcastCompositionController()).createBroadcastVideoComposition(...args); }
   function stopBroadcastVideoComposition(...args) { void getBroadcastCompositionController().then((controller) => controller.stopBroadcastVideoComposition(...args)); }
   async function buildBroadcastOutputStream(...args) { return (await getBroadcastCompositionController()).buildBroadcastOutputStream(...args); }
+
+  let broadcastAudioBridgeControllerPromise = null;
+  function getBroadcastAudioBridgeController() {
+    if (!broadcastAudioBridgeControllerPromise) {
+      broadcastAudioBridgeControllerPromise = import("./features/broadcast/audio-bridge-controller.js").then(({ createBroadcastAudioBridgeController }) => createBroadcastAudioBridgeController({
+        getAudioContext: () => window.AudioContext || window.webkitAudioContext,
+        getDesktopBridge: () => window.miranteDesktop,
+      }));
+    }
+    return broadcastAudioBridgeControllerPromise;
+  }
+  async function stopWindowAudioBridge(...args) { return (await getBroadcastAudioBridgeController()).stop(...args); }
+  async function startWindowAudioBridge(...args) { return (await getBroadcastAudioBridgeController()).startWindowAudio(...args); }
+  async function startSystemAudioBridge(...args) { return (await getBroadcastAudioBridgeController()).startSystemAudio(...args); }
 
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
@@ -4807,108 +4815,6 @@
     } catch (error) {
       reportClientError("broadcast_preview_play_error", error, { roomId: broadcastRoomId });
       notice = "A prévia foi conectada, mas o navegador bloqueou a reprodução automática. Clique no vídeo para reproduzir.";
-    }
-  }
-
-  function enqueueWindowAudio(chunk) {
-    const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk?.buffer || chunk || []);
-    const frameCount = Math.floor(bytes.byteLength / 4);
-    if (!frameCount) return;
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const samples = new Float32Array(frameCount * 2);
-    for (let frame = 0; frame < frameCount; frame += 1) {
-      samples[frame * 2] = view.getInt16(frame * 4, true) / 32768;
-      samples[frame * 2 + 1] = view.getInt16(frame * 4 + 2, true) / 32768;
-    }
-    windowAudioQueue.push({ samples, frameCount, offset: 0 });
-    windowAudioQueuedFrames += frameCount;
-    while (windowAudioQueuedFrames > 96000 && windowAudioQueue.length > 1) {
-      const discarded = windowAudioQueue.shift();
-      windowAudioQueuedFrames -= discarded.frameCount - discarded.offset;
-    }
-  }
-
-  function fillWindowAudio(event) {
-    const left = event.outputBuffer.getChannelData(0);
-    const right = event.outputBuffer.numberOfChannels > 1 ? event.outputBuffer.getChannelData(1) : left;
-    for (let frame = 0; frame < left.length; frame += 1) {
-      const current = windowAudioQueue[0];
-      if (!current) {
-        left[frame] = 0;
-        if (right !== left) right[frame] = 0;
-        continue;
-      }
-      const sampleOffset = current.offset * 2;
-      left[frame] = current.samples[sampleOffset] || 0;
-      if (right !== left) right[frame] = current.samples[sampleOffset + 1] || 0;
-      current.offset += 1;
-      windowAudioQueuedFrames -= 1;
-      if (current.offset >= current.frameCount) windowAudioQueue.shift();
-    }
-  }
-
-  async function stopWindowAudioBridge() {
-    windowAudioUnsubscribe?.();
-    windowAudioUnsubscribe = null;
-    windowAudioQueue = [];
-    windowAudioQueuedFrames = 0;
-    windowAudioProcessor?.disconnect();
-    windowAudioProcessor = null;
-    windowAudioDestination = null;
-    if (windowAudioContext) {
-      await windowAudioContext.close().catch(() => {});
-      windowAudioContext = null;
-    }
-    try { await window.miranteDesktop?.stopWindowAudio?.(); } catch {}
-  }
-
-  async function startWindowAudioBridge(processId) {
-    if (!window.miranteDesktop?.startWindowAudio || !processId) return null;
-    await stopWindowAudioBridge();
-    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextConstructor) throw new Error("Este app não possui suporte ao áudio isolado da janela.");
-    const context = new AudioContextConstructor({ sampleRate: 48000 });
-    const destination = context.createMediaStreamDestination();
-    const processor = context.createScriptProcessor(4096, 2, 2);
-    windowAudioContext = context;
-    windowAudioDestination = destination;
-    windowAudioProcessor = processor;
-    processor.onaudioprocess = fillWindowAudio;
-    processor.connect(destination);
-    windowAudioUnsubscribe = window.miranteDesktop.onWindowAudioChunk?.(enqueueWindowAudio) || null;
-    await context.resume();
-    try {
-      const result = await window.miranteDesktop.startWindowAudio(processId);
-      if (!result?.ok) throw new Error(result?.message || "Não foi possível capturar o áudio da janela.");
-      return destination.stream.getAudioTracks()[0] || null;
-    } catch (error) {
-      await stopWindowAudioBridge();
-      throw error;
-    }
-  }
-
-  async function startSystemAudioBridge() {
-    if (!window.miranteDesktop?.startSystemAudio) return null;
-    await stopWindowAudioBridge();
-    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextConstructor) throw new Error("Este app não possui suporte ao áudio filtrado do computador.");
-    const context = new AudioContextConstructor({ sampleRate: 48000 });
-    const destination = context.createMediaStreamDestination();
-    const processor = context.createScriptProcessor(4096, 2, 2);
-    windowAudioContext = context;
-    windowAudioDestination = destination;
-    windowAudioProcessor = processor;
-    processor.onaudioprocess = fillWindowAudio;
-    processor.connect(destination);
-    windowAudioUnsubscribe = window.miranteDesktop.onWindowAudioChunk?.(enqueueWindowAudio) || null;
-    await context.resume();
-    try {
-      const result = await window.miranteDesktop.startSystemAudio();
-      if (!result?.ok) throw new Error(result?.message || "Não foi possível capturar o áudio filtrado do computador.");
-      return destination.stream.getAudioTracks()[0] || null;
-    } catch (error) {
-      await stopWindowAudioBridge();
-      throw error;
     }
   }
 

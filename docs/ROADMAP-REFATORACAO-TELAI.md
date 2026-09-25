@@ -167,6 +167,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair atualização, inicialização com o sistema, aceleração gráfica e seletores de captura Electron para `frontend/src/features/shell/desktop-controller.js` em chunk lazy.
     - [x] Extrair transporte WebSocket, pares WebRTC, ICE, renegociação e chat do host para `frontend/src/features/broadcast/transport-controller.js` em chunk lazy.
     - [x] Extrair composição de vídeo, sobreposição de câmera e limpeza de tracks para `frontend/src/features/broadcast/composition-controller.js` em chunk lazy.
+    - [x] Extrair o bridge PCM de áudio do Electron, incluindo áudio de janela/sistema e liberação do `AudioContext`, para `frontend/src/features/broadcast/audio-bridge-controller.js` em chunk lazy.
     - [x] Extrair carregamento, visualização pública, seleção e multistream para `frontend/src/features/live/controller.js` em chunk lazy, preservando rotas e layout.
     - [x] Extrair operações de mensagens, anexos, edição, exclusão e busca para `frontend/src/features/groups/message-controller.js` em chunk lazy.
     - [x] Extrair descoberta de grupos, convites e solicitações de entrada para `frontend/src/features/groups/membership-controller.js` em chunk lazy.
