@@ -309,6 +309,8 @@
   let groupAuditLogSettingsLoad = null;
   let SettingsPage = null;
   let settingsPageLoad = null;
+  let MultistreamPage = null;
+  let multistreamPageLoad = null;
   let ProfileSettingsExtras = null;
   let profileSettingsExtrasLoad = null;
   let VoiceSettingsPanel = null;
@@ -422,6 +424,17 @@
   }
 
   $: if (view === "settings" && !SettingsPage) void loadSettingsPage();
+
+  function loadMultistreamPage() {
+    if (MultistreamPage || multistreamPageLoad) return multistreamPageLoad;
+    multistreamPageLoad = import("./features/live/MultistreamPage.svelte")
+      .then((module) => { MultistreamPage = module.default; })
+      .catch((error) => reportClientError("multistream_page_load_error", error))
+      .finally(() => { multistreamPageLoad = null; });
+    return multistreamPageLoad;
+  }
+
+  $: if (view === "multistream" && !MultistreamPage) void loadMultistreamPage();
 
   function loadProfileSettingsExtras() {
     if (ProfileSettingsExtras || profileSettingsExtrasLoad) return profileSettingsExtrasLoad;
@@ -6252,43 +6265,18 @@
           <div class="workspace-loading"><span></span><span></span><span></span></div>
         {/if}
       {:else if view === "multistream"}
-        <section class="multistream-page" aria-labelledby="multistream-title">
-          <header class="multistream-page-heading">
-            <div>
-              <p class="eyebrow">visualização simultânea</p>
-              <h1 id="multistream-title">Sua central de lives</h1>
-              <p class="muted">Acompanhe {selectedStreams.size} transmissões ao mesmo tempo, com cada vídeo em seu próprio espaço.</p>
-            </div>
-            <div class="multistream-page-actions">
-              <button class="outline rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={closeMultistream}><HugeiconsIcon icon={iconFor("arrowLeft")} size={16} strokeWidth={1.8} /> Voltar para ao vivo</button>
-              <button class="primary rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={() => selectView("live")}><HugeiconsIcon icon={iconFor("add")} size={16} strokeWidth={1.8} /> Adicionar live</button>
-            </div>
-          </header>
-          {#if selectedStreams.size >= 2}
-            <div class="multistream-page-toolbar">
-              <span><i></i> {selectedStreams.size} lives selecionadas</span>
-              <small>Você pode remover qualquer transmissão pelo botão × do cartão.</small>
-            </div>
-            <div class={`multistream-grid multistream-grid-dedicated multistream-grid-count-${Math.min(selectedStreams.size, 4)}`}>
-              {#each streams.filter((stream) => selectedStreams.has(stream.id)) as stream}
-                <article class="multistream-tile">
-                  <div class="multistream-tile-heading">
-                    <span><strong>{stream.channelName}</strong><small>{stream.title || "Transmissão ao vivo"}</small></span>
-                    <button class="outline" type="button" on:click={() => { toggleStream(stream.id); if (selectedStreams.size < 3) closeMultistream(); }} aria-label={`Remover ${stream.channelName} da grade`}>×</button>
-                  </div>
-                  <iframe src={streamViewerUrl(stream, true)} title={`Transmissão de ${stream.channelName}`} allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe>
-                </article>
-              {/each}
-            </div>
-          {:else}
-            <div class="multistream-empty panel">
-              <span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("sparkles")} size={24} strokeWidth={1.8} /></span>
-              <h2>Escolha pelo menos duas lives</h2>
-              <p class="muted">Volte para “Ao vivo”, selecione os canais que deseja acompanhar e abra a central novamente.</p>
-              <button class="primary rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={() => selectView("live")}>Escolher transmissões</button>
-            </div>
-          {/if}
-        </section>
+        {#if MultistreamPage}
+          <svelte:component
+            this={MultistreamPage}
+            {streams}
+            {selectedStreams}
+            onClose={closeMultistream}
+            onSelectLive={() => selectView("live")}
+            onToggleStream={toggleStream}
+          />
+        {:else}
+          <div class="workspace-loading"><span></span><span></span><span></span></div>
+        {/if}
        {:else}
         <LivePage
           {streams}
