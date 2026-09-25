@@ -22,6 +22,7 @@ import { createPostgresGroupRoomRepository } from "../server/repositories/group-
 import { createPostgresGroupPermissionRepository } from "../server/repositories/group-permissions.mjs";
 import { createPostgresGroupMemberRepository } from "../server/repositories/group-members.mjs";
 import { createPostgresStreamRepository } from "../server/repositories/streams.mjs";
+import { createPostgresGroupSettingsRepository } from "../server/repositories/group-settings.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -243,8 +244,13 @@ try {
   });
   await notificationSync.sync(ids.owner);
 
+  const groupSettings = createPostgresGroupSettingsRepository(client);
+  assert.equal((await groupSettings.findGroup(createdGroup.id)).ownerId, ids.owner);
+  assert.equal((await groupSettings.updateGroup(createdGroup.id, "PG Updated Group", `pg-updated-${ids.group}`)).name, "PG Updated Group");
+  assert.equal(await groupSettings.deleteGroup(createdGroup.id), true);
+
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "group-members", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "group-members", "group-settings", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

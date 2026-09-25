@@ -28,6 +28,7 @@ import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs
 import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
 import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
 import { createStreamRepository } from "./server/repositories/streams.mjs";
+import { createGroupSettingsRepository } from "./server/repositories/group-settings.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -803,6 +804,7 @@ const groupRoomRepository = createGroupRoomRepository(database, { createId: rand
 const groupPermissionRepository = createGroupPermissionRepository(database);
 const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
 const streamRepository = createStreamRepository(database, { createId: randomUUID });
+const groupSettingsRepository = createGroupSettingsRepository(database);
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2841,7 +2843,7 @@ async function handleHttpRequest(request, response) {
       }
       voiceRooms.delete(voiceRoomId);
     }
-    database.prepare("DELETE FROM groups WHERE id = ?").run(groupId);
+    groupSettingsRepository.deleteGroup(groupId);
     return json(response, 200, { ok: true, group: { id: group.id, name: group.name } });
   }
   const groupJoinRequestMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/join-requests$/);
@@ -2907,8 +2909,7 @@ async function handleHttpRequest(request, response) {
       if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para o grupo." });
       const duplicate = database.prepare("SELECT id FROM groups WHERE slug = ? AND id <> ?").get(slug, groupId);
       if (duplicate) return json(response, 409, { error: "Já existe um grupo com esse nome." });
-      database.prepare("UPDATE groups SET name = ?, slug = ? WHERE id = ?").run(name, slug, groupId);
-      return json(response, 200, { group: database.prepare("SELECT id, name, slug FROM groups WHERE id = ?").get(groupId) });
+      return json(response, 200, { group: groupSettingsRepository.updateGroup(groupId, name, slug) });
     }).catch(() => json(response, 400, { error: "Não foi possível salvar as configurações do grupo." }));
     return;
   }
