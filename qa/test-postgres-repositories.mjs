@@ -13,6 +13,7 @@ import { createPostgresAuthRepository } from "../server/repositories/auth.mjs";
 import { createPostgresOAuthRepository } from "../server/repositories/oauth.mjs";
 import { createPostgresAccountRepository } from "../server/repositories/accounts.mjs";
 import { createPostgresSocialRepository } from "../server/repositories/social.mjs";
+import { createPostgresGroupSetupRepository } from "../server/repositories/group-setup.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -94,6 +95,12 @@ try {
   await social.setFollowing(ids.owner, ids.member, false, now);
 
   const groups = createPostgresGroupAccessRepository(client);
+  const groupSetup = createPostgresGroupSetupRepository(client, { transactionClient: true });
+  await groupSetup.ensureDefaultGroupRooms(ids.group, ids.owner);
+  const defaultRoleId = await groupSetup.ensureDefaultGroupRoles(ids.group, ids.owner);
+  await groupSetup.ensureGroupRolePositions(ids.group);
+  assert.equal((await client.query("SELECT id FROM group_rooms WHERE group_id = $1 AND slug = 'geral'", [ids.group])).rowCount, 1);
+  assert.equal((await client.query("SELECT id FROM group_roles WHERE id = $1 AND is_default = 1", [defaultRoleId])).rowCount, 1);
   assert.equal(await groups.isGroupMember(ids.member, ids.group), true);
   assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canViewVoiceMembers: true });
   assert.equal(await groups.canGroupAction(ids.member, ids.group, "canChat"), true);
@@ -131,7 +138,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

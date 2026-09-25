@@ -19,6 +19,7 @@ import { createAuthRepository } from "./server/repositories/auth.mjs";
 import { createOAuthRepository } from "./server/repositories/oauth.mjs";
 import { createAccountRepository } from "./server/repositories/accounts.mjs";
 import { createSocialRepository } from "./server/repositories/social.mjs";
+import { createGroupSetupRepository } from "./server/repositories/group-setup.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -773,6 +774,7 @@ const notificationSyncService = createNotificationSyncService(database, {
 });
 const accountRepository = createAccountRepository(database, { legalPolicyVersion, createId: randomUUID });
 const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
+const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -1329,104 +1331,10 @@ function streamPublicPath(stream) {
   return group ? `/${group}/${channel}` : `/${channel}`;
 }
 
-function ensureDefaultGroupRooms(groupId, ownerId) {
-  const now = new Date().toISOString();
-  const insert = database.prepare("INSERT OR IGNORE INTO group_rooms (id, group_id, name, slug, kind, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
-  insert.run(randomUUID(), groupId, "Geral", "geral", "text", ownerId, now);
-}
-
-function migrateLegacyGroupMemberRoles(groupId, ownerId, defaultRoleId) {
-  const legacyMembers = database.prepare(`
-    SELECT group_members.user_id AS userId,
-      group_member_permissions.can_chat AS canChat,
-      group_member_permissions.can_stream AS canStream,
-      group_member_permissions.can_invite AS canInvite,
-      group_member_permissions.can_view_voice_members AS canViewVoiceMembers
-    FROM group_members
-    LEFT JOIN group_member_permissions
-      ON group_member_permissions.group_id = group_members.group_id
-      AND group_member_permissions.user_id = group_members.user_id
-    WHERE group_members.group_id = ?
-      AND group_members.role = 'member'
-      AND group_members.role_id IS NULL
-  `).all(groupId);
-  const roleCache = new Map();
-  for (const member of legacyMembers) {
-    const hasLegacyRow = [member.canChat, member.canStream, member.canInvite, member.canViewVoiceMembers]
-      .some((value) => value !== null && value !== undefined);
-    const permissions = {
-      canChat: hasLegacyRow ? member.canChat !== 0 : true,
-      canStream: hasLegacyRow ? member.canStream !== 0 : true,
-      canInvite: hasLegacyRow ? member.canInvite !== 0 : true,
-      canViewVoiceMembers: hasLegacyRow ? member.canViewVoiceMembers !== 0 : true,
-    };
-    const isDefault = Object.values(permissions).every(Boolean);
-    let roleId = defaultRoleId;
-    if (!isDefault) {
-      const signature = Object.values(permissions).map((value) => (value ? 1 : 0)).join("");
-      roleId = roleCache.get(signature);
-      if (!roleId) {
-        const existing = database.prepare(`
-          SELECT id FROM group_roles
-          WHERE group_id = ? AND can_chat = ? AND can_stream = ? AND can_invite = ?
-            AND can_view_voice_members = ? AND can_move_members = 0
-          LIMIT 1
-        `).get(groupId, permissions.canChat ? 1 : 0, permissions.canStream ? 1 : 0, permissions.canInvite ? 1 : 0, permissions.canViewVoiceMembers ? 1 : 0);
-        if (existing) {
-          roleId = existing.id;
-        } else {
-          const baseName = "Membro migrado";
-          let name = baseName;
-          let suffix = 2;
-          while (database.prepare("SELECT 1 FROM group_roles WHERE group_id = ? AND name = ? LIMIT 1").get(groupId, name)) name = `${baseName} ${suffix++}`;
-          roleId = randomUUID();
-          database.prepare(`
-            INSERT INTO group_roles (id, group_id, name, color, can_chat, can_stream, can_invite,
-              can_view_voice_members, can_move_members, is_default, created_by, created_at)
-            VALUES (?, ?, ?, '#5865f2', ?, ?, ?, ?, 0, 0, ?, ?)
-          `).run(roleId, groupId, name, permissions.canChat ? 1 : 0, permissions.canStream ? 1 : 0, permissions.canInvite ? 1 : 0, permissions.canViewVoiceMembers ? 1 : 0, ownerId, new Date().toISOString());
-        }
-        roleCache.set(signature, roleId);
-      }
-    }
-    database.prepare("UPDATE group_members SET role_id = ? WHERE group_id = ? AND user_id = ? AND role_id IS NULL").run(roleId, groupId, member.userId);
-  }
-}
-
-function ensureDefaultGroupRoles(groupId, ownerId) {
-  let role = database.prepare("SELECT id FROM group_roles WHERE group_id = ? AND is_default = 1 LIMIT 1").get(groupId);
-  if (!role) {
-    const roleId = randomUUID();
-    database.prepare("INSERT INTO group_roles (id, group_id, name, color, is_default, created_by, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)")
-      .run(roleId, groupId, "Membro", "#5865f2", ownerId, new Date().toISOString());
-    role = { id: roleId };
-  }
-  migrateLegacyGroupMemberRoles(groupId, ownerId, role.id);
-  return role.id;
-}
-
-function ensureGroupRolePositions(groupId) {
-  const roles = database.prepare(`
-    SELECT id, sort_order AS sortOrder, is_default AS isDefault, name
-    FROM group_roles WHERE group_id = ?
-    ORDER BY is_default DESC, name COLLATE NOCASE
-  `).all(groupId);
-  if (roles.length <= 1 || roles.some((role) => Number(role.sortOrder) !== 0)) return;
-  database.exec("BEGIN");
-  try {
-    const update = database.prepare("UPDATE group_roles SET sort_order = ? WHERE id = ? AND group_id = ?");
-    roles.forEach((role, index) => update.run(index, role.id, groupId));
-    database.exec("COMMIT");
-  } catch (error) {
-    try { database.exec("ROLLBACK"); } catch {}
-    throw error;
-  }
-}
-
 for (const group of database.prepare("SELECT id, owner_id AS ownerId FROM groups").all()) {
-  ensureDefaultGroupRooms(group.id, group.ownerId);
-  ensureDefaultGroupRoles(group.id, group.ownerId);
-  ensureGroupRolePositions(group.id);
+  groupSetupRepository.ensureDefaultGroupRooms(group.id, group.ownerId);
+  groupSetupRepository.ensureDefaultGroupRoles(group.id, group.ownerId);
+  groupSetupRepository.ensureGroupRolePositions(group.id);
 }
 
 function presenceKey(groupId, userId) { return `${groupId}:${userId}`; }
@@ -2906,8 +2814,8 @@ async function handleHttpRequest(request, response) {
         database.exec("BEGIN");
         database.prepare("INSERT INTO groups (id, name, slug, owner_id, created_at) VALUES (?, ?, ?, ?, ?)").run(group.id, name, slug, user.id, new Date().toISOString());
         database.prepare("INSERT INTO group_members (group_id, user_id, role, created_at) VALUES (?, ?, 'owner', ?)").run(group.id, user.id, new Date().toISOString());
-        ensureDefaultGroupRooms(group.id, user.id);
-        ensureDefaultGroupRoles(group.id, user.id);
+        groupSetupRepository.ensureDefaultGroupRooms(group.id, user.id);
+        groupSetupRepository.ensureDefaultGroupRoles(group.id, user.id);
         database.exec("COMMIT");
       } catch (error) {
         try { database.exec("ROLLBACK"); } catch {}
@@ -3013,7 +2921,7 @@ async function handleHttpRequest(request, response) {
       try {
         database.exec("BEGIN");
         if (status === "approved") {
-          const roleId = ensureDefaultGroupRoles(groupId, group.ownerId);
+          const roleId = groupSetupRepository.ensureDefaultGroupRoles(groupId, group.ownerId);
           database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, role_id, created_at) VALUES (?, ?, 'member', ?, ?)")
             .run(groupId, joinRequest.userId, roleId, now);
           ensureGroupPermissionRow(groupId, joinRequest.userId);
@@ -3057,7 +2965,7 @@ async function handleHttpRequest(request, response) {
     if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
     const group = database.prepare("SELECT id, name, slug, owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    ensureDefaultGroupRoles(groupId, group.ownerId);
+    groupSetupRepository.ensureDefaultGroupRoles(groupId, group.ownerId);
     const roles = database.prepare(`
       SELECT id, name, color, can_chat AS canChat, can_stream AS canStream,
         can_invite AS canInvite, can_view_voice_members AS canViewVoiceMembers,
@@ -3690,7 +3598,7 @@ async function handleHttpRequest(request, response) {
     }
     try {
       database.exec("BEGIN");
-      const roleId = ensureDefaultGroupRoles(invite.groupId, database.prepare("SELECT owner_id FROM groups WHERE id = ?").get(invite.groupId)?.owner_id);
+      const roleId = groupSetupRepository.ensureDefaultGroupRoles(invite.groupId, database.prepare("SELECT owner_id FROM groups WHERE id = ?").get(invite.groupId)?.owner_id);
       database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, role_id, created_at) VALUES (?, ?, 'member', ?, ?)").run(invite.groupId, user.id, roleId, new Date().toISOString());
       ensureGroupPermissionRow(invite.groupId, user.id);
       database.prepare("UPDATE group_user_invites SET status = 'accepted' WHERE id = ?").run(inviteId);
@@ -3710,7 +3618,7 @@ async function handleHttpRequest(request, response) {
     database.exec("BEGIN");
     try {
       const ownerId = database.prepare("SELECT owner_id AS ownerId FROM groups WHERE id = ?").get(invite.group_id)?.ownerId;
-      const roleId = ensureDefaultGroupRoles(invite.group_id, ownerId);
+      const roleId = groupSetupRepository.ensureDefaultGroupRoles(invite.group_id, ownerId);
       const joined = database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, role_id, created_at) VALUES (?, ?, 'member', ?, ?)").run(invite.group_id, user.id, roleId, new Date().toISOString());
       if (joined.changes) database.prepare("UPDATE group_invites SET uses = uses + 1 WHERE token_hash = ?").run(hashSessionToken(redeemMatch[1]));
       database.exec("COMMIT");
