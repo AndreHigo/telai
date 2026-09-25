@@ -85,11 +85,15 @@ try {
   assert.equal(await userProfiles.existsById(ids.owner), true);
   assert.equal((await userProfiles.updateProfile(ids.invitee, { displayName: "PG Invitee Updated", avatarData: null }))?.displayName, "PG Invitee Updated");
 
-  const auth = createPostgresAuthRepository(client, { legalPolicyVersion: "test-v1" });
+  const auth = createPostgresAuthRepository(client, { legalPolicyVersion: "test-v1", transactionClient: true });
   await auth.recordLegalConsents(ids.owner, now);
   await auth.recordLegalConsents(ids.owner, now);
   assert.equal((await auth.legalConsentStatus(ids.owner)).required, false);
   assert.equal((await auth.userWithLinkedAccounts({ id: ids.owner, username: "pg-owner", displayName: "PG Owner", avatarData: null })).linkedAccounts.length, 0);
+  const registeredId = randomUUID();
+  await auth.createUserWithConsents({ id: registeredId, username: `pg-register-${registeredId.slice(0, 8)}`, displayName: "PG Registered", passwordHash: "test-password", createdAt: now, createUser: userProfiles.createUser });
+  assert.equal((await userProfiles.findCredentialsByUsername(`pg-register-${registeredId.slice(0, 8)}`))?.id, registeredId);
+  assert.equal((await auth.legalConsentStatus(registeredId)).required, false);
 
   const oauth = createPostgresOAuthRepository(client, {
     slugFor: (value) => String(value || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32),

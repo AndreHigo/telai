@@ -25,22 +25,52 @@ export function createAuthRepository(database, {
     };
   }
 
-  function recordLegalConsents(userId, acceptedAt = new Date().toISOString()) {
+  function recordLegalConsents(userId, acceptedAt = new Date().toISOString(), targetDatabase = database) {
     for (const consentType of ["terms", "privacy"]) {
-      database.prepare(`
+      targetDatabase.prepare(`
         INSERT OR IGNORE INTO user_consents (id, user_id, consent_type, policy_version, accepted_at)
         VALUES (?, ?, ?, ?, ?)
       `).run(createId(), userId, consentType, legalPolicyVersion, acceptedAt);
     }
   }
 
-  return { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents };
+  function createUserWithConsents({ id, username, displayName, passwordHash, createdAt, createUser }) {
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      const createdUser = createUser({ id, username, displayName, passwordHash, createdAt, database });
+      recordLegalConsents(id, createdAt, database);
+      database.exec("COMMIT");
+      return createdUser;
+    } catch (error) {
+      try { database.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
+
+  return { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents, createUserWithConsents };
+}
+
+async function withPostgresTransaction(database, callback, useProvidedClient = false) {
+  const client = useProvidedClient ? database : (typeof database.connect === "function" ? await database.connect() : database);
+  const ownsClient = client !== database;
+  try {
+    if (!useProvidedClient) await client.query("BEGIN");
+    const result = await callback(client);
+    if (!useProvidedClient) await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    if (!useProvidedClient) await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    if (ownsClient) client.release();
+  }
 }
 
 export function createPostgresAuthRepository(database, {
   compactAvatarData = (value) => value,
   legalPolicyVersion,
   createId = randomUUID,
+  transactionClient = false,
 } = {}) {
   async function userWithLinkedAccounts(user) {
     if (!user) return null;
@@ -70,9 +100,9 @@ export function createPostgresAuthRepository(database, {
     };
   }
 
-  async function recordLegalConsents(userId, acceptedAt = new Date().toISOString()) {
+  async function recordLegalConsents(userId, acceptedAt = new Date().toISOString(), targetDatabase = database) {
     for (const consentType of ["terms", "privacy"]) {
-      await database.query(`
+      await targetDatabase.query(`
         INSERT INTO user_consents (id, user_id, consent_type, policy_version, accepted_at)
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (user_id, consent_type, policy_version) DO NOTHING
@@ -80,5 +110,13 @@ export function createPostgresAuthRepository(database, {
     }
   }
 
-  return { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents };
+  async function createUserWithConsents({ id, username, displayName, passwordHash, createdAt, createUser }) {
+    return withPostgresTransaction(database, async (client) => {
+      const createdUser = await createUser({ id, username, displayName, passwordHash, createdAt, database: client });
+      await recordLegalConsents(id, createdAt, client);
+      return createdUser;
+    }, transactionClient);
+  }
+
+  return { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents, createUserWithConsents };
 }

@@ -6,8 +6,8 @@ export function createUserProfileRepository(database) {
     `).get(username) || null;
   }
 
-  function createUser({ id, username, displayName, passwordHash, createdAt }) {
-    database.prepare("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)")
+  function createUser({ id, username, displayName, passwordHash, createdAt, database: targetDatabase = database }) {
+    targetDatabase.prepare("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)")
       .run(id, username, displayName, passwordHash, createdAt);
     return { id, username, displayName, avatarData: null };
   }
@@ -35,8 +35,8 @@ export function createPostgresUserProfileRepository(database) {
     return result.rows[0] || null;
   }
 
-  async function createUser({ id, username, displayName, passwordHash, createdAt }) {
-    await database.query("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES ($1, $2, $3, $4, $5)", [id, username, displayName, passwordHash, createdAt]);
+  async function createUser({ id, username, displayName, passwordHash, createdAt, database: targetDatabase = database }) {
+    await targetDatabase.query("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES ($1, $2, $3, $4, $5)", [id, username, displayName, passwordHash, createdAt]);
     return { id, username, displayName, avatarData: null };
   }
 

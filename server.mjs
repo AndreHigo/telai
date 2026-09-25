@@ -770,7 +770,7 @@ const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupActio
 const directConversationRepository = createDirectConversationRepository(database, { compactUserSummary, createId: randomUUID });
 const { directConversationForUser, directConversationPayload } = directConversationRepository;
 const sessionRepository = createSessionRepository(database, { hashSessionToken });
-const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents } = createAuthRepository(database, {
+const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents, createUserWithConsents } = createAuthRepository(database, {
   compactAvatarData,
   legalPolicyVersion,
   createId: randomUUID,
@@ -2460,12 +2460,8 @@ async function handleHttpRequest(request, response) {
       const user = { id: randomUUID(), username, displayName };
       try {
         const now = new Date().toISOString();
-        database.exec("BEGIN IMMEDIATE");
-        userProfileRepository.createUser({ id: user.id, username: user.username, displayName: user.displayName, passwordHash: hashPassword(password), createdAt: now });
-        recordLegalConsents(user.id, now);
-        database.exec("COMMIT");
+        createUserWithConsents({ id: user.id, username: user.username, displayName: user.displayName, passwordHash: hashPassword(password), createdAt: now, createUser: userProfileRepository.createUser });
       } catch (error) {
-        try { database.exec("ROLLBACK"); } catch {}
         if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Esse nome de usuário já está em uso." });
         throw error;
       }
