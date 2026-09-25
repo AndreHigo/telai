@@ -105,6 +105,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair busca social, amizades, solicitações e follows para `server/http/social-routes.mjs`.
 - [x] Extrair listagem, leitura e sincronização de notificações para `server/http/notification-routes.mjs`.
 - [x] Extrair criação, leitura e envio de conversas diretas para `server/http/direct-routes.mjs`.
+- [x] Extrair convites de membro e resgate de convites para `server/http/member-invite-routes.mjs`.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
