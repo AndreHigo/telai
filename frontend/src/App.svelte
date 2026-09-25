@@ -41,6 +41,7 @@
   import { createVoiceReconnectStorage } from "./services/media/voice-reconnect-storage.js";
   import { createVoiceQualityController } from "./features/voice/quality-controller.js";
   import { createVoiceSignalingController } from "./features/voice/signaling-controller.js";
+  import { createVoicePeerHealthController } from "./features/voice/peer-health-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
   import {
@@ -267,8 +268,6 @@
   let voicePeerRecoveryInFlight = new Set();
   let voicePeerNegotiationInFlight = new Set();
   let voicePeerAudioHealth = new Map();
-  let voicePeerHealthTimer = null;
-  let voicePeerHealthInFlight = false;
   let voicePeerRelayRecoveryAttempted = new Set();
   let voicePendingCandidates = new Map();
   let voicePendingSignals = new Map();
@@ -608,6 +607,16 @@
     getPeerConnections: () => voicePeerConnections,
     reportClientError,
     pollIntervalMs: VOICE_QUALITY_POLL_MS,
+  });
+  const voicePeerHealthController = createVoicePeerHealthController({
+    getPeerConnections: () => voicePeerConnections,
+    getPeerAudioHealth: () => voicePeerAudioHealth,
+    hasTurnServer: () => voiceHasTurnServer(),
+    recoverPeer: (participantId, peer, options) => recoverVoicePeer(participantId, peer, options),
+    markRelayRecoveryAttempted: (participantId) => voicePeerRelayRecoveryAttempted.add(participantId),
+    reportClientError,
+    graceMs: VOICE_PEER_AUDIO_GRACE_MS,
+    pollIntervalMs: VOICE_PEER_HEALTH_POLL_MS,
   });
   let voiceDevicesBusy = false;
   let voiceDevicesError = "";
@@ -3016,8 +3025,7 @@
   }
 
   function stopVoicePeerHealthTimer() {
-    if (voicePeerHealthTimer) window.clearInterval(voicePeerHealthTimer);
-    voicePeerHealthTimer = null;
+    voicePeerHealthController.stop();
     voiceQualityController.stop();
   }
 
@@ -3033,54 +3041,8 @@
   }
 
   function ensureVoicePeerHealthTimer() {
-    if (!voicePeerHealthTimer) voicePeerHealthTimer = window.setInterval(checkVoicePeerAudioHealth, VOICE_PEER_HEALTH_POLL_MS);
+    voicePeerHealthController.start();
     voiceQualityController.start();
-  }
-
-  async function checkVoicePeerAudioHealth() {
-    if (voicePeerHealthInFlight || !voicePeerAudioHealth.size) return;
-    voicePeerHealthInFlight = true;
-    try {
-      const now = Date.now();
-      for (const [participantId, peer] of voicePeerConnections) {
-        if (["connected", "completed"].includes(peer.connectionState) && !voicePeerAudioHealth.has(participantId)) {
-          voicePeerAudioHealth.set(participantId, {
-            firstTrackAt: now,
-            lastProgressAt: now,
-            lastBytes: 0,
-            recoveryAttempted: false,
-          });
-          ensureVoicePeerHealthTimer();
-        }
-        const health = voicePeerAudioHealth.get(participantId);
-        if (!health || health.recoveryAttempted || !["connected", "completed"].includes(peer.connectionState) || typeof peer.getStats !== "function") continue;
-        const stats = await peer.getStats();
-        let receivedProgress = 0;
-        for (const report of stats.values()) {
-          if (report.type !== "inbound-rtp" || (report.kind !== "audio" && report.mediaType !== "audio")) continue;
-          receivedProgress = Math.max(
-            receivedProgress,
-            Number(report.bytesReceived || 0),
-            Number(report.packetsReceived || 0),
-          );
-        }
-        if (receivedProgress > health.lastBytes) {
-          health.lastBytes = receivedProgress;
-          health.lastProgressAt = now;
-          continue;
-        }
-        if (now - health.firstTrackAt >= VOICE_PEER_AUDIO_GRACE_MS && now - health.lastProgressAt >= VOICE_PEER_AUDIO_GRACE_MS) {
-          health.recoveryAttempted = true;
-          voicePeerRelayRecoveryAttempted.add(participantId);
-          reportClientError("voice_peer_audio_stalled", new Error("O par de voz conectou, mas não está recebendo áudio."), { participantId, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, forceRelay: voiceHasTurnServer() });
-          void recoverVoicePeer(participantId, peer, { forceRelay: voiceHasTurnServer() });
-        }
-      }
-    } catch (error) {
-      reportClientError("voice_peer_audio_health_error", error, { voicePeers: voicePeerConnections.size });
-    } finally {
-      voicePeerHealthInFlight = false;
-    }
   }
 
   function voicePeerShouldInitiate(participantId) {
