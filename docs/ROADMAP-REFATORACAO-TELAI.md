@@ -108,6 +108,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair criação, leitura e envio de conversas diretas para `server/http/direct-routes.mjs`.
 - [x] Extrair convites de membro e resgate de convites para `server/http/member-invite-routes.mjs`.
 - [x] Extrair manutenção e API administrativa para `server/http/admin-routes.mjs`, mantendo a página `/admin` no servidor principal.
+- [x] Extrair autenticação de operador, consultas paginadas e visão do painel para `server/admin/runtime.mjs`.
 - [x] Extrair sessão, consentimento, cadastro, login, logout e operações de conta para `server/http/auth-routes.mjs`, mantendo OAuth no gateway.
 - [x] Extrair o runtime de sessão, cookies, rate limit de login, PKCE e identidade OAuth para `server/auth/runtime.mjs`.
 - [x] Extrair métricas locais e diagnósticos de cliente para `server/http/observability-routes.mjs`.
