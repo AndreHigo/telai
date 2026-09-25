@@ -50,6 +50,7 @@
   import { createVoiceSignalingController } from "./features/voice/signaling-controller.js";
   import { createVoicePeerHealthController } from "./features/voice/peer-health-controller.js";
   import { createVoicePeerRecoveryController } from "./features/voice/peer-recovery-controller.js";
+  import { createVoiceSoundController, readSoundPreferences, SOUND_PREFERENCE_DEFAULTS } from "./features/voice/sound-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
@@ -425,8 +426,6 @@
   }
 
   $: if (settingsSection === "voice" && !VoiceSettingsPanel) void loadVoiceSettingsPanel();
-  let voiceSoundContext = null;
-  let pendingNotificationSound = false;
   let voiceActivityTimer;
   // Para o microfone local, a borda acompanha a janela de áudio do analisador.
   // A saída usa uma cauda curta para não piscar com ruído e o tempo mínimo
@@ -448,16 +447,7 @@
   const VOICE_PEER_HEALTH_POLL_MS = 2_000;
   const VOICE_QUALITY_POLL_MS = 10_000;
   const VOICE_REMOTE_PLAYBACK_RETRY_MS = 1_000;
-  const soundPreferenceDefaults = { enabled: true, volume: 0.55, enter: true, leave: true, mute: true, unmute: true, message: true, notification: true };
-  function readSoundPreferences() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem("mirante-sound-preferences") || "null");
-      if (!parsed || typeof parsed !== "object") throw new Error("invalid sound preferences");
-      return { ...soundPreferenceDefaults, ...parsed, volume: Math.min(1, Math.max(0, Number(parsed.volume ?? soundPreferenceDefaults.volume))) };
-    } catch {
-      return { ...soundPreferenceDefaults, enabled: localStorage.getItem("mirante-voice-sounds") !== "false" };
-    }
-  }
+  const soundPreferenceDefaults = SOUND_PREFERENCE_DEFAULTS;
   let soundPreferences = readSoundPreferences();
   let voiceSoundEffects = soundPreferences.enabled;
   class VoicePreferenceMap extends Map {
@@ -907,6 +897,21 @@
   }
 
   const api = createApiClient({ reportError: reportClientError });
+  const voiceSoundController = createVoiceSoundController({
+    getState: () => ({ soundPreferences, voiceDeafened, voiceOutputVolume }),
+    setState: (next) => {
+      if ("soundPreferences" in next) soundPreferences = next.soundPreferences;
+      if ("voiceSoundEffects" in next) voiceSoundEffects = next.voiceSoundEffects;
+    },
+  });
+  const {
+    getAudioContext: getVoiceSoundContext,
+    getCurrentAudioContext,
+    soundEnabled,
+    updateSoundPreference,
+    playVoiceSound,
+    previewVoiceSound,
+  } = voiceSoundController;
   const groupRoomReadController = createGroupRoomReadController({
     api,
     getSelectedGroupId: () => selectedGroupId,
@@ -2350,7 +2355,7 @@
     voiceTestAnalyser = null;
     stopVoiceInputStream(voiceTestStream);
     voiceTestStream = null;
-    if (voiceTestContext && voiceTestContext !== voiceSoundContext) void voiceTestContext.close().catch(() => {});
+    if (voiceTestContext && voiceTestContext !== getCurrentAudioContext()) void voiceTestContext.close().catch(() => {});
     voiceTestContext = null;
     voiceTestRunning = false;
     if (reset) {
@@ -3256,19 +3261,7 @@
 
   function handleVoicePlaybackInteraction() {
     if (voiceRemoteAudio.size) resumeVoiceRemoteAudio();
-    if (pendingNotificationSound) {
-      const context = getVoiceSoundContext();
-      if (context?.resume) {
-        void context.resume().then(() => {
-          if (pendingNotificationSound && soundEnabled("notification")) {
-            pendingNotificationSound = false;
-            playVoiceSound("notification");
-          } else if (!soundEnabled("notification")) {
-            pendingNotificationSound = false;
-          }
-        }).catch(() => {});
-      }
-    }
+    voiceSoundController.resumePendingNotificationSound();
   }
 
   function syncVoiceParticipantSpeakingState(participantId, speaking) {
@@ -3347,15 +3340,6 @@
     return voicePeerRecoveryController.recover(...args);
   }
 
-  function getVoiceSoundContext() {
-    if (typeof window === "undefined") return null;
-    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextConstructor) return null;
-    voiceSoundContext ||= new AudioContextConstructor();
-    if (voiceSoundContext.state === "suspended") void voiceSoundContext.resume().catch(() => {});
-    return voiceSoundContext;
-  }
-
   function ensureVoiceActivityTimer() {
     if (!voiceActivityTimer) voiceActivityTimer = window.setInterval(pollVoiceActivity, VOICE_ACTIVITY_POLL_MS);
   }
@@ -3366,53 +3350,6 @@
 
   function clearVoiceSpeakingPublishTimer() {
     voiceSpeakingPublisher.reset();
-  }
-
-  function updateSoundPreference(key, value) {
-    const next = { ...soundPreferences, [key]: value };
-    soundPreferences = next;
-    voiceSoundEffects = Boolean(next.enabled);
-    localStorage.setItem("mirante-sound-preferences", JSON.stringify(next));
-    localStorage.setItem("mirante-voice-sounds", String(next.enabled));
-  }
-
-  function soundEnabled(kind) {
-    return Boolean(soundPreferences.enabled && soundPreferences[kind] !== false && !voiceDeafened);
-  }
-
-  function playVoiceSound(kind) {
-    if (!soundEnabled(kind)) return;
-    const context = getVoiceSoundContext();
-    if (!context) return;
-    if (kind === "notification" && context.state === "suspended") {
-      pendingNotificationSound = true;
-      return;
-    }
-    if (kind === "notification") pendingNotificationSound = false;
-    const patterns = {
-      enter: [{ frequency: 520, duration: 0.1, offset: 0 }, { frequency: 740, duration: 0.13, offset: 0.08 }],
-      leave: [{ frequency: 660, duration: 0.1, offset: 0 }, { frequency: 440, duration: 0.15, offset: 0.08 }],
-      mute: [{ frequency: 300, duration: 0.12, offset: 0 }],
-      unmute: [{ frequency: 560, duration: 0.12, offset: 0 }],
-      deafen: [{ frequency: 260, duration: 0.12, offset: 0 }],
-      undeafen: [{ frequency: 520, duration: 0.12, offset: 0 }],
-      message: [{ frequency: 880, duration: 0.08, offset: 0 }, { frequency: 1040, duration: 0.1, offset: 0.08 }],
-      notification: [{ frequency: 740, duration: 0.09, offset: 0 }, { frequency: 988, duration: 0.12, offset: 0.09 }],
-    };
-    const now = context.currentTime;
-    for (const tone of patterns[kind] || []) {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(tone.frequency, now + tone.offset);
-      oscillator.frequency.exponentialRampToValueAtTime(Math.max(180, tone.frequency * 0.92), now + tone.offset + tone.duration);
-      gain.gain.setValueAtTime(0.0001, now + tone.offset);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, 0.055 * soundPreferences.volume * voiceOutputVolume), now + tone.offset + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + tone.offset + tone.duration);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(now + tone.offset);
-      oscillator.stop(now + tone.offset + tone.duration + 0.02);
-    }
   }
 
   async function attachVoiceActivityStream(participantId, stream) {
@@ -3636,21 +3573,6 @@
 
   function handleSoundVolumeChange(event) {
     updateSoundPreference("volume", Math.min(1, Math.max(0, Number(event.currentTarget.value) / 100)));
-  }
-
-  function previewVoiceSound(kind) {
-    const previous = soundPreferences;
-    soundPreferences = { ...soundPreferences, enabled: true, [kind]: true };
-    const context = getVoiceSoundContext();
-    if (kind === "notification" && context?.state === "suspended" && context.resume) {
-      void context.resume().then(() => {
-        const previewPreferences = soundPreferences;
-        soundPreferences = { ...soundPreferences, enabled: true, [kind]: true };
-        playVoiceSound(kind);
-        soundPreferences = previewPreferences;
-      }).catch(() => {});
-    } else playVoiceSound(kind);
-    soundPreferences = previous;
   }
 
   function handleVoiceDragStart(event, participant) {

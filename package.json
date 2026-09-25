@@ -26,6 +26,7 @@
     "test:events": "node qa/e2e-events.cjs",
     "test:events-ui": "electron --no-sandbox qa/e2e-events-ui.cjs",
     "test:voice-activity": "node qa/test-voice-activity.cjs",
+    "test:voice-sound-controller": "node qa/test-voice-sound-controller.mjs",
     "test:rtc-quality": "node qa/test-rtc-quality.mjs",
     "test:voice-quality-controller": "node qa/test-voice-quality-controller.mjs",
     "test:voice-reconnect-storage": "node qa/test-voice-reconnect-storage.mjs",
