@@ -6,28 +6,38 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash, creat
 import { DatabaseSync } from "node:sqlite";
 import { WebSocketServer } from "ws";
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
+import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
-const defaultPort = Number(process.env.PORT || 8787);
-const defaultHost = process.env.HOST || "127.0.0.1";
-const mediaMode = process.env.MEDIA_MODE === "relay" ? "relay" : "p2p";
 // O banco e a autenticação pertencem ao Telai; não dependemos de Supabase.
-const requireLogin = process.env.REQUIRE_LOGIN !== "false";
 const runtimeStartedAt = Date.now();
 // Uma atualização/F5 fecha o WebSocket antigo, mas o navegador não consegue
 // preservar a captura. Mantemos a sala viva por alguns segundos para o host
 // escolher "Retomar transmissão" e reconectar a mesma live.
-const hostReconnectGraceMs = Math.max(15_000, Number(process.env.HOST_RECONNECT_GRACE_MS || 45_000));
 // Um restart perde o mapa de salas, mas não deve encerrar imediatamente uma
 // live que ainda pode ser retomada pelo host. Depois desta janela, uma linha
 // antiga sem sessão runtime pode ser limpa com segurança.
-const streamOrphanGraceMs = Math.max(60_000, Number(process.env.MIRANTE_STREAM_ORPHAN_GRACE_MS || 120_000));
-const dataDir = path.join(__dirname, "data");
-const databasePath = process.env.MIRANTE_DB_PATH || path.join(dataDir, "mirante-tv.sqlite");
 const packageMetadata = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+const {
+  defaultPort,
+  defaultHost,
+  mediaMode,
+  requireLogin,
+  hostReconnectGraceMs,
+  streamOrphanGraceMs,
+  dataDir,
+  databasePath,
+  legalPolicyVersion,
+  desktopArtifactName,
+  desktopArtifactPath,
+  desktopReleaseDir,
+  logLevels,
+  logLevel,
+  logPath,
+} = createRuntimeConfig({ rootDir: __dirname, packageVersion: packageMetadata.version });
 const siteAdminUserIds = new Set(String(process.env.TELAI_ADMIN_USER_IDS || "")
   .split(",").map((value) => value.trim()).filter(Boolean));
 const siteAdminUsernames = new Set(String(process.env.TELAI_ADMIN_USERNAMES || "")
@@ -35,14 +45,6 @@ const siteAdminUsernames = new Set(String(process.env.TELAI_ADMIN_USERNAMES || "
 const maintenanceToken = String(process.env.TELAI_MAINTENANCE_TOKEN || process.env.MIRANTE_MAINTENANCE_TOKEN || "").trim();
 // A versão identifica exatamente qual texto jurídico foi aceito pelo titular.
 // Ela pode ser trocada no ambiente quando uma nova política entrar em vigor.
-const legalPolicyVersion = String(process.env.TELAI_LEGAL_POLICY_VERSION || "2026-09-08").trim();
-const desktopArtifactName = process.env.MIRANTE_DESKTOP_ARTIFACT_NAME || `Telai-Setup-${packageMetadata.version}.exe`;
-const desktopArtifactPath = process.env.MIRANTE_DESKTOP_ARTIFACT_PATH || path.join(__dirname, "release", desktopArtifactName);
-const desktopReleaseDir = path.join(__dirname, "release");
-const configuredLogLevel = String(process.env.MIRANTE_LOG_LEVEL || (process.env.MIRANTE_DEBUG === "1" ? "debug" : "info")).trim().toLowerCase();
-const logLevels = { error: 0, warn: 1, info: 2, debug: 3 };
-const logLevel = Object.hasOwn(logLevels, configuredLogLevel) ? configuredLogLevel : "info";
-const logPath = String(process.env.MIRANTE_LOG_PATH || "").trim();
 let logFileStream = null;
 if (logPath) {
   try {
