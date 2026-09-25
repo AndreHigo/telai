@@ -119,6 +119,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair resolução, listagem, abertura, encerramento e follows de streams para `server/http/stream-routes.mjs`, mantendo salas runtime e WebRTC no gateway.
 - [x] Extrair exclusão de grupos, overview e presença para `server/http/group-runtime-routes.mjs`, mantendo o runtime de voz no gateway.
 - [x] Extrair início, callback e vínculo OAuth para `server/http/oauth-routes.mjs`, mantendo a sessão local e os provedores existentes.
+- [x] Extrair páginas SEO, legais, download, updates e fallback de arquivos para `server/http/static-routes.mjs`.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
