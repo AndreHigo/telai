@@ -1139,19 +1139,17 @@
         scrollGroupMessagesToBottom,
         playVoiceSound,
         setNotice: (message) => { notice = message; },
+        getUser: () => user,
+        getIsViewer: () => isViewer,
+        subscribeGroup: (groupId) => ensureGroupEventGateway().subscribeGroup(groupId),
+        getSelectedRoomId: () => selectedRoomId,
+        markGroupRoomRead: (room) => markGroupRoomRead(room),
       }));
     }
     return groupControllerPromise;
   }
   async function loadGroups(...args) { return (await getGroupController()).loadGroups(...args); }
-  async function loadGroup(...args) {
-    const result = await (await getGroupController()).loadGroup(...args);
-    const groupId = args[0];
-    if (groupId && user && !isViewer) ensureGroupEventGateway().subscribeGroup(groupId);
-    const room = rooms.find((candidate) => candidate.id === selectedRoomId && candidate.kind === "text");
-    if (room && result?.group?.id === groupId) void markGroupRoomRead(room);
-    return result;
-  }
+  async function loadGroup(...args) { return (await getGroupController()).loadGroup(...args); }
 
   let groupMembershipControllerPromise = null;
   function getGroupMembershipController() {

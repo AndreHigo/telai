@@ -29,6 +29,7 @@
     "test:voice-quality-controller": "node qa/test-voice-quality-controller.mjs",
     "test:voice-reconnect-storage": "node qa/test-voice-reconnect-storage.mjs",
     "test:media-contract": "node qa/test-media-contract.mjs",
+    "test:group-controller": "node qa/test-group-controller.mjs",
     "test:voice-signaling-controller": "node qa/test-voice-signaling-controller.mjs",
     "test:voice-peer-health-controller": "node qa/test-voice-peer-health-controller.mjs",
     "test:voice-peer-recovery-controller": "node qa/test-voice-peer-recovery-controller.mjs",

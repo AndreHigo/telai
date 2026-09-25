@@ -7,6 +7,11 @@ export function createGroupController({
   scrollGroupMessagesToBottom,
   playVoiceSound,
   setNotice,
+  getUser,
+  getIsViewer,
+  subscribeGroup,
+  getSelectedRoomId,
+  markGroupRoomRead,
 }) {
   async function loadGroups() {
     const result = await api("/api/groups");
@@ -62,6 +67,11 @@ export function createGroupController({
       if (switchingGroup && current.broadcastState === "live") {
         setNotice("Sua live continua ativa. Use “Voltar à live” no topo ou encerre-a antes de iniciar outra.");
       }
+    }
+    if (loadedResult?.group?.id === groupId) {
+      if (getUser?.() && !getIsViewer?.()) subscribeGroup?.(groupId);
+      const room = (loadedResult.rooms || []).find((candidate) => candidate.id === getSelectedRoomId?.() && candidate.kind === "text");
+      if (room) void markGroupRoomRead?.(room);
     }
     return loadedResult;
   }
