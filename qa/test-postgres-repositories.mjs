@@ -21,6 +21,7 @@ import { createPostgresGroupRoleRepository } from "../server/repositories/group-
 import { createPostgresGroupRoomRepository } from "../server/repositories/group-rooms.mjs";
 import { createPostgresGroupPermissionRepository } from "../server/repositories/group-permissions.mjs";
 import { createPostgresGroupMemberRepository } from "../server/repositories/group-members.mjs";
+import { createPostgresStreamRepository } from "../server/repositories/streams.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -159,6 +160,17 @@ try {
   assert.equal(await groupMembers.leaveGroup(createdGroup.id, ids.member), true);
   assert.equal((await groupMembers.find(createdGroup.id, ids.member)), null);
 
+  const streams = createPostgresStreamRepository(client, { createId: randomUUID, transactionClient: true });
+  const createdStream = await streams.createStream({ roomName: `pg-stream-${ids.group.slice(0, 8)}`, visibility: "public", groupId: null, roomId: null, voiceRoomId: null, title: "Stream PostgreSQL", channelName: "PG Owner", channelAvatarData: null, channelGames: [], channelUsername: ownerUsername, createdBy: ids.owner, groupSlug: "", isLive: () => false, startedAt: now });
+  assert.equal(createdStream.kind, "created");
+  assert.equal((await streams.listPublicStreams()).some((stream) => stream.id === createdStream.stream.id), true);
+  assert.equal((await streams.findById(createdStream.stream.id)).createdBy, ids.owner);
+  await streams.insertChatMessage({ id: randomUUID(), channelUserId: ids.owner, streamId: createdStream.stream.id, userId: ids.member, body: "Chat PG", displayName: "PG Member", username: memberUsername, createdAt: now });
+  assert.equal((await streams.loadChatForRoom(createdStream.stream.roomName))[0].body, "Chat PG");
+  await streams.follow(ids.member, ids.owner, true, now);
+  assert.equal((await streams.listPublicStreams({ userId: ids.member, followingOnly: true })).length, 1);
+  assert.equal(await streams.endById(createdStream.stream.id, now), true);
+
   const groupJoinRequests = createPostgresGroupJoinRequestRepository(client, {
     createId: randomUUID,
     groupSetupRepository: groupSetup,
@@ -232,7 +244,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "group-members", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "group-members", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

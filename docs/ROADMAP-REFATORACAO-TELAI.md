@@ -96,6 +96,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair CRUD e validação de slug das salas de texto e voz, mantendo presença/runtime fora do repositório.
 - [x] Extrair atualização e leitura de permissões individuais dos membros.
 - [x] Extrair listagem, presença de membros e saída transacional de grupos.
+- [x] Extrair persistência de streams, chat da transmissão, follows e encerramento sem acoplar o WebRTC ao banco.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.

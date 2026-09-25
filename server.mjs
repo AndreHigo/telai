@@ -27,6 +27,7 @@ import { createGroupRoleRepository } from "./server/repositories/group-roles.mjs
 import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs";
 import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
 import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
+import { createStreamRepository } from "./server/repositories/streams.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -801,6 +802,7 @@ const groupRoleRepository = createGroupRoleRepository(database, { createId: rand
 const groupRoomRepository = createGroupRoomRepository(database, { createId: randomUUID });
 const groupPermissionRepository = createGroupPermissionRepository(database);
 const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
+const streamRepository = createStreamRepository(database, { createId: randomUUID });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -1163,18 +1165,7 @@ function activeMaintenanceNotice() {
 
 function siteAdminOverview() {
   const now = new Date().toISOString();
-  const activeStreams = database.prepare(`
-    SELECT streams.id, streams.room_name AS roomName, streams.title, streams.visibility,
-      streams.group_id AS groupId, streams.started_at AS startedAt,
-      COALESCE(channel_profiles.display_name, users.display_name) AS creatorName,
-      users.username AS creatorUsername, groups.name AS groupName
-    FROM streams
-    JOIN users ON users.id = streams.created_by
-    LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id
-    LEFT JOIN groups ON groups.id = streams.group_id
-    WHERE streams.ended_at IS NULL
-    ORDER BY streams.started_at DESC
-  `).all().filter(runtimeStreamIsLive);
+  const activeStreams = streamRepository.listAdminStreams().filter(runtimeStreamIsLive);
   const liveCountByGroup = new Map();
   for (const stream of activeStreams) {
     if (stream.groupId) liveCountByGroup.set(stream.groupId, (liveCountByGroup.get(stream.groupId) || 0) + 1);
@@ -1238,8 +1229,7 @@ function siteAdminOverview() {
 
 function siteAdminSummary() {
   const now = new Date().toISOString();
-  const activeStreams = database.prepare("SELECT id, group_id AS groupId, room_name AS roomName, started_at AS startedAt FROM streams WHERE ended_at IS NULL")
-    .all().filter(runtimeStreamIsLive);
+  const activeStreams = streamRepository.listActiveStreams().filter(runtimeStreamIsLive);
   return {
     generatedAt: new Date().toISOString(),
     summary: {
@@ -1298,7 +1288,7 @@ function siteAdminGroupsPage(requestUrl) {
   const { page, pageSize, offset } = adminPagination(requestUrl);
   const total = database.prepare("SELECT COUNT(*) AS count FROM groups").get().count;
   const liveGroups = new Map();
-  database.prepare("SELECT id, group_id AS groupId, room_name AS roomName, started_at AS startedAt FROM streams WHERE ended_at IS NULL").all()
+  streamRepository.listActiveStreams()
     .filter(runtimeStreamIsLive)
     .forEach((stream) => {
       if (stream.groupId) liveGroups.set(stream.groupId, (liveGroups.get(stream.groupId) || 0) + 1);
@@ -1381,29 +1371,15 @@ function canAccessStream(userId, stream) {
 }
 
 function streamForRoom(roomId) {
-  return database.prepare(`
-    SELECT id, room_name AS roomName, created_by AS createdBy, ended_at AS endedAt
-    FROM streams
-    WHERE room_name = ?
-    ORDER BY started_at DESC
-    LIMIT 1
-  `).get(roomId);
+  return streamRepository.findForRoom(roomId);
 }
 
 function loadStreamChat(roomId) {
-  const stream = streamForRoom(roomId);
-  if (!stream) return [];
-  return database.prepare(`
-    SELECT id, user_id AS userId, body, display_name AS displayName, username, created_at AS createdAt
-    FROM stream_chat_messages
-    WHERE stream_id = ?
-    ORDER BY created_at DESC
-    LIMIT 120
-  `).all(stream.id).reverse();
+  return streamRepository.loadChatForRoom(roomId);
 }
 
 function endStreamByRoom(roomId) {
-  database.prepare("UPDATE streams SET ended_at = ? WHERE room_name = ? AND ended_at IS NULL").run(new Date().toISOString(), roomId);
+  streamRepository.endByRoom(roomId);
 }
 
 function closeBroadcastRoom(roomId, event = "host-stopped") {
@@ -2104,10 +2080,16 @@ async function handleMessage(socket, message) {
       username: socket.user?.username || "visitante",
       createdAt: new Date(now).toISOString(),
     };
-    database.prepare(`
-      INSERT INTO stream_chat_messages (id, channel_user_id, stream_id, user_id, body, display_name, username, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(chatMessage.id, stream.createdBy, stream.id, socket.user?.id || null, chatMessage.body, chatMessage.displayName, chatMessage.username, chatMessage.createdAt);
+    streamRepository.insertChatMessage({
+      id: chatMessage.id,
+      channelUserId: stream.createdBy,
+      streamId: stream.id,
+      userId: socket.user?.id || null,
+      body: chatMessage.body,
+      displayName: chatMessage.displayName,
+      username: chatMessage.username,
+      createdAt: chatMessage.createdAt,
+    });
     room.chat.push(chatMessage);
     if (room.chat.length > 120) room.chat.splice(0, room.chat.length - 120);
     send(room.host, { type: "chat-message", message: chatMessage });
@@ -2121,7 +2103,7 @@ async function handleMessage(socket, message) {
     if (!room || room.host !== socket || !stream || stream.createdBy !== socket.user?.id) {
       return send(socket, { type: "chat-error", message: "Somente o dono do canal pode limpar o histórico." });
     }
-    database.prepare("DELETE FROM stream_chat_messages WHERE stream_id = ?").run(stream.id);
+    streamRepository.clearChat(stream.id);
     room.chat = [];
     send(room.host, { type: "chat-cleared" });
     for (const viewer of room.viewers.values()) send(viewer, { type: "chat-cleared" });
@@ -3093,14 +3075,7 @@ async function handleHttpRequest(request, response) {
     });
     const members = groupMemberRepository.listMembers(groupId).map((member) => ({ ...member, online: isPresent(groupId, member.id) }));
     const messages = groupMessageRepository.listMessages(groupId);
-    const streams = database.prepare(`
-      SELECT streams.id, streams.room_name AS roomName, streams.room_id AS roomId, streams.voice_room_id AS voiceRoomId, streams.title, streams.visibility, streams.started_at AS startedAt,
-        COALESCE(channel_profiles.display_name, users.display_name) AS channelName,
-        COALESCE(channel_profiles.avatar_data, users.avatar_data) AS channelAvatarData,
-        channel_profiles.games AS channelGames, users.username AS channelUsername, streams.created_by AS createdBy, groups.slug AS groupSlug
-      FROM streams JOIN users ON users.id = streams.created_by LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id JOIN groups ON groups.id = streams.group_id
-      WHERE streams.group_id = ? AND streams.ended_at IS NULL ORDER BY streams.started_at DESC
-    `).all(groupId).filter(runtimeStreamIsLive);
+    const streams = streamRepository.listGroupStreams(groupId).filter(runtimeStreamIsLive);
     return json(response, 200, {
       group,
       rooms,
@@ -3392,14 +3367,7 @@ async function handleHttpRequest(request, response) {
     const parts = String(requestUrl.searchParams.get("path") || "").split("/").filter(Boolean).map(slugFor);
     if (![1, 2].includes(parts.length) || parts.some((part) => !part)) return json(response, 400, { error: "Endereço de transmissão inválido." });
     const user = currentUser(request);
-    const activeStreams = database.prepare(`
-      SELECT streams.id, streams.room_name AS roomName, streams.room_id AS roomId, streams.voice_room_id AS voiceRoomId, streams.title, streams.visibility, streams.group_id AS groupId,
-        COALESCE(channel_profiles.display_name, users.display_name) AS channelName, COALESCE(channel_profiles.avatar_data, users.avatar_data) AS channelAvatarData,
-          channel_profiles.games AS channelGames, users.username AS channelUsername, groups.name AS groupName, groups.slug AS groupSlug,
-          streams.created_by AS createdBy, streams.started_at AS startedAt
-      FROM streams JOIN users ON users.id = streams.created_by LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id LEFT JOIN groups ON groups.id = streams.group_id
-      WHERE streams.ended_at IS NULL ORDER BY streams.started_at DESC
-    `).all().filter(runtimeStreamIsLive);
+    const activeStreams = streamRepository.listActiveStreams().filter(runtimeStreamIsLive);
     const channelPart = parts.length === 1 ? parts[0] : parts[1];
     const scopedStreams = activeStreams.filter((item) => parts.length === 1
       ? item.visibility === "public"
@@ -3428,27 +3396,10 @@ async function handleHttpRequest(request, response) {
     const followingOnly = requestUrl.searchParams.get("following") === "1";
     if (!user && followingOnly) return json(response, 401, { error: "Entre para ver os canais que você segue." });
     if (!user) {
-      const streams = database.prepare(`
-        SELECT streams.id, streams.room_name AS roomName, streams.room_id AS roomId, streams.voice_room_id AS voiceRoomId, streams.title, streams.visibility, streams.group_id AS groupId, streams.started_at AS startedAt,
-          COALESCE(channel_profiles.display_name, users.display_name) AS channelName, COALESCE(channel_profiles.avatar_data, users.avatar_data) AS channelAvatarData,
-          channel_profiles.games AS channelGames, users.username AS channelUsername, groups.name AS groupName, groups.slug AS groupSlug,
-          0 AS following
-        FROM streams JOIN users ON users.id = streams.created_by LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id LEFT JOIN groups ON groups.id = streams.group_id
-        WHERE streams.ended_at IS NULL AND streams.visibility = 'public'
-        ORDER BY streams.started_at DESC
-      `).all().filter(runtimeStreamIsLive);
-      return json(response, 200, { streams: streams.map((stream) => decorateRuntimeStream({ ...stream, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) })) });
+      const streams = streamRepository.listPublicStreams().filter(runtimeStreamIsLive);
+      return json(response, 200, { streams: streams.map((stream) => decorateRuntimeStream({ ...stream, following: false, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) })) });
     }
-    const streams = database.prepare(`
-      SELECT streams.id, streams.room_name AS roomName, streams.room_id AS roomId, streams.voice_room_id AS voiceRoomId, streams.title, streams.visibility, streams.group_id AS groupId, streams.started_at AS startedAt,
-        COALESCE(channel_profiles.display_name, users.display_name) AS channelName, COALESCE(channel_profiles.avatar_data, users.avatar_data) AS channelAvatarData,
-        channel_profiles.games AS channelGames, users.username AS channelUsername, groups.name AS groupName, groups.slug AS groupSlug,
-        EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = streams.created_by) AS following
-      FROM streams JOIN users ON users.id = streams.created_by LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id LEFT JOIN groups ON groups.id = streams.group_id
-      WHERE streams.ended_at IS NULL AND streams.visibility = 'public'
-        AND (? = 0 OR EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = streams.created_by))
-      ORDER BY streams.started_at DESC
-    `).all(user.id, followingOnly ? 1 : 0, user.id).filter(runtimeStreamIsLive);
+    const streams = streamRepository.listPublicStreams({ userId: user.id, followingOnly }).filter(runtimeStreamIsLive);
     return json(response, 200, { streams: streams.map((stream) => decorateRuntimeStream({ ...stream, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) })) });
   }
   if (requestUrl.pathname === "/api/streams" && request.method === "POST") {
@@ -3464,43 +3415,37 @@ async function handleHttpRequest(request, response) {
       if (visibility === "private" && (!groupId || !isGroupMember(user.id, groupId))) return json(response, 403, { error: "Escolha um grupo do qual você participa." });
       if (visibility === "private" && !canGroupAction(user.id, groupId, "canStream")) return json(response, 403, { error: "Você não tem permissão para abrir lives neste grupo." });
       if (visibility === "private" && roomId) {
-        const room = database.prepare("SELECT id, kind FROM group_rooms WHERE id = ? AND group_id = ?").get(roomId, groupId);
+        const room = groupRoomRepository.findRoom(groupId, roomId);
         if (!room || room.kind !== "live") return json(response, 400, { error: "Escolha uma sala de transmissão válida." });
       }
       if (visibility === "private" && voiceRoomId) {
-        const voiceRoom = database.prepare("SELECT id FROM group_voice_rooms WHERE id = ? AND group_id = ?").get(voiceRoomId, groupId);
-        if (!voiceRoom) return json(response, 400, { error: "Escolha uma sala de voz válida." });
+        const voiceRoom = groupRoomRepository.findRoom(groupId, voiceRoomId);
+        if (!voiceRoom || voiceRoom.kind !== "voice") return json(response, 400, { error: "Escolha uma sala de voz válida." });
       }
       // Os links amigáveis são baseados no nome do transmissor (e, nas
       // privadas, no grupo). Impedir duplicatas mantém cada link apontando
       // para uma única transmissão, sem esconder uma live atrás de outra.
-      let transactionStarted = false;
       try {
         // A verificação e a inserção precisam ser atômicas: dois cliques, abas
         // ou clientes concorrentes não podem abrir duas lives do mesmo escopo.
-        database.exec("BEGIN IMMEDIATE");
-        transactionStarted = true;
-        const activeStreams = visibility === "public"
-          ? database.prepare("SELECT room_name AS roomName, started_at AS startedAt FROM streams WHERE created_by = ? AND visibility = 'public' AND ended_at IS NULL ORDER BY started_at DESC").all(user.id)
-          : database.prepare("SELECT room_name AS roomName, started_at AS startedAt FROM streams WHERE created_by = ? AND visibility = 'private' AND group_id = ? AND ended_at IS NULL ORDER BY started_at DESC").all(user.id, groupId);
-        if (activeStreams.some(runtimeStreamIsLive)) {
-          database.exec("ROLLBACK");
-          transactionStarted = false;
+        const groupSlug = groupId ? database.prepare("SELECT slug FROM groups WHERE id = ?").get(groupId)?.slug || "" : "";
+        const channel = channelProfileForUser(user.id) || { displayName: user.displayName, avatarData: user.avatarData, games: [] };
+        const result = streamRepository.createStream({
+          roomName, visibility, groupId, roomId: roomId || null, voiceRoomId: voiceRoomId || null,
+          title: String(body.title || `Transmissão de ${channel.displayName}`).trim().slice(0, 120),
+          channelName: channel.displayName, channelAvatarData: compactAvatarData(channel.avatarData), channelGames: channel.games,
+          channelUsername: user.username, createdBy: user.id, groupSlug, isLive: runtimeStreamIsLive,
+        });
+        if (result.kind === "already-live") {
           return json(response, 409, {
             error: visibility === "public"
               ? "Você já tem uma live pública ativa. Encerre-a antes de abrir outra."
               : "Você já tem uma live privada ativa neste grupo. Encerre-a antes de abrir outra.",
           });
         }
-        const groupSlug = groupId ? database.prepare("SELECT slug FROM groups WHERE id = ?").get(groupId)?.slug || "" : "";
-        const channel = channelProfileForUser(user.id) || { displayName: user.displayName, avatarData: user.avatarData, games: [] };
-        const stream = { id: randomUUID(), roomName, visibility, groupId, roomId: roomId || null, voiceRoomId: voiceRoomId || null, title: String(body.title || `Transmissão de ${channel.displayName}`).trim().slice(0, 120), channelName: channel.displayName, channelAvatarData: compactAvatarData(channel.avatarData), channelGames: channel.games, channelUsername: user.username, createdBy: user.id, groupSlug };
-        database.prepare("INSERT INTO streams (id, room_name, created_by, title, visibility, group_id, room_id, voice_room_id, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .run(stream.id, stream.roomName, user.id, stream.title, stream.visibility, stream.groupId, stream.roomId, stream.voiceRoomId, new Date().toISOString());
-        database.exec("COMMIT");
-        transactionStarted = false;
+        const stream = result.stream;
         if (stream.visibility === "public") {
-          const followers = database.prepare("SELECT follower_id AS followerId FROM follows WHERE followed_id = ?").all(user.id);
+          const followers = streamRepository.followerIds(user.id).map((followerId) => ({ followerId }));
           const createdAt = new Date().toISOString();
           for (const follower of followers) {
             createNotification({
@@ -3515,9 +3460,6 @@ async function handleHttpRequest(request, response) {
         }
         return json(response, 201, { stream: { ...stream, publicPath: streamPublicPath(stream) } });
       } catch (error) {
-        if (transactionStarted) {
-          try { database.exec("ROLLBACK"); } catch {}
-        }
         return json(response, 409, { error: "Não foi possível abrir este canal." });
       }
     }).catch(() => json(response, 400, { error: "Não foi possível abrir o canal." }));
@@ -3527,24 +3469,24 @@ async function handleHttpRequest(request, response) {
   if (streamActionMatch && ["POST", "DELETE"].includes(request.method)) {
     const user = requireUser(request, response);
     if (!user) return;
-    const stream = database.prepare("SELECT id, created_by, room_name AS roomName, ended_at AS endedAt FROM streams WHERE id = ?").get(streamActionMatch[1]);
+    const stream = streamRepository.findById(streamActionMatch[1]);
     if (!stream) return json(response, 404, { error: "Canal não encontrado." });
     if (streamActionMatch[2] === "end") {
-      if (stream.created_by !== user.id) return json(response, 403, { error: "Somente o transmissor pode encerrar este canal." });
+      if (stream.createdBy !== user.id) return json(response, 403, { error: "Somente o transmissor pode encerrar este canal." });
       if (stream.endedAt) {
         closeBroadcastRoom(stream.roomName);
         return json(response, 200, { ok: true, alreadyEnded: true });
       }
-      database.prepare("UPDATE streams SET ended_at = ? WHERE id = ?").run(new Date().toISOString(), stream.id);
+      streamRepository.endById(stream.id);
       closeBroadcastRoom(stream.roomName);
       return json(response, 200, { ok: true });
     }
-    if (stream.created_by === user.id) return json(response, 400, { error: "Você não pode seguir seu próprio canal." });
+    if (stream.createdBy === user.id) return json(response, 400, { error: "Você não pode seguir seu próprio canal." });
     if (request.method === "POST") {
-      database.prepare("INSERT OR IGNORE INTO follows (follower_id, followed_id, created_at) VALUES (?, ?, ?)").run(user.id, stream.created_by, new Date().toISOString());
+      streamRepository.follow(user.id, stream.createdBy, true);
       return json(response, 200, { ok: true, following: true });
     }
-    database.prepare("DELETE FROM follows WHERE follower_id = ? AND followed_id = ?").run(user.id, stream.created_by);
+    streamRepository.follow(user.id, stream.createdBy, false);
     return json(response, 200, { ok: true, following: false });
   }
   if (requestUrl.pathname === "/ice-config") {

@@ -17,7 +17,7 @@ etapa.
 - A migration baseline e o importador SQLite → PostgreSQL já existem.
 - O comando `pnpm run db:import:postgres -- --plan` inspeciona o SQLite sem conectar no PostgreSQL.
 - A migration baseline já foi executada e validada no PostgreSQL local via Docker; o cutover continua adiado e SQLite permanece sendo o driver ativo.
-- Os repositórios já extraídos, incluindo autenticação, consentimentos, OAuth, contas, social, descoberta/criação de grupos, setup, cargos, salas, permissões, membros, convites, solicitações de entrada, mensagens de grupo e conversas diretas, agora possuem implementações PostgreSQL assíncronas paralelas, validadas em uma transação com rollback; elas ainda não foram ligadas ao runtime HTTP.
+- Os repositórios já extraídos, incluindo autenticação, consentimentos, OAuth, contas, social, descoberta/criação de grupos, setup, cargos, salas, permissões, membros, streams, chat da transmissão, convites, solicitações de entrada, mensagens de grupo e conversas diretas, agora possuem implementações PostgreSQL assíncronas paralelas, validadas em uma transação com rollback; elas ainda não foram ligadas ao runtime HTTP.
 - Não existe um banco SQLite de aplicação válido neste checkout para importar; nenhum dado de teste foi tratado como dado real.
 - Nenhum ambiente de produção foi apontado para PostgreSQL.
 - Nenhum banco SQLite foi apagado ou alterado por esta preparação.
