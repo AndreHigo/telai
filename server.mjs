@@ -7,6 +7,7 @@ import { WebSocketServer } from "ws";
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { installWebsocketHeartbeat } from "./server/gateway/heartbeat.mjs";
+import { createGroupAccessRepository } from "./server/repositories/groups.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
@@ -742,6 +743,7 @@ database.exec("CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(ex
 database.exec("CREATE INDEX IF NOT EXISTS stream_chat_messages_stream_idx ON stream_chat_messages(stream_id, created_at DESC)");
 database.exec("CREATE INDEX IF NOT EXISTS group_messages_room_idx ON group_messages(group_id, room_id, created_at DESC)");
 database.exec("CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_messages(sender_id, created_at DESC)");
+const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
 
 function pruneExpiredRuntimeState() {
   const now = Date.now();
@@ -1730,10 +1732,6 @@ for (const group of database.prepare("SELECT id, owner_id AS ownerId FROM groups
   ensureGroupRolePositions(group.id);
 }
 
-function isGroupMember(userId, groupId) {
-  return Boolean(database.prepare("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, userId));
-}
-
 function directConversationForUser(conversationId, userId) {
   return database.prepare(`
     SELECT direct_conversations.id, direct_conversations.created_at AS createdAt,
@@ -1756,50 +1754,6 @@ function directConversationPayload(conversationId, userId) {
   `).get(conversationId, userId);
   if (!otherUser) return null;
   return { ...conversation, otherUser: compactUserSummary(otherUser) };
-}
-
-function ensureGroupPermissionRow(groupId, userId) {
-  database.prepare(`
-    INSERT OR IGNORE INTO group_member_permissions (group_id, user_id, can_chat, can_stream, can_invite, can_view_voice_members, updated_at)
-    VALUES (?, ?, 1, 1, 1, 1, ?)
-  `).run(groupId, userId, new Date().toISOString());
-}
-
-function groupPermissions(groupId, userId) {
-  const member = database.prepare("SELECT role, role_id AS roleId FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, userId);
-  if (!member) return null;
-  if (member.role === "owner") return { canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true };
-  ensureGroupPermissionRow(groupId, userId);
-  const permissions = database.prepare(`
-    SELECT can_chat AS canChat, can_stream AS canStream, can_invite AS canInvite,
-      can_view_voice_members AS canViewVoiceMembers
-    FROM group_member_permissions WHERE group_id = ? AND user_id = ?
-  `).get(groupId, userId);
-  const role = member.roleId
-    ? database.prepare(`
-      SELECT can_chat AS canChat, can_stream AS canStream, can_invite AS canInvite,
-        can_view_voice_members AS canViewVoiceMembers, can_move_members AS canMoveMembers
-      FROM group_roles WHERE id = ? AND group_id = ?
-    `).get(member.roleId, groupId)
-    : null;
-  if (role) return {
-    canChat: Boolean(role.canChat),
-    canStream: Boolean(role.canStream),
-    canInvite: Boolean(role.canInvite),
-    canViewVoiceMembers: Boolean(role.canViewVoiceMembers),
-    canMoveMembers: Boolean(role.canMoveMembers),
-  };
-  return {
-    canChat: Boolean(permissions?.canChat),
-    canStream: Boolean(permissions?.canStream),
-    canInvite: Boolean(permissions?.canInvite),
-    canViewVoiceMembers: Boolean(permissions?.canViewVoiceMembers),
-    canMoveMembers: Boolean(role?.canMoveMembers),
-  };
-}
-
-function canGroupAction(userId, groupId, action) {
-  return Boolean(groupPermissions(groupId, userId)?.[action]);
 }
 
 function presenceKey(groupId, userId) { return `${groupId}:${userId}`; }

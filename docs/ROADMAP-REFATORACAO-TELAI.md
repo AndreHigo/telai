@@ -71,7 +71,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair validações puras de entrada e normalização de dados.
 - [ ] Padronizar formato de erros HTTP sem alterar contratos existentes.
 - [x] Extrair abertura do SQLite e migrações genéricas para `server/repositories`.
-- [ ] Separar consultas/repositórios de domínio das rotas HTTP.
+- [x] Extrair o repositório de acesso e permissões de grupos.
+- [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
