@@ -36,6 +36,7 @@
   import { createGroupRoomReadController } from "./features/groups/room-read-controller.js";
   import { createGroupStateStore } from "./features/groups/group-state.js";
   import { createMessageStateStore } from "./features/groups/message-state.js";
+  import { createApplicationCommandController } from "./features/groups/application-command-controller.js";
   import { createGroupThreadRuntime } from "./features/groups/thread-runtime.js";
   import {
     createSelectedVoiceAudioConstraints,
@@ -159,6 +160,8 @@
   let viewerStreamPath = "";
   let viewerStream = null;
   let selectedGroupId = groupState.getState().selectedGroupId;
+  let groupApplicationCommands = [];
+  let groupApplicationCommandsGroupId = "";
   let groupOverview = groupState.getState().groupOverview;
   let knownGroupMessageIds = groupState.getState().knownGroupMessageIds;
   let selectedRoomId = groupState.getState().selectedRoomId;
@@ -1107,12 +1110,18 @@
   $: unreadDirectNotification = notifications.find((notification) => notification.unread && notification.type === "direct_message" && notification.directConversationId) || null;
   $: visualStyle = `--mirante-button-color:${buttonColor};--mirante-input-background:${inputBackgroundColor};--mirante-background:${backgroundColor};`;
   $: roomMessages = (groupOverview?.messages || []).filter((message) => !selectedRoom || !message.roomId || message.roomId === selectedRoom.id);
+  $: if (selectedGroupId !== groupApplicationCommandsGroupId) {
+    groupApplicationCommandsGroupId = selectedGroupId || "";
+    groupApplicationCommands = [];
+    void loadGroupApplicationCommands(selectedGroupId);
+  }
   $: if (notice) {
     const noticeAtDisplay = notice;
     setTimeout(() => { if (notice === noticeAtDisplay) notice = ""; }, 5000);
   }
 
   const api = createApiClient({ reportError: reportClientError });
+  const applicationCommandController = createApplicationCommandController({ api, setNotice: (message) => { notice = message; } });
   const voiceSoundController = createVoiceSoundController({
     getState: () => ({ soundPreferences, voiceDeafened, voiceOutputVolume }),
     setState: (next) => {
@@ -1463,6 +1472,41 @@
   async function loadGroups(...args) { return (await getGroupController()).loadGroups(...args); }
   async function loadGroup(...args) { return (await getGroupController()).loadGroup(...args); }
   async function selectRoom(...args) { return (await getGroupController()).selectRoom(...args); }
+
+  async function loadGroupApplicationCommands(groupId) {
+    if (!groupId) {
+      groupApplicationCommands = [];
+      return;
+    }
+    try {
+      const applications = await applicationCommandController.loadForGroup(groupId);
+      if (groupApplicationCommandsGroupId !== groupId || applications === null) return;
+      groupApplicationCommands = applications;
+    } catch (error) {
+      if (groupApplicationCommandsGroupId !== groupId) return;
+      groupApplicationCommands = [];
+      notice = error?.message || "Não foi possível carregar os comandos dos bots.";
+    }
+  }
+
+  async function startApplicationInteraction({ applicationId, commandName, options }) {
+    if (!selectedGroupId || selectedRoom?.kind !== "text") {
+      notice = "Selecione um canal de texto para usar um comando.";
+      return;
+    }
+    try {
+      await applicationCommandController.invoke({
+        groupId: selectedGroupId,
+        roomId: selectedRoom.id,
+        applicationId,
+        commandName,
+        options,
+      });
+    } catch (error) {
+      notice = error?.message || "Não foi possível enviar o comando ao bot.";
+      throw error;
+    }
+  }
 
   let groupMembershipControllerPromise = null;
   function getGroupMembershipController() {
@@ -6080,7 +6124,7 @@
           onOpenVoiceSettings={openVoiceSettings}
           onLeaveVoiceRoom={leaveVoiceRoom}
         />
-        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => setNavigationState({ showMobileChannels: !showMobileChannels, showMobileMembers: false })} onToggleMembers={() => setNavigationState({ showMobileMembers: !showMobileMembers, showMobileChannels: false })} onCreateChannel={() => { showRoomDialog = true; }} onSearchMessages={openGroupMessageSearch} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput messageDraft={messageDraft} on:messageDraft={(event) => setMessageState({ messageDraft: event.detail })} {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} editingMessageDraft={editingMessageDraft} on:editingMessageDraft={(event) => setMessageState({ editingMessageDraft: event.detail })} {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onOpenThread={openGroupThread} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} onSubmitBotComponent={submitBotComponent} onSubmitBotModal={submitBotModal} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
+        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => setNavigationState({ showMobileChannels: !showMobileChannels, showMobileMembers: false })} onToggleMembers={() => setNavigationState({ showMobileMembers: !showMobileMembers, showMobileChannels: false })} onCreateChannel={() => { showRoomDialog = true; }} onSearchMessages={openGroupMessageSearch} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput messageDraft={messageDraft} on:messageDraft={(event) => setMessageState({ messageDraft: event.detail })} {selectedRoom} {roomMessages} {groupApplicationCommands} currentUserId={user?.id} {editingMessageId} editingMessageDraft={editingMessageDraft} on:editingMessageDraft={(event) => setMessageState({ editingMessageDraft: event.detail })} {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onOpenThread={openGroupThread} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} onSubmitBotComponent={submitBotComponent} onSubmitBotModal={submitBotModal} onStartApplicationInteraction={startApplicationInteraction} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
         <GroupMemberRail
           {user}
           {memberRoleGroups}

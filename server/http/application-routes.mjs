@@ -180,6 +180,20 @@ export function createApplicationRoutes({
   }
 
   return async function handleApplicationRoutes(request, response, requestUrl) {
+    const groupCommandsMatch = requestUrl.pathname.match(/^\/api\/groups\/([A-Za-z0-9-]{1,64})\/applications\/commands$/);
+    if (groupCommandsMatch && request.method === "GET") {
+      const user = await requireUser(request, response);
+      if (!user) return true;
+      const [, groupId] = groupCommandsMatch;
+      if (!await isGroupMember(user.id, groupId)) {
+        json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      const applications = await applicationRepository.listInstalledCommandsForGroup(groupId);
+      json(response, 200, { applications });
+      return true;
+    }
+
     const userInteractionMatch = requestUrl.pathname.match(/^\/api\/groups\/([A-Za-z0-9-]{1,64})\/applications\/([A-Za-z0-9-]{16,64})\/interactions$/);
     if (userInteractionMatch && request.method === "POST") {
       const user = await requireUser(request, response);

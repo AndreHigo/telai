@@ -300,6 +300,7 @@ enviada ao GitHub nem publicada em produção.
   - [x] Aceitar interações de componentes e submissões de modal com validação de campos e opções.
   - [x] Renderizar respostas de bot, botões, seleções e formulários modais no workspace de chat existente, preservando o shell visual.
   - [x] Persistir respostas no histórico visual e recuperar seus componentes após refresh.
+  - [x] Descobrir comandos de bots instalados por grupo e executá-los pelo compositor de mensagens, sem criar uma tela paralela ou alterar a identidade visual.
 - [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.
 - [x] Criar migration baseline e importador offline SQLite → PostgreSQL.
 - [x] Subir PostgreSQL local em Docker e aplicar/validar a migration baseline sem cutover.

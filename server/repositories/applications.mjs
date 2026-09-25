@@ -57,6 +57,40 @@ function publicCommand(row) {
   };
 }
 
+function publicInstalledCommand(row) {
+  return {
+    id: row.commandId,
+    applicationId: row.applicationId,
+    name: row.commandName,
+    description: row.commandDescription,
+    options: parseCommandOptions(row.commandOptionsJson),
+    createdAt: row.commandCreatedAt || null,
+    updatedAt: row.commandUpdatedAt || null,
+  };
+}
+
+function groupInstalledCommands(rows) {
+  const applications = new Map();
+  for (const row of rows) {
+    let application = applications.get(row.applicationId);
+    if (!application) {
+      application = {
+        applicationId: row.applicationId,
+        applicationName: row.applicationName,
+        bot: {
+          id: row.botUserId,
+          username: row.botUsername,
+          displayName: row.botDisplayName,
+        },
+        commands: [],
+      };
+      applications.set(row.applicationId, application);
+    }
+    if (row.commandId) application.commands.push(publicInstalledCommand(row));
+  }
+  return [...applications.values()];
+}
+
 export function createApplicationRepository(database, { createId = randomUUID } = {}) {
   function findOwned(ownerId, applicationId) {
     return publicApplication(database.prepare(`
@@ -118,6 +152,26 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     `).all(applicationId).map(publicCommand);
   }
 
+  function listInstalledCommandsForGroup(groupId) {
+    const rows = database.prepare(`
+      SELECT applications.id AS applicationId, applications.name AS applicationName,
+        applications.bot_user_id AS botUserId, users.username AS botUsername,
+        users.display_name AS botDisplayName,
+        application_commands.id AS commandId, application_commands.name AS commandName,
+        application_commands.description AS commandDescription,
+        application_commands.options_json AS commandOptionsJson,
+        application_commands.created_at AS commandCreatedAt,
+        application_commands.updated_at AS commandUpdatedAt
+      FROM application_group_installations
+      JOIN applications ON applications.id = application_group_installations.application_id
+      JOIN users ON users.id = applications.bot_user_id
+      JOIN application_commands ON application_commands.application_id = applications.id
+      WHERE application_group_installations.group_id = ?
+      ORDER BY applications.name COLLATE NOCASE, application_commands.name COLLATE NOCASE
+    `).all(groupId);
+    return groupInstalledCommands(rows);
+  }
+
   function createCommand({ applicationId, name, description = "", options = [], createdAt = new Date().toISOString() }) {
     const id = createId();
     const optionsJson = JSON.stringify(options);
@@ -143,9 +197,9 @@ export function createApplicationRepository(database, { createId = randomUUID } 
 
   function findInstalledCommand(applicationId, groupId, name) {
     return publicCommand(database.prepare(`
-      SELECT application_commands.id AS commandId, application_commands.application_id AS applicationId,
-        application_commands.name AS commandName, application_commands.description AS commandDescription,
-        application_commands.options_json AS commandOptionsJson
+      SELECT application_commands.id, application_commands.application_id AS applicationId,
+        application_commands.name, application_commands.description,
+        application_commands.options_json AS optionsJson
       FROM application_commands
       JOIN application_group_installations ON application_group_installations.application_id = application_commands.application_id
       WHERE application_commands.application_id = ? AND application_group_installations.group_id = ? AND application_commands.name = ?
@@ -235,7 +289,7 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     }
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }
 
 async function withPostgresTransaction(database, callback) {
@@ -302,6 +356,26 @@ export function createPostgresApplicationRepository(database, { createId = rando
     return result.rows.map(publicCommand);
   }
 
+  async function listInstalledCommandsForGroup(groupId) {
+    const result = await database.query(`
+      SELECT applications.id AS "applicationId", applications.name AS "applicationName",
+        applications.bot_user_id AS "botUserId", users.username AS "botUsername",
+        users.display_name AS "botDisplayName",
+        application_commands.id AS "commandId", application_commands.name AS "commandName",
+        application_commands.description AS "commandDescription",
+        application_commands.options_json AS "commandOptionsJson",
+        application_commands.created_at AS "commandCreatedAt",
+        application_commands.updated_at AS "commandUpdatedAt"
+      FROM application_group_installations
+      JOIN applications ON applications.id = application_group_installations.application_id
+      JOIN users ON users.id = applications.bot_user_id
+      JOIN application_commands ON application_commands.application_id = applications.id
+      WHERE application_group_installations.group_id = $1
+      ORDER BY LOWER(applications.name), LOWER(application_commands.name)
+    `, [groupId]);
+    return groupInstalledCommands(result.rows);
+  }
+
   async function createCommand({ applicationId, name, description = "", options = [], createdAt = new Date().toISOString() }) {
     const id = createId();
     const optionsJson = JSON.stringify(options);
@@ -327,9 +401,9 @@ export function createPostgresApplicationRepository(database, { createId = rando
 
   async function findInstalledCommand(applicationId, groupId, name) {
     const result = await database.query(`
-      SELECT application_commands.id AS "commandId", application_commands.application_id AS "applicationId",
-        application_commands.name AS "commandName", application_commands.description AS "commandDescription",
-        application_commands.options_json AS "commandOptionsJson"
+      SELECT application_commands.id, application_commands.application_id AS "applicationId",
+        application_commands.name, application_commands.description,
+        application_commands.options_json AS "optionsJson"
       FROM application_commands
       JOIN application_group_installations ON application_group_installations.application_id = application_commands.application_id
       WHERE application_commands.application_id = $1 AND application_group_installations.group_id = $2 AND application_commands.name = $3
@@ -402,5 +476,5 @@ export function createPostgresApplicationRepository(database, { createId = rando
     });
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }

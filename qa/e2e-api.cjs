@@ -400,6 +400,10 @@ async function main() {
     assert.equal(install.response.status, 201, JSON.stringify(install.body));
     const interactionCommand = await api(owner, `/api/applications/${applicationId}/commands`, "POST", { name: "ping", description: "Responde ao ping" });
     assert.equal(interactionCommand.response.status, 201, JSON.stringify(interactionCommand.body));
+    const groupCommandCatalog = await api(owner, `/api/groups/${groupId}/applications/commands`);
+    assert.equal(groupCommandCatalog.response.status, 200, JSON.stringify(groupCommandCatalog.body));
+    assert.equal(groupCommandCatalog.body.applications[0].applicationId, applicationId);
+    assert.equal(groupCommandCatalog.body.applications[0].commands[0].name, "ping");
     const createdInteraction = await api(owner, `/api/groups/${groupId}/applications/${applicationId}/interactions`, "POST", { roomId: group.textRoomId, commandName: "ping" });
     assert.equal(createdInteraction.response.status, 202, JSON.stringify(createdInteraction.body));
     assert.equal(createdInteraction.body.interaction.kind, "command");

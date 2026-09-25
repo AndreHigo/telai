@@ -95,6 +95,9 @@ const paths = {
   "/groups/{groupId}/applications/{applicationId}/interactions": pathItem("Aplicações", {
     post: ["createApplicationInteraction", "Cria uma interação de comando para o bot", { methods: ["202"] }],
   }),
+  "/groups/{groupId}/applications/commands": pathItem("Aplicações", {
+    get: ["listGroupApplicationCommands", "Lista comandos de aplicações instaladas no grupo"],
+  }),
   "/interactions/{interactionId}/components": pathItem("Aplicações", {
     post: ["createComponentInteraction", "Envia uma interação de componente", { methods: ["202"] }],
   }),
