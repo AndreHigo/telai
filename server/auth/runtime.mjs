@@ -1,4 +1,5 @@
-import { createHash, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
+import { passwordMatches } from "./crypto.mjs";
 
 export function createAuthRuntime({
   sessionRepository,
@@ -16,20 +17,11 @@ export function createAuthRuntime({
   trustedForwardedHeaders,
   publicOriginForRequest,
   hashSessionToken,
-  hashPassword,
   randomBytes,
   send,
   errorLog,
   getWebsocketServer,
 }) {
-  function passwordMatches(password, storedHash) {
-    const [salt, expectedHash] = String(storedHash || "").split(":");
-    if (!salt || !expectedHash) return false;
-    const actual = scryptSync(password, salt, 64);
-    const expected = Buffer.from(expectedHash, "hex");
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  }
-
   function parseCookies(request) {
     return Object.fromEntries(String(request.headers.cookie || "").split(";").map((part) => {
       const separator = part.indexOf("=");

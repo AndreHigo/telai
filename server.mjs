@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash, createHmac } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual, createHmac } from "node:crypto";
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { createDatabaseConfig } from "./server/config/database.mjs";
@@ -15,6 +15,7 @@ import { createBroadcastMessageHandler } from "./server/gateway/broadcast-messag
 import { createBroadcastRuntime } from "./server/gateway/broadcast-runtime.mjs";
 import { createIceConfiguration } from "./server/media/ice-configuration.mjs";
 import { createAuthRuntime } from "./server/auth/runtime.mjs";
+import { hashPassword, hashSessionToken } from "./server/auth/crypto.mjs";
 import { createStreamRuntime } from "./server/domain/streams/runtime.mjs";
 import { createVoiceRuntime } from "./server/domain/voice/runtime.mjs";
 import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
@@ -901,7 +902,6 @@ const {
   trustedForwardedHeaders,
   publicOriginForRequest,
   hashSessionToken,
-  hashPassword,
   randomBytes,
   send,
   errorLog,
@@ -1055,16 +1055,6 @@ function pruneExpiredRuntimeState() {
 }
 
 setInterval(pruneExpiredRuntimeState, 5 * 60_000).unref();
-
-function hashSessionToken(token) {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-function hashPassword(password) {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
-}
 
 const handleAuthRoutes = createAuthRoutes({
   json,
