@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash, createHmac } from "node:crypto";
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
+import { createDatabaseConfig } from "./server/config/database.mjs";
 import { createWebsocketGateway } from "./server/gateway/websocket.mjs";
 import { createGatewayPolicy } from "./server/gateway/policy.mjs";
 import { createGatewayMessageDispatcher } from "./server/gateway/message-dispatcher.mjs";
@@ -97,6 +98,10 @@ const {
   logLevel,
   logPath,
 } = createRuntimeConfig({ rootDir: __dirname, packageVersion: packageMetadata.version });
+const databaseDriver = createDatabaseConfig().driver;
+if (databaseDriver !== "sqlite") {
+  throw new Error("PostgreSQL ainda não está ligado ao runtime HTTP do Telai. Mantenha TELAI_DATABASE_DRIVER=sqlite até concluir o cutover validado.");
+}
 const siteAdminUserIds = new Set(String(process.env.TELAI_ADMIN_USER_IDS || "")
   .split(",").map((value) => value.trim()).filter(Boolean));
 const siteAdminUsernames = new Set(String(process.env.TELAI_ADMIN_USERNAMES || "")
