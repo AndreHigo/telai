@@ -22,7 +22,7 @@ export function liveNotificationContext(stream, canRevealPrivate = true) {
 }
 
 export function createNotificationRuntime({ notificationSyncService, canAccessStream }) {
-  function liveNotificationPresentation(notification, userId) {
+  async function liveNotificationPresentation(notification, userId) {
     if (notification.type !== "channel_live" || !notification.streamId) return { liveContext: null };
     const stream = {
       visibility: notification.streamVisibility,
@@ -34,7 +34,7 @@ export function createNotificationRuntime({ notificationSyncService, canAccessSt
       voiceRoomName: notification.streamVoiceRoomName,
       liveRoomName: notification.streamLiveRoomName,
     };
-    const liveContext = liveNotificationContext(stream, canAccessStream(userId, stream));
+    const liveContext = liveNotificationContext(stream, await canAccessStream(userId, stream));
     if (!liveContext) return { liveContext: null, streamPath: null };
     return {
       title: `${liveContext.initiatorName} está ao vivo`,

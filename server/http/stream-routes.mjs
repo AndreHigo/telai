@@ -165,12 +165,12 @@ export function createStreamRoutes({
           return true;
         }
         if (stream.endedAt) {
-          closeBroadcastRoom(stream.roomName);
+          await closeBroadcastRoom(stream.roomName);
           json(response, 200, { ok: true, alreadyEnded: true });
           return true;
         }
         await streamRepository.endById(stream.id);
-        closeBroadcastRoom(stream.roomName);
+        await closeBroadcastRoom(stream.roomName);
         json(response, 200, { ok: true });
         return true;
       }

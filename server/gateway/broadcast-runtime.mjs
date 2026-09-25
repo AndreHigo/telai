@@ -30,38 +30,38 @@ export function createBroadcastRuntime({
     notifyViewers(room, message);
   }
 
-  function roomFor(roomId) {
+  async function roomFor(roomId) {
     if (!rooms.has(roomId)) rooms.set(roomId, {
       host: null,
       hostDisconnectedAt: null,
       hostReconnectTimer: null,
       viewers: new Map(),
-      chat: loadStreamChat(roomId),
+      chat: await loadStreamChat(roomId),
       closed: false,
       relay: { active: false, mimeType: "", firstChunk: null, recentChunks: [], recentBytes: 0 },
     });
     return rooms.get(roomId);
   }
 
-  function closeBroadcastRoom(roomId, event = "host-stopped") {
+  async function closeBroadcastRoom(roomId, event = "host-stopped") {
     const room = rooms.get(roomId);
     if (!room || room.closed) return false;
     room.closed = true;
     room.hostDisconnectedAt = null;
     clearHostReconnectTimer(room);
     endRelay(room);
-    endStreamByRoom(roomId);
+    await endStreamByRoom(roomId);
     notifyViewers(room, { type: event });
     return true;
   }
 
-  function expireDisconnectedHost(roomId, room) {
+  async function expireDisconnectedHost(roomId, room) {
     if (rooms.get(roomId) !== room || room.host || !room.hostDisconnectedAt) return;
     room.hostDisconnectedAt = null;
     room.closed = true;
     clearHostReconnectTimer(room);
     endRelay(room);
-    endStreamByRoom(roomId);
+    await endStreamByRoom(roomId);
     notifyViewers(room, { type: "host-left" });
     infoLog("broadcast_host_expired", { roomId, viewers: room.viewers.size });
     if (room.viewers.size === 0) rooms.delete(roomId);
@@ -69,7 +69,9 @@ export function createBroadcastRuntime({
 
   function scheduleHostReconnect(roomId, room) {
     clearHostReconnectTimer(room);
-    room.hostReconnectTimer = setTimeout(() => expireDisconnectedHost(roomId, room), hostReconnectGraceMs);
+    room.hostReconnectTimer = setTimeout(() => {
+      expireDisconnectedHost(roomId, room).catch((error) => debugLog("broadcast_host_expire_error", { roomId, error: error.message }));
+    }, hostReconnectGraceMs);
   }
 
   function sendRelayChunk(socket, chunk, room) {

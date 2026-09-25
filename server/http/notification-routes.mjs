@@ -14,8 +14,8 @@ export function createNotificationRoutes({
       const now = new Date().toISOString();
       await groupInviteRepository.expireMemberInvites(user.id, now);
       await syncNotificationsForUser(user.id);
-      const notifications = (await notificationRepository.listNotifications(user.id, now)).map((notification) => {
-        const presentation = liveNotificationPresentation(notification, user.id);
+      const notifications = await Promise.all((await notificationRepository.listNotifications(user.id, now)).map(async (notification) => {
+        const presentation = await liveNotificationPresentation(notification, user.id);
         const streamPath = notification.streamId && presentation.liveContext
           ? streamPublicPath({ visibility: notification.streamVisibility, channelName: notification.streamChannelName, channelUsername: notification.streamChannelUsername, groupSlug: notification.streamGroupSlug })
           : null;
@@ -30,7 +30,7 @@ export function createNotificationRoutes({
           unread: !notification.readAt,
           actionable: notification.type === "group_invite" ? notification.inviteStatus === "pending" : notification.type === "group_join_request" ? notification.joinRequestStatus === "pending" : notification.type === "channel_live" ? Boolean(streamPath) : notification.type === "direct_message" ? Boolean(notification.directConversationId) : false,
         };
-      });
+      }));
       json(response, 200, { notifications, unreadCount: notifications.filter((notification) => notification.unread).length });
       return true;
     }

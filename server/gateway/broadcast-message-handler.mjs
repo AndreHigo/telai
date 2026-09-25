@@ -33,7 +33,7 @@ export function createBroadcastMessageHandler({
       }
 
       leave(socket);
-      const room = roomFor(roomId);
+      const room = await roomFor(roomId);
       if (room.closed) {
         send(socket, { type: "error", message: "Esta sala foi encerrada." });
         return true;
@@ -129,7 +129,7 @@ export function createBroadcastMessageHandler({
     if (message.type === "chat-message") {
       const room = rooms.get(socket.roomId);
       if (!room || (room.host !== socket && room.viewers.get(socket.clientId) !== socket)) return true;
-      const stream = streamForRoom(socket.roomId);
+      const stream = await streamForRoom(socket.roomId);
       if (room.closed || !stream || stream.endedAt) {
         send(socket, { type: "chat-error", message: "Esta transmissão já foi encerrada." });
         return true;
@@ -151,7 +151,7 @@ export function createBroadcastMessageHandler({
         username: socket.user?.username || "visitante",
         createdAt: new Date(now).toISOString(),
       };
-      streamRepository.insertChatMessage({
+      await streamRepository.insertChatMessage({
         id: chatMessage.id,
         channelUserId: stream.createdBy,
         streamId: stream.id,
@@ -170,12 +170,12 @@ export function createBroadcastMessageHandler({
 
     if (message.type === "clear-chat") {
       const room = rooms.get(socket.roomId);
-      const stream = streamForRoom(socket.roomId);
+      const stream = await streamForRoom(socket.roomId);
       if (!room || room.host !== socket || !stream || stream.createdBy !== socket.user?.id) {
         send(socket, { type: "chat-error", message: "Somente o dono do canal pode limpar o histórico." });
         return true;
       }
-      streamRepository.clearChat(stream.id);
+      await streamRepository.clearChat(stream.id);
       room.chat = [];
       send(room.host, { type: "chat-cleared" });
       for (const viewer of room.viewers.values()) send(viewer, { type: "chat-cleared" });
@@ -189,7 +189,7 @@ export function createBroadcastMessageHandler({
         const reason = ["user", "logout", "capture-timeout", "capture-ended-before-start"].includes(requestedReason)
           ? requestedReason
           : "user";
-        closeBroadcastRoom(socket.roomId);
+        await closeBroadcastRoom(socket.roomId);
         infoLog("broadcast_stopped", { clientId: socket.clientId, roomId: socket.roomId, viewers: room.viewers.size, reason });
       }
       return true;
