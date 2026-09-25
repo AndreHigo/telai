@@ -73,6 +73,14 @@ Para validar os contratos dos repositórios contra o PostgreSQL local:
 pnpm run db:test:postgres-repositories
 ```
 
+Para executar a validação completa local em ordem segura, use:
+
+```powershell
+pnpm run db:test:postgres-suite
+```
+
+Essa suíte roda as fixtures sequencialmente porque importação e repositories usam o mesmo banco de QA; executá-las em paralelo pode remover uma fixture enquanto outra ainda a utiliza.
+
 Os comandos `db:test:postgres-*` carregam automaticamente `deploy/.env.postgres`
 quando esse arquivo local existe; variáveis já definidas no ambiente têm
 precedência. O arquivo continua fora do versionamento e nenhum segredo é

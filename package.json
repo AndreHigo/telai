@@ -48,6 +48,7 @@
     "db:test:postgres-migration-concurrency": "node qa/test-postgres-migration-concurrency.mjs",
     "db:test:postgres-repositories": "node qa/test-postgres-repositories.mjs",
     "db:test:postgres-maintenance": "node qa/test-postgres-maintenance.cjs",
+    "db:test:postgres-suite": "node qa/test-postgres-suite.mjs",
     "dist": "npm run build:frontend && electron-builder --win nsis"
   },
   "dependencies": {
