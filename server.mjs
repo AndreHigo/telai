@@ -2955,7 +2955,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = groupRoleOrderMatch[1];
-    const owner = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const owner = groupPermissionRepository.member(groupId, user.id);
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode ordenar cargos." });
     readJson(request).then((body) => {
       const roleIds = Array.isArray(body.roleIds) ? body.roleIds.map((roleId) => String(roleId || "").trim()) : null;
@@ -2977,7 +2977,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const [, groupId, roleId] = groupRoleMatch;
-    const owner = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const owner = groupPermissionRepository.member(groupId, user.id);
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode administrar cargos." });
     const role = groupRoleRepository.findRole(groupId, roleId);
     if (!role) return json(response, 404, { error: "Cargo não encontrado neste grupo." });
@@ -3012,7 +3012,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const [, groupId, memberId] = groupMemberRoleMatch;
-    const owner = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const owner = groupPermissionRepository.member(groupId, user.id);
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode atribuir cargos." });
     const member = groupRoleRepository.member(groupId, memberId);
     if (!member) return json(response, 404, { error: "Membro não encontrado neste grupo." });
@@ -3057,7 +3057,7 @@ async function handleHttpRequest(request, response) {
     const groupId = groupOverviewMatch[1];
     if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
     touchGroupPresence(groupId, user.id);
-    const group = database.prepare("SELECT id, name, slug FROM groups WHERE id = ?").get(groupId);
+    const group = groupSettingsRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     const rooms = groupRoomRepository.listTextRooms(groupId);
     const voiceRoomsForGroup = groupRoomRepository.listVoiceRooms(groupId).map((room) => {
@@ -3112,7 +3112,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const [, groupId, roomId] = groupRoomActionMatch;
-    const member = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const member = groupPermissionRepository.member(groupId, user.id);
     if (member?.role !== "owner") return json(response, 403, { error: "Somente o dono pode gerenciar canais." });
     const room = groupRoomRepository.findRoom(groupId, roomId);
     if (!room) return json(response, 404, { error: "Canal não encontrado." });
@@ -3194,7 +3194,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = inviteMatch[1];
-    const member = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const member = groupPermissionRepository.member(groupId, user.id);
     if (!member) return json(response, 403, { error: "Você não participa deste grupo." });
     if (!canGroupAction(user.id, groupId, "canInvite")) return json(response, 403, { error: "Você não tem permissão para criar convites neste grupo." });
     readJson(request).then((body) => {
@@ -3211,7 +3211,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const [, groupId, tokenHash] = inviteDeleteMatch;
-    const group = database.prepare("SELECT owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
+    const group = groupSettingsRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o dono pode revogar convites." });
     if (!groupInviteRepository.deleteGroupInvite(groupId, tokenHash)) return json(response, 404, { error: "Convite não encontrado." });
