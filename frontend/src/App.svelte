@@ -42,6 +42,7 @@
   import { createVoiceQualityController } from "./features/voice/quality-controller.js";
   import { createVoiceSignalingController } from "./features/voice/signaling-controller.js";
   import { createVoicePeerHealthController } from "./features/voice/peer-health-controller.js";
+  import { createVoicePeerRecoveryController } from "./features/voice/peer-recovery-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
   import {
@@ -262,10 +263,8 @@
   let voiceSocket = null;
   let voiceParticipants = new Map();
   let voicePeerConnections = new Map();
-  let voicePeerDisconnectTimers = new Map();
   let voicePeerConnectionTimers = new Map();
   let voicePeerAudioTrackTimers = new Map();
-  let voicePeerRecoveryInFlight = new Set();
   let voicePeerNegotiationInFlight = new Set();
   let voicePeerAudioHealth = new Map();
   let voicePeerRelayRecoveryAttempted = new Set();
@@ -617,6 +616,16 @@
     reportClientError,
     graceMs: VOICE_PEER_AUDIO_GRACE_MS,
     pollIntervalMs: VOICE_PEER_HEALTH_POLL_MS,
+  });
+  const voicePeerRecoveryController = createVoicePeerRecoveryController({
+    getState: () => ({ rtcConfig, voicePeerConnections, voiceState }),
+    refreshIceConfiguration: (force) => refreshIceConfigurationIfNeeded(force),
+    hasTurnServer: () => voiceHasTurnServer(),
+    closePeer: (participantId) => closeVoicePeer(participantId),
+    createPeer: (participantId, initiator, peerConfig) => createVoicePeer(participantId, initiator, peerConfig),
+    shouldInitiate: (participantId) => voicePeerShouldInitiate(participantId),
+    sendVoice,
+    reportClientError,
   });
   let voiceDevicesBusy = false;
   let voiceDevicesError = "";
@@ -3054,16 +3063,12 @@
   }
 
   function closeVoicePeer(participantId) {
-    const disconnectTimer = voicePeerDisconnectTimers.get(participantId);
-    if (disconnectTimer) clearTimeout(disconnectTimer);
-    voicePeerDisconnectTimers.delete(participantId);
     const connectionTimer = voicePeerConnectionTimers.get(participantId);
     if (connectionTimer) clearTimeout(connectionTimer);
     voicePeerConnectionTimers.delete(participantId);
     const audioTrackTimer = voicePeerAudioTrackTimers.get(participantId);
     if (audioTrackTimer) clearTimeout(audioTrackTimer);
     voicePeerAudioTrackTimers.delete(participantId);
-    voicePeerRecoveryInFlight.delete(participantId);
     voicePeerNegotiationInFlight.delete(participantId);
     const playbackTimer = voiceRemotePlaybackTimers.get(participantId);
     if (playbackTimer) clearTimeout(playbackTimer);
@@ -3072,6 +3077,7 @@
     voicePeerConnections.delete(participantId);
     voicePendingCandidates.delete(participantId);
     voiceSignalingController.clearParticipant(participantId);
+    voicePeerRecoveryController.clearParticipant(participantId);
     voicePendingSignals.delete(participantId);
     voicePeerAudioHealth.delete(participantId);
     voicePeerRelayRecoveryAttempted.delete(participantId);
@@ -3285,51 +3291,12 @@
     markVoiceParticipantSpeaking(participantId, false, "rtc");
   }
 
-  function scheduleVoicePeerRecovery(participantId, delayMs = 5000, forceRelay = false) {
-    if (voicePeerDisconnectTimers.has(participantId)) return;
-    const timer = window.setTimeout(() => {
-      voicePeerDisconnectTimers.delete(participantId);
-      const peer = voicePeerConnections.get(participantId);
-      if (peer && ["failed", "disconnected"].includes(peer.connectionState)) void recoverVoicePeer(participantId, peer, { forceRelay });
-    }, delayMs);
-    voicePeerDisconnectTimers.set(participantId, timer);
+  function scheduleVoicePeerRecovery(...args) {
+    return voicePeerRecoveryController.schedule(...args);
   }
 
-  async function recoverVoicePeer(participantId, peer, { forceRelay = false } = {}) {
-    if (voicePeerRecoveryInFlight.has(participantId) || voiceState !== "connected" || voicePeerConnections.get(participantId) !== peer) return;
-    voicePeerRecoveryInFlight.add(participantId);
-    try {
-      await refreshIceConfigurationIfNeeded(true);
-      if (voicePeerConnections.get(participantId) !== peer || peer.connectionState === "closed") return;
-      const recoveryConfig = forceRelay && voiceHasTurnServer()
-        ? { ...rtcConfig, iceTransportPolicy: "relay" }
-        : rtcConfig;
-      if (forceRelay && voiceHasTurnServer()) {
-        closeVoicePeer(participantId);
-        // A recuperação pode ser disparada nos dois lados ao mesmo tempo.
-        // Recriar ambos como iniciadores causa glare e deixa o par conectado
-        // apenas em uma direção. Preserve o mesmo papel determinístico usado
-        // na entrada inicial da sala.
-        const initiator = voicePeerShouldInitiate(participantId);
-        createVoicePeer(participantId, initiator, recoveryConfig);
-        reportClientError("voice_peer_recovery_recreated", new Error("A conexão de áudio foi recriada usando TURN."), { participantId, forceRelay: true, initiator });
-        return;
-      }
-      if (peer.signalingState !== "stable") {
-        scheduleVoicePeerRecovery(participantId, 3000, forceRelay);
-        return;
-      }
-      reportClientError("voice_peer_recovery_started", new Error("Renegociando a conexão de áudio."), { participantId, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState });
-      if (typeof peer.restartIce === "function") peer.restartIce();
-      const offer = await peer.createOffer({ iceRestart: true });
-      await peer.setLocalDescription(offer);
-      sendVoice({ type: "voice-signal", target: participantId, payload: { kind: "offer", sdp: peer.localDescription } });
-    } catch (error) {
-      reportClientError("voice_peer_recovery_error", error, { participantId, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState });
-      scheduleVoicePeerRecovery(participantId, 10000, forceRelay);
-    } finally {
-      voicePeerRecoveryInFlight.delete(participantId);
-    }
+  function recoverVoicePeer(...args) {
+    return voicePeerRecoveryController.recover(...args);
   }
 
   function getVoiceSoundContext() {
@@ -3934,9 +3901,7 @@
           });
           ensureVoicePeerHealthTimer();
         }
-        const disconnectTimer = voicePeerDisconnectTimers.get(participantId);
-        if (disconnectTimer) clearTimeout(disconnectTimer);
-        voicePeerDisconnectTimers.delete(participantId);
+        voicePeerRecoveryController.clearParticipant(participantId);
       }
     };
     peer.oniceconnectionstatechange = () => {
@@ -4305,6 +4270,7 @@
       sendVoice({ type: "voice-leave" });
     }
     for (const participantId of voicePeerConnections.keys()) closeVoicePeer(participantId);
+    voicePeerRecoveryController.clearAll();
     clearVoiceActivityAnalyzer(previousVoiceClientId);
     if (!preserveLocalStream) {
       stopVoiceInputStream(voiceLocalStream);

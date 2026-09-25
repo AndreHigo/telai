@@ -29,6 +29,7 @@
     "test:media-contract": "node qa/test-media-contract.mjs",
     "test:voice-signaling-controller": "node qa/test-voice-signaling-controller.mjs",
     "test:voice-peer-health-controller": "node qa/test-voice-peer-health-controller.mjs",
+    "test:voice-peer-recovery-controller": "node qa/test-voice-peer-recovery-controller.mjs",
     "test:sqlite-legacy-compatibility": "node qa/test-sqlite-legacy-compatibility.mjs",
     "test:security": "node qa/e2e-rate-limit.cjs",
     "test:notifications": "electron --no-sandbox qa/e2e-notifications.cjs",
