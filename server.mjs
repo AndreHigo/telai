@@ -10,6 +10,7 @@ import { installWebsocketHeartbeat } from "./server/gateway/heartbeat.mjs";
 import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
 import { createGroupAccessRepository } from "./server/repositories/groups.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
+import { createSessionRepository } from "./server/repositories/sessions.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -746,6 +747,7 @@ database.exec("CREATE INDEX IF NOT EXISTS group_messages_room_idx ON group_messa
 database.exec("CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_messages(sender_id, created_at DESC)");
 const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
 const { directConversationForUser, directConversationPayload } = createDirectConversationRepository(database, { compactUserSummary });
+const sessionRepository = createSessionRepository(database, { hashSessionToken });
 
 function pruneExpiredRuntimeState() {
   const now = Date.now();
@@ -852,13 +854,7 @@ function clearLoginFailure(request, username) {
 
 function currentUser(request) {
   const token = parseCookies(request).mirante_session;
-  if (!token) return null;
-  const now = new Date().toISOString();
-  return database.prepare(`
-    SELECT users.id, users.username, users.display_name AS displayName, users.avatar_data AS avatarData
-    FROM sessions JOIN users ON users.id = sessions.user_id
-    WHERE sessions.token_hash = ? AND sessions.expires_at > ?
-  `).get(hashSessionToken(token), now) || null;
+  return sessionRepository.findUserByToken(token);
 }
 
 function sessionCookie(token, request) {
@@ -880,8 +876,7 @@ function expiredSessionCookie(request) {
 function createSession(userId, request, response) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  database.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)")
-    .run(hashSessionToken(token), userId, expiresAt, new Date().toISOString());
+  sessionRepository.create({ userId, token, expiresAt });
   response.setHeader("Set-Cookie", sessionCookie(token, request));
 }
 

@@ -73,6 +73,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair abertura do SQLite e migrações genéricas para `server/repositories`.
 - [x] Extrair o repositório de acesso e permissões de grupos.
 - [x] Extrair o repositório de conversas diretas.
+- [x] Extrair o acesso persistente às sessões de autenticação.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
