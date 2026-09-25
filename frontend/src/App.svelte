@@ -604,6 +604,7 @@
   });
   const voiceQualityController = createVoiceQualityController({
     getPeerConnections: () => voicePeerConnections,
+    getRecoveryCount: (participantId) => voicePeerRecoveryController.getRecoveryCount(participantId),
     reportClientError,
     pollIntervalMs: VOICE_QUALITY_POLL_MS,
   });

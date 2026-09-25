@@ -12,6 +12,7 @@ export function createVoicePeerRecoveryController({
 } = {}) {
   const timers = new Map();
   const inFlight = new Set();
+  const recoveryCounts = new Map();
   const state = () => getState?.() || {};
 
   function clearParticipant(participantId) {
@@ -24,6 +25,11 @@ export function createVoicePeerRecoveryController({
   function clearAll() {
     for (const participantId of timers.keys()) clearParticipant(participantId);
     inFlight.clear();
+    recoveryCounts.clear();
+  }
+
+  function getRecoveryCount(participantId) {
+    return recoveryCounts.get(participantId) || 0;
   }
 
   function schedule(participantId, delayMs = 5_000, forceRelay = false) {
@@ -42,6 +48,7 @@ export function createVoicePeerRecoveryController({
     const current = state();
     if (inFlight.has(participantId) || current.voiceState !== "connected" || current.voicePeerConnections?.get(participantId) !== peer) return;
     inFlight.add(participantId);
+    recoveryCounts.set(participantId, getRecoveryCount(participantId) + 1);
     try {
       await refreshIceConfiguration?.(true);
       const latest = state();
@@ -72,5 +79,5 @@ export function createVoicePeerRecoveryController({
     }
   }
 
-  return { clearAll, clearParticipant, recover, schedule };
+  return { clearAll, clearParticipant, getRecoveryCount, recover, schedule };
 }

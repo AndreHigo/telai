@@ -22,6 +22,7 @@ const peers = new Map([...statsByPeer.entries()].map(([participantId, reportsFor
 
 const controller = createVoiceQualityController({
   getPeerConnections: () => peers,
+  getRecoveryCount: (participantId) => participantId === "peer-a" ? 2 : 0,
   loadQualityModule: async () => import("../frontend/src/services/media/rtc-quality.js"),
   reportClientError: (...args) => reports.push(args),
   setIntervalFn: (callback, delay) => {
@@ -45,6 +46,7 @@ assert.equal(reports[0][0], "voice_rtc_quality");
 assert.equal(reports[0][2].samples.length, 2);
 assert.equal(reports[0][2].samples[0].roundTripTimeMs, 40);
 assert.equal(reports[0][2].samples[1].roundTripTimeMs, 80);
+assert.equal(reports[0][2].samples[0].reconnectionCount, 2);
 
 statsByPeer.get("peer-a").set("audio-a", { id: "audio-a", type: "inbound-rtp", kind: "audio", packetsReceived: 20, bytesReceived: 3000, timestamp: 2000 });
 statsByPeer.get("peer-b").set("audio-b", { id: "audio-b", type: "inbound-rtp", kind: "audio", packetsReceived: 40, bytesReceived: 5000, timestamp: 2000 });

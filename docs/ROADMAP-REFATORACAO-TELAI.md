@@ -232,6 +232,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair fila, buffer de candidatos e negociação offer/answer de voz para `frontend/src/features/voice/signaling-controller.js`, mantendo a captura local no shell.
     - [x] Extrair o monitor de áudio remoto, limiar de stall e recuperação via TURN para `frontend/src/features/voice/peer-health-controller.js`.
     - [x] Extrair timers, `iceRestart`, fallback TURN e recriação determinística de peers para `frontend/src/features/voice/peer-recovery-controller.js`.
+    - [x] Incluir a contagem de recuperações por peer nos snapshots de qualidade RTC, cobrindo reconexão além de jitter, perda, RTT e bitrate.
 - [ ] Preservar captura de tela, janela, câmera, áudio de jogos e Electron.
 
 ### Fase 5 — Plataforma e escala sob demanda

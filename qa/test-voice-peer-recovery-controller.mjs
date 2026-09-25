@@ -38,6 +38,7 @@ await controller.recover("peer", renegotiatingPeer);
 assert.equal(renegotiatingPeer.restarted, true);
 assert.equal(sent[0].payload.kind, "offer");
 assert.equal(reports[0][0], "voice_peer_recovery_started");
+assert.equal(controller.getRecoveryCount("peer"), 1);
 
 const relayController = createVoicePeerRecoveryController({
   getState: () => state,
@@ -55,6 +56,7 @@ assert.deepEqual(closed.at(-1), "relay-peer");
 assert.deepEqual(created.at(-1)[1], false);
 assert.equal(created.at(-1)[2].iceTransportPolicy, "relay");
 assert.equal(reports.at(-1)[0], "voice_peer_recovery_recreated");
+assert.equal(relayController.getRecoveryCount("relay-peer"), 1);
 
 const delayedPeer = peer();
 state.voicePeerConnections.set("delayed", delayedPeer);
@@ -64,5 +66,7 @@ assert.equal(timers.at(-1).delay, 123);
 assert.equal(timers.length, 1);
 controller.clearParticipant("delayed");
 assert.equal(timers.at(-1).cleared, true);
+controller.clearAll();
+assert.equal(controller.getRecoveryCount("peer"), 0);
 
 console.log(JSON.stringify({ ok: true, checks: 10 }));

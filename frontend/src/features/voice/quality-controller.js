@@ -2,6 +2,7 @@ const DEFAULT_POLL_INTERVAL_MS = 10_000;
 
 export function createVoiceQualityController({
   getPeerConnections,
+  getRecoveryCount = () => 0,
   reportClientError,
   loadQualityModule = () => import("../../services/media/rtc-quality.js"),
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
@@ -37,6 +38,7 @@ export function createVoiceQualityController({
           participantId,
           connectionState: peer.connectionState,
           iceConnectionState: peer.iceConnectionState,
+          reconnectionCount: Number(getRecoveryCount(participantId)) || 0,
           ...result.sample,
         });
       }
