@@ -111,6 +111,8 @@ async function main() {
     assert.ok(openApi.body.paths["/groups/{groupId}/attachments/{attachmentId}"].get);
     assert.ok(openApi.body.paths["/groups/{groupId}/rooms/{roomId}/read"].post);
     assert.ok(openApi.body.paths["/users/{userId}/block"].post);
+    assert.ok(openApi.body.paths["/applications"].post);
+    assert.ok(openApi.body.paths["/bot/groups/{groupId}/messages"].post);
     const missingVersionedRoute = await request("/api/v1/route-that-does-not-exist");
     assert.equal(missingVersionedRoute.response.status, 404);
     assert.equal(missingVersionedRoute.body.code, "not_found");
@@ -359,6 +361,43 @@ async function main() {
     assert.ok(webhookOverview.body.messages.some((message) => message.body === "build concluído" && message.displayName === "CI Bot"));
     assert.equal((await api(owner, `/api/groups/${groupId}/webhooks/${webhookCreation.body.webhook.id}`, "DELETE")).response.status, 200);
     assert.equal((await request(webhookPath, { method: "POST", body: JSON.stringify({ content: "não deve publicar" }) })).response.status, 404);
+    const applicationCreation = await api(owner, "/api/applications", "POST", { name: "QA Integration", description: "Bot de integração" });
+    assert.equal(applicationCreation.response.status, 201);
+    assert.equal(applicationCreation.body.application.name, "QA Integration");
+    assert.equal(applicationCreation.body.application.bot.username.startsWith("bot-"), true);
+    const applicationId = applicationCreation.body.application.id;
+    const applicationList = await api(owner, "/api/applications");
+    assert.equal(applicationList.response.status, 200);
+    assert.ok(applicationList.body.applications.some((item) => item.id === applicationId));
+    const tokenCreation = await api(owner, `/api/applications/${applicationId}/tokens`, "POST", { label: "QA token" });
+    assert.equal(tokenCreation.response.status, 201);
+    assert.match(tokenCreation.body.token, /^[A-Za-z0-9_-]{32,}$/);
+    assert.equal(Object.prototype.hasOwnProperty.call(tokenCreation.body.tokenInfo, "tokenHash"), false);
+    const tokenList = await api(owner, `/api/applications/${applicationId}/tokens`);
+    assert.equal(tokenList.response.status, 200);
+    assert.equal(tokenList.body.tokens.length, 1);
+    assert.equal(Object.prototype.hasOwnProperty.call(tokenList.body.tokens[0], "token"), false);
+    const install = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "POST");
+    assert.equal(install.response.status, 201);
+    const botMessage = await request(`/api/bot/groups/${groupId}/messages`, {
+      method: "POST",
+      headers: { authorization: `Bot ${tokenCreation.body.token}` },
+      body: JSON.stringify({ roomId: group.textRoomId, content: "mensagem do bot QA" }),
+    });
+    assert.equal(botMessage.response.status, 201);
+    assert.equal(botMessage.body.message.username, applicationCreation.body.application.bot.username);
+    const botOverview = await api(owner, `/api/groups/${groupId}/overview`);
+    assert.ok(botOverview.body.messages.some((message) => message.body === "mensagem do bot QA" && message.userId === applicationCreation.body.application.bot.id));
+    const tokenRevocation = await api(owner, `/api/applications/${applicationId}/tokens/${tokenCreation.body.tokenInfo.id}`, "DELETE");
+    assert.equal(tokenRevocation.response.status, 200);
+    const revokedBotMessage = await request(`/api/bot/groups/${groupId}/messages`, {
+      method: "POST",
+      headers: { authorization: `Bot ${tokenCreation.body.token}` },
+      body: JSON.stringify({ content: "não deve publicar" }),
+    });
+    assert.equal(revokedBotMessage.response.status, 401);
+    assert.equal((await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "DELETE")).response.status, 200);
+    assert.equal((await api(owner, `/api/applications/${applicationId}`, "DELETE")).response.status, 200);
     assert.ok(overview.body.members.some((item) => item.id === member.user.id));
   });
   await check("permissions deny and restore", async () => {

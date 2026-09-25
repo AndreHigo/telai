@@ -48,12 +48,23 @@ export function createAccountRepository(database, { legalPolicyVersion, createId
       `).all(userId),
       follows: database.prepare("SELECT follower_id AS followerId, followed_id AS followedId, created_at AS createdAt FROM follows WHERE follower_id = ? OR followed_id = ? ORDER BY created_at").all(userId, userId),
       blocks: database.prepare("SELECT blocker_id AS blockerId, blocked_id AS blockedId, created_at AS createdAt FROM user_blocks WHERE blocker_id = ? OR blocked_id = ? ORDER BY created_at").all(userId, userId),
+      applications: database.prepare(`
+        SELECT applications.id, applications.name, applications.description,
+          applications.created_at AS createdAt, applications.updated_at AS updatedAt,
+          applications.bot_user_id AS botUserId, users.username AS botUsername,
+          users.display_name AS botDisplayName
+        FROM applications JOIN users ON users.id = applications.bot_user_id
+        WHERE applications.owner_id = ? ORDER BY applications.created_at
+      `).all(userId),
     };
   }
 
   function deleteUserAccount(userId) {
     database.exec("BEGIN IMMEDIATE");
     try {
+      const botUserIds = database.prepare("SELECT bot_user_id AS botUserId FROM applications WHERE owner_id = ?").all(userId).map(({ botUserId }) => botUserId);
+      database.prepare("DELETE FROM applications WHERE owner_id = ?").run(userId);
+      for (const botUserId of botUserIds) database.prepare("DELETE FROM users WHERE id = ? AND is_bot = 1").run(botUserId);
       const result = database.prepare("DELETE FROM users WHERE id = ?").run(userId);
       if (!result.changes) throw new Error("account-not-found");
       database.exec("COMMIT");
@@ -74,6 +85,7 @@ export function createAccountRepository(database, { legalPolicyVersion, createId
     try {
       database.exec("BEGIN IMMEDIATE");
       database.prepare("UPDATE groups SET owner_id = ? WHERE owner_id = ?").run(targetId, sourceId);
+      database.prepare("UPDATE applications SET owner_id = ? WHERE owner_id = ?").run(targetId, sourceId);
       database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, created_at) SELECT group_id, ?, role, created_at FROM group_members WHERE user_id = ?").run(targetId, sourceId);
       database.prepare(`
         INSERT OR IGNORE INTO group_member_permissions (group_id, user_id, can_chat, can_stream, can_invite, can_view_voice_members, updated_at)
@@ -151,7 +163,7 @@ export function createPostgresAccountRepository(database, { legalPolicyVersion, 
     if (!account) return null;
     const query = async (text, values = [userId]) => (await database.query(text, values)).rows;
     const one = async (text, values = [userId]) => (await database.query(text, values)).rows[0] || null;
-    const [consents, linkedAccounts, preferences, voicePreferences, channelProfile, memberships, ownedGroups, permissions, joinRequests, invitationsReceived, notifications, streams, streamMessages, groupMessages, directConversations, directMessages, follows, blocks] = await Promise.all([
+    const [consents, linkedAccounts, preferences, voicePreferences, channelProfile, memberships, ownedGroups, permissions, joinRequests, invitationsReceived, notifications, streams, streamMessages, groupMessages, directConversations, directMessages, follows, blocks, applications] = await Promise.all([
       query('SELECT consent_type AS type, policy_version AS "policyVersion", accepted_at AS "acceptedAt" FROM user_consents WHERE user_id = $1 ORDER BY accepted_at'),
       query('SELECT provider, email, created_at AS "createdAt", updated_at AS "updatedAt" FROM oauth_accounts WHERE user_id = $1 ORDER BY provider'),
       query('SELECT theme, default_quality AS "defaultQuality", default_audio AS "defaultAudio", button_color AS "buttonColor", input_background_color AS "inputBackgroundColor", background_color AS "backgroundColor", push_to_talk_key AS "pushToTalkKey", mute_shortcut AS "muteShortcut", live_notification_scope AS "liveNotificationScope", voice_microphone_volume AS "voiceMicrophoneVolume", voice_output_volume AS "voiceOutputVolume", preferred_input_device_id AS "preferredInputDeviceId", preferred_output_device_id AS "preferredOutputDeviceId", updated_at AS "updatedAt" FROM user_preferences WHERE user_id = $1'),
@@ -170,18 +182,22 @@ export function createPostgresAccountRepository(database, { legalPolicyVersion, 
       query('SELECT direct_messages.id, direct_messages.conversation_id AS "conversationId", direct_messages.sender_id AS "senderId", direct_messages.body, direct_messages.created_at AS "createdAt", direct_messages.read_at AS "readAt" FROM direct_messages JOIN direct_conversation_members ON direct_conversation_members.conversation_id = direct_messages.conversation_id WHERE direct_conversation_members.user_id = $1 ORDER BY direct_messages.created_at'),
       query('SELECT follower_id AS "followerId", followed_id AS "followedId", created_at AS "createdAt" FROM follows WHERE follower_id = $1 OR followed_id = $1 ORDER BY created_at'),
       query('SELECT blocker_id AS "blockerId", blocked_id AS "blockedId", created_at AS "createdAt" FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1 ORDER BY created_at'),
+      query('SELECT applications.id, applications.name, applications.description, applications.created_at AS "createdAt", applications.updated_at AS "updatedAt", applications.bot_user_id AS "botUserId", users.username AS "botUsername", users.display_name AS "botDisplayName" FROM applications JOIN users ON users.id = applications.bot_user_id WHERE applications.owner_id = $1 ORDER BY applications.created_at'),
     ]);
     return {
       exportVersion: "1", exportedAt: new Date().toISOString(),
       legal: { policyVersion: legalPolicyVersion, consents }, account, linkedAccounts, preferences,
       voicePreferences: voicePreferences.map((item) => ({ ...item, locallyMuted: Boolean(item.locallyMuted) })),
       channelProfile, memberships, ownedGroups, permissions, joinRequests, invitationsReceived,
-      notifications, streams, streamMessages, groupMessages, directConversations, directMessages, follows, blocks,
+      notifications, streams, streamMessages, groupMessages, directConversations, directMessages, follows, blocks, applications,
     };
   }
 
   async function deleteUserAccount(userId) {
     return withPostgresTransaction(database, async (client) => {
+      const bots = await client.query('SELECT bot_user_id AS "botUserId" FROM applications WHERE owner_id = $1', [userId]);
+      await client.query("DELETE FROM applications WHERE owner_id = $1", [userId]);
+      if (bots.rows.length) await client.query("DELETE FROM users WHERE id = ANY($1::text[]) AND is_bot = 1", [bots.rows.map(({ botUserId }) => botUserId)]);
       const result = await client.query("DELETE FROM users WHERE id = $1", [userId]);
       if (!result.rowCount) throw new Error("account-not-found");
     }, transactionClient);
@@ -201,6 +217,7 @@ export function createPostgresAccountRepository(database, { legalPolicyVersion, 
       const source = sourceResult.rows[0];
       if (!target || !source) throw new Error("oauth-merge-user-missing");
       await client.query("UPDATE groups SET owner_id = $1 WHERE owner_id = $2", [targetId, sourceId]);
+      await client.query("UPDATE applications SET owner_id = $1 WHERE owner_id = $2", [targetId, sourceId]);
       await client.query("INSERT INTO group_members (group_id, user_id, role, created_at) SELECT group_id, $1, role, created_at FROM group_members WHERE user_id = $2 ON CONFLICT (group_id, user_id) DO NOTHING", [targetId, sourceId]);
       await client.query("INSERT INTO group_member_permissions (group_id, user_id, can_chat, can_stream, can_invite, can_view_voice_members, updated_at) SELECT group_id, $1, can_chat, can_stream, can_invite, can_view_voice_members, updated_at FROM group_member_permissions WHERE user_id = $2 ON CONFLICT (group_id, user_id) DO NOTHING", [targetId, sourceId]);
       await client.query("UPDATE group_members SET role = 'owner' WHERE user_id = $1 AND group_id IN (SELECT group_id FROM group_members WHERE user_id = $2 AND role = 'owner')", [targetId, sourceId]);

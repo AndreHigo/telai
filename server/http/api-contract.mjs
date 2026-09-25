@@ -62,6 +62,31 @@ const paths = {
   "/auth/{provider}/callback": pathItem("OAuth", { get: ["completeOAuth", "Conclui autenticação OAuth", { auth: false }] }),
   "/account/export": pathItem("Conta", { get: ["exportAccountData", "Exporta os dados da conta"] }),
   "/account/delete": pathItem("Conta", { post: ["deleteAccount", "Exclui a conta e seus dados"] }),
+  "/applications": pathItem("Aplicações", {
+    get: ["listApplications", "Lista as aplicações do usuário"],
+    post: ["createApplication", "Cria uma aplicação com identidade de bot", { methods: ["201"] }],
+  }),
+  "/applications/{applicationId}": pathItem("Aplicações", {
+    get: ["getApplication", "Retorna uma aplicação"],
+    delete: ["deleteApplication", "Exclui uma aplicação"],
+  }),
+  "/applications/{applicationId}/tokens": pathItem("Aplicações", {
+    get: ["listApplicationTokens", "Lista metadados dos tokens de uma aplicação"],
+    post: ["createApplicationToken", "Cria um token de bot exibido uma única vez", { methods: ["201"] }],
+  }),
+  "/applications/{applicationId}/tokens/{tokenId}": pathItem("Aplicações", {
+    delete: ["revokeApplicationToken", "Revoga um token de bot"],
+  }),
+  "/applications/{applicationId}/groups": pathItem("Aplicações", {
+    get: ["listApplicationInstallations", "Lista grupos onde o bot foi instalado"],
+  }),
+  "/applications/{applicationId}/groups/{groupId}": pathItem("Aplicações", {
+    post: ["installApplicationBot", "Instala o bot em um grupo", { methods: ["201"] }],
+    delete: ["uninstallApplicationBot", "Remove o bot de um grupo"],
+  }),
+  "/bot/groups/{groupId}/messages": pathItem("Aplicações", {
+    post: ["createBotMessage", "Publica mensagem autenticada por token de bot", { auth: false, methods: ["201"] }],
+  }),
   "/users/search": pathItem("Social", { get: ["searchUsers", "Busca usuários"] }),
   "/social": pathItem("Social", { get: ["getSocialGraph", "Retorna amizades, solicitações e follows"] }),
   "/users/{userId}/block": pathItem("Social", {

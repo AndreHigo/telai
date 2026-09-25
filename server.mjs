@@ -47,6 +47,7 @@ import { createMediaRoutes } from "./server/http/media-routes.mjs";
 import { createOAuthRoutes } from "./server/http/oauth-routes.mjs";
 import { createStaticRoutes } from "./server/http/static-routes.mjs";
 import { createStreamRoutes } from "./server/http/stream-routes.mjs";
+import { createApplicationRoutes } from "./server/http/application-routes.mjs";
 import { clientIp, publicOriginForRequest, trustedForwardedHeaders } from "./server/http/request-context.mjs";
 import { createObservabilityRuntime } from "./server/observability/runtime.mjs";
 import { createObservabilitySnapshot } from "./server/observability/snapshot.mjs";
@@ -293,6 +294,7 @@ const {
   groupMessageRepository,
   groupAttachmentRepository,
   groupWebhookRepository,
+  applicationRepository,
   groupRoomReadRepository,
   groupRepository,
   groupModerationRepository,
@@ -461,6 +463,20 @@ const {
   isPresent,
   disconnectUserFromGroup: (...args) => eventGateway?.disconnectUserFromGroup(...args),
   publishGroupPresence: (...args) => eventGateway?.publishGroupPresence(...args),
+  publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
+});
+const handleApplicationRoutes = createApplicationRoutes({
+  json,
+  readJson,
+  requireUser,
+  applicationRepository,
+  groupSettingsRepository,
+  groupMessageRepository,
+  isGroupMember,
+  canGroupRoomAction,
+  hashToken: hashSessionToken,
+  createToken: () => randomBytes(32).toString("base64url"),
+  createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
   publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
 });
 const {
@@ -739,6 +755,7 @@ const handleHttpRoutes = createHttpRouter({
   handleGroupRoomRoutes,
   handleGroupAuditRoutes,
   handleGroupModerationRoutes,
+  handleApplicationRoutes,
   handleGroupContentRoutes,
   handleGroupWebhookRoutes,
   handleGroupInviteRoutes,

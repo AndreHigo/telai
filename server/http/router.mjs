@@ -20,6 +20,7 @@ export function createHttpRouter({
   handleGroupRoomRoutes,
   handleGroupAuditRoutes,
   handleGroupModerationRoutes,
+  handleApplicationRoutes,
   handleGroupContentRoutes,
   handleGroupWebhookRoutes,
   handleGroupInviteRoutes,
@@ -84,6 +85,7 @@ export function createHttpRouter({
     if (await handleGroupRoomRoutes(request, response, routedUrl)) return true;
     if (await handleGroupAuditRoutes(request, response, routedUrl)) return true;
     if (await handleGroupModerationRoutes(request, response, routedUrl)) return true;
+    if (await handleApplicationRoutes(request, response, routedUrl)) return true;
     if (await handleGroupWebhookRoutes(request, response, routedUrl)) return true;
     if (await handleGroupContentRoutes(request, response, routedUrl)) return true;
     if (await handleGroupInviteRoutes(request, response, routedUrl)) return true;
