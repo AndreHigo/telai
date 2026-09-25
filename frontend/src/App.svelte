@@ -30,6 +30,7 @@
   import { createApiClient } from "./services/api.js";
   import { createGroupRoomReadController } from "./features/groups/room-read-controller.js";
   import { createGroupStateStore } from "./features/groups/group-state.js";
+  import { createMessageStateStore } from "./features/groups/message-state.js";
   import { createGroupThreadRuntime } from "./features/groups/thread-runtime.js";
   import {
     createSelectedVoiceAudioConstraints,
@@ -130,6 +131,7 @@
   let loading = true;
   let user = null;
   const groupState = createGroupStateStore();
+  const messageState = createMessageStateStore();
   let groups = groupState.getState().groups;
   let streams = [];
   const navigationState = createNavigationStateStore();
@@ -172,14 +174,14 @@
   let registerUsername = "";
   let registerPassword = "";
   let registerLegalAccepted = false;
-  let messageDraft = "";
-  let messageAttachments = [];
-  let editingMessageId = "";
-  let editingMessageDraft = "";
+  let messageDraft = messageState.getState().messageDraft;
+  let messageAttachments = messageState.getState().messageAttachments;
+  let editingMessageId = messageState.getState().editingMessageId;
+  let editingMessageDraft = messageState.getState().editingMessageDraft;
   let messageComposerInput;
-  let mentionSuggestions = [];
-  let mentionStartIndex = -1;
-  let mentionActiveIndex = 0;
+  let mentionSuggestions = messageState.getState().mentionSuggestions;
+  let mentionStartIndex = messageState.getState().mentionStartIndex;
+  let mentionActiveIndex = messageState.getState().mentionActiveIndex;
   let broadcastState = "idle";
   let broadcastError = "";
   let broadcastTitle = "";
@@ -406,14 +408,14 @@
         getSelectedGroupId: () => selectedGroupId,
         getSelectedRoom: () => selectedRoom,
         getActiveThread: () => activeGroupThread,
-        setActiveThread: (value) => { activeGroupThread = value; },
+        setActiveThread: (value) => setMessageState({ activeGroupThread: value }),
         getThreadMessages: () => groupThreadMessages,
-        setThreadMessages: (value) => { groupThreadMessages = value; },
+        setThreadMessages: (value) => setMessageState({ groupThreadMessages: value }),
         getThreadDraft: () => groupThreadDraft,
-        setThreadDraft: (value) => { groupThreadDraft = value; },
+        setThreadDraft: (value) => setMessageState({ groupThreadDraft: value }),
         getThreadBusy: () => groupThreadBusy,
-        setThreadBusy: (value) => { groupThreadBusy = value; },
-        setThreadError: (value) => { groupThreadError = value; },
+        setThreadBusy: (value) => setMessageState({ groupThreadBusy: value }),
+        setThreadError: (value) => setMessageState({ groupThreadError: value }),
         getKnownMessageIds: () => knownGroupMessageIds,
         setKnownMessageIds: (value) => setGroupState({ knownGroupMessageIds: value }),
         getGroupOverview: () => groupOverview,
@@ -801,15 +803,15 @@
   let groupSearchResults = [];
   let groupSearchBusy = false;
   let groupSearchError = "";
-  let groupMessageSearchQuery = "";
-  let groupMessageSearchResults = [];
-  let groupMessageSearchBusy = false;
-  let groupMessageSearchError = "";
-  let activeGroupThread = null;
-  let groupThreadMessages = [];
-  let groupThreadDraft = "";
-  let groupThreadBusy = false;
-  let groupThreadError = "";
+  let groupMessageSearchQuery = messageState.getState().groupMessageSearchQuery;
+  let groupMessageSearchResults = messageState.getState().groupMessageSearchResults;
+  let groupMessageSearchBusy = messageState.getState().groupMessageSearchBusy;
+  let groupMessageSearchError = messageState.getState().groupMessageSearchError;
+  let activeGroupThread = messageState.getState().activeGroupThread;
+  let groupThreadMessages = messageState.getState().groupThreadMessages;
+  let groupThreadDraft = messageState.getState().groupThreadDraft;
+  let groupThreadBusy = messageState.getState().groupThreadBusy;
+  let groupThreadError = messageState.getState().groupThreadError;
   let groupJoinRequests = [];
   let groupJoinActionId = "";
   let groupAuditEntries = [];
@@ -878,6 +880,29 @@
     groupOverviewRetryAt = next.groupOverviewRetryAt;
     groupOverviewRefreshInFlight = next.groupOverviewRefreshInFlight;
     groupPresenceRefreshInFlight = next.groupPresenceRefreshInFlight;
+  });
+
+  function setMessageState(next) {
+    messageState.setState(next);
+  }
+
+  const unsubscribeMessageState = messageState.subscribe((next) => {
+    messageDraft = next.messageDraft;
+    messageAttachments = next.messageAttachments;
+    editingMessageId = next.editingMessageId;
+    editingMessageDraft = next.editingMessageDraft;
+    mentionSuggestions = next.mentionSuggestions;
+    mentionStartIndex = next.mentionStartIndex;
+    mentionActiveIndex = next.mentionActiveIndex;
+    activeGroupThread = next.activeGroupThread;
+    groupThreadMessages = next.groupThreadMessages;
+    groupThreadDraft = next.groupThreadDraft;
+    groupThreadBusy = next.groupThreadBusy;
+    groupThreadError = next.groupThreadError;
+    groupMessageSearchQuery = next.groupMessageSearchQuery;
+    groupMessageSearchResults = next.groupMessageSearchResults;
+    groupMessageSearchBusy = next.groupMessageSearchBusy;
+    groupMessageSearchError = next.groupMessageSearchError;
   });
 
   const routeController = createRouteController({
@@ -1221,9 +1246,9 @@
         getRooms: () => rooms,
         getSelectedRoomId: () => selectedRoomId,
         getActiveGroupThread: () => activeGroupThread,
-        setActiveGroupThread: (value) => { activeGroupThread = value; },
+        setActiveGroupThread: (value) => setMessageState({ activeGroupThread: value }),
         getGroupThreadMessages: () => groupThreadMessages,
-        setGroupThreadMessages: (value) => { groupThreadMessages = value; },
+        setGroupThreadMessages: (value) => setMessageState({ groupThreadMessages: value }),
         getKnownGroupMessageIds: () => knownGroupMessageIds,
         setKnownGroupMessageIds: (value) => setGroupState({ knownGroupMessageIds: value }),
         shouldKeepGroupMessagesAtBottom,
@@ -1329,8 +1354,11 @@
           if ("selectedRoomId" in next) groupPatch.selectedRoomId = next.selectedRoomId;
           if ("showGroupPicker" in next) showGroupPicker = next.showGroupPicker;
           if ("showMobileChannels" in next) setNavigationState({ showMobileChannels: next.showMobileChannels });
-          if ("mentionSuggestions" in next) mentionSuggestions = next.mentionSuggestions;
-          if ("mentionStartIndex" in next) mentionStartIndex = next.mentionStartIndex;
+          const messagePatch = {};
+          if ("mentionSuggestions" in next) messagePatch.mentionSuggestions = next.mentionSuggestions;
+          if ("mentionStartIndex" in next) messagePatch.mentionStartIndex = next.mentionStartIndex;
+          if ("mentionActiveIndex" in next) messagePatch.mentionActiveIndex = next.mentionActiveIndex;
+          if (Object.keys(messagePatch).length) setMessageState(messagePatch);
           if ("watchingGroupLiveStreamId" in next) groupPatch.watchingGroupLiveStreamId = next.watchingGroupLiveStreamId;
           if (Object.keys(groupPatch).length) setGroupState(groupPatch);
         },
@@ -1496,19 +1524,21 @@
           user,
         }),
         setState: (next) => {
-          if ("activeGroupThread" in next) activeGroupThread = next.activeGroupThread;
-          if ("editingMessageDraft" in next) editingMessageDraft = next.editingMessageDraft;
-          if ("editingMessageId" in next) editingMessageId = next.editingMessageId;
-          if ("groupMessageSearchBusy" in next) groupMessageSearchBusy = next.groupMessageSearchBusy;
-          if ("groupMessageSearchError" in next) groupMessageSearchError = next.groupMessageSearchError;
-          if ("groupMessageSearchQuery" in next) groupMessageSearchQuery = next.groupMessageSearchQuery;
-          if ("groupMessageSearchResults" in next) groupMessageSearchResults = next.groupMessageSearchResults;
+          const messagePatch = {};
+          if ("activeGroupThread" in next) messagePatch.activeGroupThread = next.activeGroupThread;
+          if ("editingMessageDraft" in next) messagePatch.editingMessageDraft = next.editingMessageDraft;
+          if ("editingMessageId" in next) messagePatch.editingMessageId = next.editingMessageId;
+          if ("groupMessageSearchBusy" in next) messagePatch.groupMessageSearchBusy = next.groupMessageSearchBusy;
+          if ("groupMessageSearchError" in next) messagePatch.groupMessageSearchError = next.groupMessageSearchError;
+          if ("groupMessageSearchQuery" in next) messagePatch.groupMessageSearchQuery = next.groupMessageSearchQuery;
+          if ("groupMessageSearchResults" in next) messagePatch.groupMessageSearchResults = next.groupMessageSearchResults;
+          if (Object.keys(messagePatch).length) setMessageState(messagePatch);
           if ("showGroupMessageSearch" in next) showGroupMessageSearch = next.showGroupMessageSearch;
           if ("groupOverview" in next) setGroupState({ groupOverview: next.groupOverview });
-          if ("groupThreadMessages" in next) groupThreadMessages = next.groupThreadMessages;
+          if ("groupThreadMessages" in next) setMessageState({ groupThreadMessages: next.groupThreadMessages });
           if ("knownGroupMessageIds" in next) setGroupState({ knownGroupMessageIds: next.knownGroupMessageIds });
-          if ("messageAttachments" in next) messageAttachments = next.messageAttachments;
-          if ("messageDraft" in next) messageDraft = next.messageDraft;
+          if ("messageAttachments" in next) setMessageState({ messageAttachments: next.messageAttachments });
+          if ("messageDraft" in next) setMessageState({ messageDraft: next.messageDraft });
           if ("notice" in next) notice = next.notice;
         },
         selectRoom,
@@ -3132,14 +3162,11 @@
   }
 
   function closeGroupThread() {
-    activeGroupThread = null;
-    groupThreadMessages = [];
-    groupThreadDraft = "";
-    groupThreadError = "";
+    setMessageState({ activeGroupThread: null, groupThreadMessages: [], groupThreadDraft: "", groupThreadError: "" });
   }
 
   function updateGroupThreadDraft(value) {
-    groupThreadDraft = value;
+    setMessageState({ groupThreadDraft: value });
   }
 
   function ensureVoicePeerHealthTimer() {
@@ -3621,7 +3648,7 @@
     const textRoom = textRooms[0];
     if (!textRoom) return;
     setGroupState({ selectedRoomId: textRoom.id });
-    messageDraft = `${messageDraft.trim()}${messageDraft.trim() ? " " : ""}@${participant.username || participant.displayName || "usuario"} `;
+    setMessageState({ messageDraft: `${messageDraft.trim()}${messageDraft.trim() ? " " : ""}@${participant.username || participant.displayName || "usuario"} ` });
     closeVoiceContextMenu();
     await tick();
     document.querySelector(".message-composer textarea")?.focus();
@@ -5419,9 +5446,7 @@
   }
 
   function clearMentionSuggestions() {
-    mentionSuggestions = [];
-    mentionStartIndex = -1;
-    mentionActiveIndex = 0;
+    setMessageState({ mentionSuggestions: [], mentionStartIndex: -1, mentionActiveIndex: 0 });
   }
 
   function updateMentionSuggestions(event) {
@@ -5435,16 +5460,19 @@
       return;
     }
     const query = (match[1] || "").toLocaleLowerCase();
-    mentionStartIndex = cursor - query.length - 1;
-    mentionSuggestions = groupMembers
+    const mentionStart = cursor - query.length - 1;
+    const suggestions = groupMembers
       .filter((member) => {
         const username = String(member.username || "").toLocaleLowerCase();
         const displayName = String(member.displayName || "").toLocaleLowerCase();
         return !query || username.includes(query) || displayName.includes(query);
       })
       .slice(0, 6);
-    mentionActiveIndex = Math.min(mentionActiveIndex, Math.max(mentionSuggestions.length - 1, 0));
-    if (!mentionSuggestions.length) mentionStartIndex = -1;
+    setMessageState({
+      mentionStartIndex: suggestions.length ? mentionStart : -1,
+      mentionSuggestions: suggestions,
+      mentionActiveIndex: Math.min(mentionActiveIndex, Math.max(suggestions.length - 1, 0)),
+    });
   }
 
   async function insertMention(member) {
@@ -5453,7 +5481,7 @@
     const mentionName = member.username || member.displayName || "usuario";
     const nextDraft = `${messageDraft.slice(0, mentionStartIndex)}@${mentionName} ${messageDraft.slice(cursor)}`;
     const nextCursor = mentionStartIndex + mentionName.length + 2;
-    messageDraft = nextDraft;
+    setMessageState({ messageDraft: nextDraft });
     clearMentionSuggestions();
     await tick();
     messageComposerInput?.focus();
@@ -5465,7 +5493,7 @@
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         const direction = event.key === "ArrowDown" ? 1 : -1;
-        mentionActiveIndex = (mentionActiveIndex + direction + mentionSuggestions.length) % mentionSuggestions.length;
+        setMessageState({ mentionActiveIndex: (mentionActiveIndex + direction + mentionSuggestions.length) % mentionSuggestions.length });
         return;
       }
       if (event.key === "Enter" || event.key === "Tab") {
@@ -5611,6 +5639,7 @@
   onDestroy(() => {
     unsubscribeNavigationState();
     unsubscribeGroupState();
+    unsubscribeMessageState();
     clearBroadcastCaptureRecoveryTimer();
     clearVoiceSpeakingPublishTimer();
     stopVoiceTest();
@@ -6289,7 +6318,7 @@
         busy={groupMessageSearchBusy}
         error={groupMessageSearchError}
         {rooms}
-        onQueryChange={(value) => groupMessageSearchQuery = value}
+        onQueryChange={(value) => setMessageState({ groupMessageSearchQuery: value })}
         onSearch={searchGroupMessages}
         onClose={() => showGroupMessageSearch = false}
         onSelect={openGroupMessageSearchResult}
