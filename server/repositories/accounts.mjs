@@ -118,12 +118,12 @@ async function withPostgresTransaction(database, callback, useProvidedClient = f
   const client = useProvidedClient ? database : (typeof database.connect === "function" ? await database.connect() : database);
   const ownsClient = client !== database;
   try {
-    await client.query("BEGIN");
+    if (!useProvidedClient) await client.query("BEGIN");
     const result = await callback(client);
-    await client.query("COMMIT");
+    if (!useProvidedClient) await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
+    if (!useProvidedClient) await client.query("ROLLBACK").catch(() => {});
     throw error;
   } finally {
     if (ownsClient) client.release();

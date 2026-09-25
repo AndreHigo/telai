@@ -12,6 +12,7 @@ import { createPostgresNotificationSyncService } from "../server/services/postgr
 import { createPostgresAuthRepository } from "../server/repositories/auth.mjs";
 import { createPostgresOAuthRepository } from "../server/repositories/oauth.mjs";
 import { createPostgresAccountRepository } from "../server/repositories/accounts.mjs";
+import { createPostgresSocialRepository } from "../server/repositories/social.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -20,6 +21,9 @@ const pool = createPostgresPool(config);
 const client = await pool.connect();
 const ids = { owner: randomUUID(), member: randomUUID(), group: randomUUID(), conversation: randomUUID() };
 const now = new Date().toISOString();
+const ownerUsername = `pg-owner-${ids.owner.slice(0, 8)}`;
+const memberUsername = `pg-member-${ids.member.slice(0, 8)}`;
+const oauthEmail = `pg-oauth-${ids.owner.slice(0, 8)}@example.test`;
 const compactUserSummary = (user) => ({ id: user.id, username: user.username, displayName: user.displayName });
 const normalizePreferenceVolume = (value) => Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 1;
 
@@ -27,9 +31,9 @@ try {
   await client.query("BEGIN");
   await client.query(`
     INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES
-      ($1, 'pg-owner', 'PG Owner', 'test', $3),
-      ($2, 'pg-member', 'PG Member', 'test', $3)
-  `, [ids.owner, ids.member, now]);
+      ($1, $2, 'PG Owner', 'test', $5),
+      ($3, $4, 'PG Member', 'test', $5)
+  `, [ids.owner, ownerUsername, ids.member, memberUsername, now]);
   await client.query("INSERT INTO groups (id, name, slug, owner_id, created_at) VALUES ($1, 'PG Group', $2, $3, $4)", [ids.group, `pg-${ids.group}`, ids.owner, now]);
   await client.query("INSERT INTO group_members (group_id, user_id, role, created_at) VALUES ($1, $2, 'owner', $3), ($1, $4, 'member', $3)", [ids.group, ids.owner, now, ids.member]);
   await client.query("INSERT INTO direct_conversations (id, created_at, updated_at) VALUES ($1, $2, $2)", [ids.conversation, now]);
@@ -53,15 +57,15 @@ try {
   });
   const oauthUser = await oauth.upsertOAuthUser("test", {
     providerUserId: `provider-${ids.owner}`,
-    email: "pg-oauth@example.test",
+    email: oauthEmail,
     emailVerified: true,
     displayName: "PG OAuth",
-    usernameHint: "pg-oauth",
+    usernameHint: `pg-oauth-${ids.owner.slice(0, 8)}`,
   });
   assert.equal(oauthUser.displayName, "PG OAuth");
   assert.equal((await oauth.upsertOAuthUser("test", {
     providerUserId: `provider-${ids.owner}`,
-    email: "pg-oauth-updated@example.test",
+    email: `${oauthEmail}.updated`,
     emailVerified: true,
     displayName: "Updated Name",
     usernameHint: "updated",
@@ -74,9 +78,20 @@ try {
   assert.equal((await client.query("SELECT id FROM users WHERE id = $1", [oauthUser.id])).rowCount, 0);
   assert.equal((await client.query("SELECT user_id FROM oauth_accounts WHERE provider = 'test' AND provider_user_id = $1", [`provider-${ids.owner}`])).rows[0].user_id, ids.owner);
   const deleteUserId = randomUUID();
-  await client.query("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES ($1, 'pg-delete', 'PG Delete', 'test', $2)", [deleteUserId, now]);
+  await client.query("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES ($1, $2, 'PG Delete', 'test', $3)", [deleteUserId, `pg-delete-${deleteUserId.slice(0, 8)}`, now]);
   await accounts.deleteUserAccount(deleteUserId);
   assert.equal((await client.query("SELECT id FROM users WHERE id = $1", [deleteUserId])).rowCount, 0);
+
+  const social = createPostgresSocialRepository(client, { transactionClient: true });
+  const socialRequest = await social.createFriendRequest(ids.owner, ids.member, now);
+  assert.equal((await social.pendingRequest(ids.owner, ids.member))?.id, socialRequest.requestId);
+  assert.equal((await social.listSocial(ids.owner)).outgoingRequests.length, 1);
+  assert.equal((await social.decideFriendRequest(socialRequest.requestId, ids.member, "accept", now))?.status, "accepted");
+  assert.equal(await social.friendshipExists(ids.owner, ids.member), true);
+  await social.setFollowing(ids.owner, ids.member, true, now);
+  assert.equal((await social.searchUsers(ids.owner, memberUsername))[0].following, true);
+  assert.equal(await social.removeFriendship(ids.owner, ids.member), true);
+  await social.setFollowing(ids.owner, ids.member, false, now);
 
   const groups = createPostgresGroupAccessRepository(client);
   assert.equal(await groups.isGroupMember(ids.member, ids.group), true);
@@ -85,7 +100,7 @@ try {
 
   const conversations = createPostgresDirectConversationRepository(client, { compactUserSummary });
   assert.equal((await conversations.directConversationForUser(ids.conversation, ids.owner))?.id, ids.conversation);
-  assert.equal((await conversations.directConversationPayload(ids.conversation, ids.owner))?.otherUser.username, "pg-member");
+  assert.equal((await conversations.directConversationPayload(ids.conversation, ids.owner))?.otherUser.username, memberUsername);
 
   const profiles = createPostgresChannelProfileRepository(client, { parseChannelGames: (value) => JSON.parse(value || "[]") });
   assert.equal((await profiles.channelProfileForUser(ids.owner))?.displayName, "Owner Channel");
@@ -116,7 +131,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);
