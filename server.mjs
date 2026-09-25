@@ -41,6 +41,7 @@ import { createDirectRoutes } from "./server/http/direct-routes.mjs";
 import { createMemberInviteRoutes } from "./server/http/member-invite-routes.mjs";
 import { createAdminRoutes } from "./server/http/admin-routes.mjs";
 import { createAuthRoutes } from "./server/http/auth-routes.mjs";
+import { createObservabilityRoutes } from "./server/http/observability-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -1124,6 +1125,20 @@ const handleAuthRoutes = createAuthRoutes({
   parseCookies,
   sessionRepository,
   expiredSessionCookie,
+});
+const handleObservabilityRoutes = createObservabilityRoutes({
+  json,
+  readJson,
+  isLocalObservabilityRequest,
+  observabilitySnapshot,
+  allowClientErrorRequest,
+  currentUser,
+  addMapCount,
+  observability,
+  routineClientDiagnosticKinds,
+  infoLog,
+  errorLog,
+  warnLog,
 });
 
 function liveNotificationContext(stream, canRevealPrivate = true) {
@@ -2233,45 +2248,7 @@ async function handleHttpRequest(request, response) {
     });
     return;
   }
-  if (requestUrl.pathname === "/metrics") {
-    if (!isLocalObservabilityRequest(request)) return json(response, 404, { error: "Not found" });
-    return json(response, 200, observabilitySnapshot());
-  }
-  if (requestUrl.pathname === "/api/client-errors" && request.method === "POST") {
-    if (!allowClientErrorRequest(request)) {
-      response.setHeader("Retry-After", "60");
-      return json(response, 429, { error: "Muitos diagnósticos. Tente novamente em um minuto." });
-    }
-    try {
-      const body = await readJson(request, 12 * 1024);
-      const user = currentUser(request);
-      const kind = String(body.kind || "client_error").replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 64) || "client_error";
-      addMapCount(observability.clientEventCounts, kind);
-      const clientDiagnostic = {
-        kind,
-        message: String(body.message || "Erro sem mensagem").slice(0, 240),
-        stack: String(body.stack || "").slice(0, 1200),
-        route: String(body.route || request.headers.referer || "").split("?", 1)[0].slice(0, 240),
-        appVersion: String(body.appVersion || "").slice(0, 32),
-        context: body.context && typeof body.context === "object" ? body.context : {},
-        authenticated: Boolean(user),
-      };
-      const isViewerTelemetry = kind.startsWith("viewer_")
-        && !kind.includes("error")
-        && !kind.includes("timeout")
-        && !kind.endsWith("_stalled")
-        && !kind.endsWith("_ended")
-        && !kind.endsWith("_closed")
-        && !kind.includes("recovery_started");
-      const isRoutineClientTelemetry = routineClientDiagnosticKinds.has(kind);
-      if (isViewerTelemetry || isRoutineClientTelemetry) infoLog("client_telemetry", clientDiagnostic);
-      else errorLog("client_error", clientDiagnostic);
-      return json(response, 202, { ok: true });
-    } catch (error) {
-      warnLog("client_error_rejected", { error: error.message });
-      return json(response, 400, { error: "Diagnóstico inválido." });
-    }
-  }
+  if (await handleObservabilityRoutes(request, response, requestUrl)) return;
   const oauthStartMatch = requestUrl.pathname.match(/^\/api\/auth\/(google|discord)$/);
   if (oauthStartMatch && request.method === "GET") {
     const providerName = oauthStartMatch[1];
