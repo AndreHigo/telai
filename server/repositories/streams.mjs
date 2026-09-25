@@ -49,8 +49,17 @@ export function createStreamRepository(database, { createId = randomUUID } = {})
 
   function findForRoom(roomId) {
     return database.prepare(`
-      SELECT id, room_name AS roomName, created_by AS createdBy, ended_at AS endedAt
+      SELECT id, room_name AS roomName, created_by AS createdBy, visibility,
+        group_id AS groupId, started_at AS startedAt, ended_at AS endedAt
       FROM streams WHERE room_name = ? ORDER BY started_at DESC LIMIT 1
+    `).get(roomId) || null;
+  }
+
+  function findActiveForRoom(roomId) {
+    return database.prepare(`
+      SELECT id, room_name AS roomName, created_by AS createdBy, visibility,
+        group_id AS groupId, started_at AS startedAt, ended_at AS endedAt
+      FROM streams WHERE room_name = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1
     `).get(roomId) || null;
   }
 
@@ -115,7 +124,7 @@ export function createStreamRepository(database, { createId = randomUUID } = {})
     }
   }
 
-  return { listPublicStreams, listActiveStreams, listGroupStreams, listAdminStreams, findForRoom, findById, loadChatForRoom, insertChatMessage, clearChat, endByRoom, endById, followerIds, follow, createStream };
+  return { listPublicStreams, listActiveStreams, listGroupStreams, listAdminStreams, findForRoom, findActiveForRoom, findById, loadChatForRoom, insertChatMessage, clearChat, endByRoom, endById, followerIds, follow, createStream };
 }
 
 async function withPostgresTransaction(database, callback, useProvidedClient = false) {
@@ -176,7 +185,11 @@ export function createPostgresStreamRepository(database, { createId = randomUUID
   }
 
   async function findForRoom(roomId) {
-    return (await database.query('SELECT id, room_name AS "roomName", created_by AS "createdBy", ended_at AS "endedAt" FROM streams WHERE room_name = $1 ORDER BY started_at DESC LIMIT 1', [roomId])).rows[0] || null;
+    return (await database.query('SELECT id, room_name AS "roomName", created_by AS "createdBy", visibility, group_id AS "groupId", started_at AS "startedAt", ended_at AS "endedAt" FROM streams WHERE room_name = $1 ORDER BY started_at DESC LIMIT 1', [roomId])).rows[0] || null;
+  }
+
+  async function findActiveForRoom(roomId) {
+    return (await database.query('SELECT id, room_name AS "roomName", created_by AS "createdBy", visibility, group_id AS "groupId", started_at AS "startedAt", ended_at AS "endedAt" FROM streams WHERE room_name = $1 AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1', [roomId])).rows[0] || null;
   }
 
   async function findById(streamId) {
@@ -214,5 +227,5 @@ export function createPostgresStreamRepository(database, { createId = randomUUID
     }, transactionClient);
   }
 
-  return { listPublicStreams, listActiveStreams, listGroupStreams, listAdminStreams, findForRoom, findById, loadChatForRoom, insertChatMessage, clearChat, endByRoom, endById, followerIds, follow, createStream };
+  return { listPublicStreams, listActiveStreams, listGroupStreams, listAdminStreams, findForRoom, findActiveForRoom, findById, loadChatForRoom, insertChatMessage, clearChat, endByRoom, endById, followerIds, follow, createStream };
 }

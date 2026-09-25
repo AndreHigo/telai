@@ -1673,7 +1673,8 @@ function replaceOtherVoiceSessions(socket) {
 
 function authorizeVoiceRoomJoin(voiceRoomId, groupId, socket) {
   if (!socket.user) return { ok: false, message: "Entre com sua conta para entrar numa sala de voz." };
-  const voiceRoom = database.prepare("SELECT id, group_id AS groupId, name, COALESCE(max_participants, 8) AS maxParticipants FROM group_voice_rooms WHERE id = ? AND group_id = ?").get(voiceRoomId, groupId);
+  const room = groupRoomRepository.findRoom(groupId, voiceRoomId);
+  const voiceRoom = room?.kind === "voice" ? { ...room, groupId } : null;
   if (!voiceRoom || !isGroupMember(socket.user.id, groupId)) return { ok: false, message: "Você não tem acesso a esta sala de voz." };
   if (!canGroupAction(socket.user.id, groupId, "canChat")) return { ok: false, message: "Você não tem permissão para entrar nas salas de voz deste grupo." };
   return { ok: true, voiceRoom };
@@ -1783,17 +1784,17 @@ function leave(socket) {
 
 async function authorizeRoomJoin(roomId, socket, role) {
   if (!requireLogin) return { ok: true };
-  const stream = database.prepare("SELECT id, room_name AS roomName, created_by, visibility, group_id, started_at AS startedAt FROM streams WHERE room_name = ? AND ended_at IS NULL").get(roomId);
+  const stream = streamRepository.findActiveForRoom(roomId);
   if (!stream) return { ok: false, message: "Esta transmissão não existe ou já foi encerrada." };
   if (!runtimeStreamIsLive(stream)) return { ok: false, message: "Esta transmissão foi encerrada. Abra uma nova live para continuar." };
-  if (role === "viewer" && socket.user && stream.created_by === socket.user.id) {
+  if (role === "viewer" && socket.user && stream.createdBy === socket.user.id) {
     return { ok: false, message: "Você já está transmitindo esta live pelo painel do Telai." };
   }
   // Links públicos podem ser assistidos sem conta. A autenticação continua
   // obrigatória para abrir lives e para acessar qualquer canal privado.
   if (role === "viewer" && stream.visibility === "public") return { ok: true };
   if (!socket.user) return { ok: false, message: "Entre com sua conta para acessar esta transmissão." };
-  if (role === "host" && stream.created_by === socket.user.id) return { ok: true };
+  if (role === "host" && stream.createdBy === socket.user.id) return { ok: true };
   return canAccessStream(socket.user.id, stream)
     ? { ok: true }
     : { ok: false, message: "Você não tem acesso a esta transmissão privada." };
