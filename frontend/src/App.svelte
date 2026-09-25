@@ -315,6 +315,8 @@
   let groupChannelPermissionsSettingsLoad = null;
   let GroupAuditLogSettings = null;
   let groupAuditLogSettingsLoad = null;
+  let ProfileSettingsExtras = null;
+  let profileSettingsExtrasLoad = null;
   let VoiceSettingsPanel = null;
   let voiceSettingsPanelLoad = null;
   const viewportController = createViewportController({
@@ -415,6 +417,17 @@
   }
 
   $: if (settingsTab === "group" && !GroupAuditLogSettings) void loadGroupAuditLogSettings();
+
+  function loadProfileSettingsExtras() {
+    if (ProfileSettingsExtras || profileSettingsExtrasLoad) return profileSettingsExtrasLoad;
+    profileSettingsExtrasLoad = import("./features/settings/ProfileSettingsExtras.svelte")
+      .then((module) => { ProfileSettingsExtras = module.default; })
+      .catch((error) => reportClientError("profile_settings_extras_load_error", error))
+      .finally(() => { profileSettingsExtrasLoad = null; });
+    return profileSettingsExtrasLoad;
+  }
+
+  $: if (settingsSection === "profile" && !ProfileSettingsExtras) void loadProfileSettingsExtras();
 
   function loadVoiceSettingsPanel() {
     if (VoiceSettingsPanel || voiceSettingsPanelLoad) return voiceSettingsPanelLoad;
@@ -6147,24 +6160,24 @@
           <SettingsHeading onBack={() => { view = settingsReturnView; }} />
           {#if settingsSection === "channel"}<ChannelProfileSettings bind:channelDisplayName {channelAvatarData} {gameOptions} {channelGames} {channelError} {settingsBusy} onSave={saveChannelProfile} onAvatarChange={handleChannelAvatarChange} onClearAvatar={clearChannelAvatar} onToggleChannelGame={toggleChannelGame} />{/if}
           <div class="settings-layout"><SettingsInternalNav {settingsTab} {selectedGroupId} onSelectTab={(tab) => settingsTab = tab} /><div class="settings-content">{#if settingsTab === "user"}<AccountProfileSettings {settingsBusy} {user} {settingsAvatarData} bind:settingsDisplayName {avatarError} onSave={saveProfile} onAvatarChange={handleAvatarChange} onClearAvatar={clearAvatar} /><PreferencesSettings {settingsBusy} bind:theme bind:selectedQuality bind:audioMode bind:buttonColor bind:inputBackgroundColor bind:backgroundColor onSave={savePreferences} /><LinkedAccountsSettings {user} {providers} />{:else}<GroupAdministrationSettings {selectedGroup} {settingsBusy} bind:groupSettingsName onSave={saveGroupSettings} />{/if}{#if settingsError}<p class="settings-error" role="alert">{settingsError}</p>{/if}</div></div>
-        {#if settingsTab === "user" && settingsSection === "profile"}
-          <section class="settings-card settings-reset-card">
-            <div class="settings-card-heading"><div><p class="eyebrow">preferências</p><h2>Restaurar configurações</h2><p class="muted">Volte o Telai aos valores padrão sem apagar sua conta, grupos, mensagens ou transmissões.</p></div><button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={() => preferencesResetConfirm = !preferencesResetConfirm} disabled={settingsBusy || preferencesResetBusy}>{preferencesResetConfirm ? "Cancelar" : "Restaurar padrões"}</button></div>
-            {#if preferencesResetConfirm}<div class="settings-callout settings-reset-callout"><span>Isso restaura tema, cores, qualidade, áudio, volumes, filtros, dispositivos e atalhos. A ação não apaga dados da conta.</span><button class="danger-outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={resetPreferencesToDefaults} disabled={preferencesResetBusy}>{preferencesResetBusy ? "Restaurando…" : "Restaurar agora"}</button></div>{/if}
-          </section>
-        {/if}
-        {#if settingsTab === "user" && settingsSection === "profile" && isDesktop}
-          <section class="settings-card desktop-startup-card">
-            <div class="settings-card-heading"><div><p class="eyebrow">aplicativo desktop</p><h2>Iniciar com o computador</h2><p class="muted">O Telai será iniciado automaticamente com o Windows e ficará disponível na bandeja.</p></div><label class="permission-toggle desktop-startup-toggle" title="Iniciar o Telai com o computador"><input type="checkbox" bind:checked={launchAtLogin} on:change={toggleLaunchAtLogin} disabled={launchAtLoginBusy} aria-label="Iniciar o Telai com o computador" /><span></span></label></div>
-            {#if launchAtLoginError}<p class="settings-error" role="alert">{launchAtLoginError}</p>{/if}
-          </section>
-        {/if}
-         {#if settingsSection === "profile" && isDesktop}
-           <section class="settings-card desktop-hardware-card">
-             <div class="settings-card-heading"><div><p class="eyebrow">compatibilidade</p><h2>Aceleração gráfica</h2><p class="muted">Use o modo desativado se o Telai causar travamentos, tela preta ou conflito com o driver de vídeo. A alteração exige reiniciar o aplicativo.</p></div><select class="settings-input desktop-hardware-select" value={hardwareAccelerationMode} on:change={setHardwareAcceleration} disabled={hardwareAccelerationBusy} aria-label="Modo de aceleração gráfica"><option value="auto">Automático (recomendado)</option><option value="disabled">Desativada (modo de compatibilidade)</option></select></div>
-             {#if hardwareAccelerationError}<p class="settings-error" role="alert">{hardwareAccelerationError}</p>{/if}
-           </section>
-         {/if}
+         {#if ProfileSettingsExtras}<svelte:component this={ProfileSettingsExtras}
+           {settingsSection}
+           {settingsTab}
+           {isDesktop}
+           {settingsBusy}
+           {preferencesResetBusy}
+           {preferencesResetConfirm}
+           {launchAtLogin}
+           {launchAtLoginBusy}
+           {launchAtLoginError}
+           {hardwareAccelerationMode}
+           {hardwareAccelerationBusy}
+           {hardwareAccelerationError}
+           onTogglePreferencesResetConfirm={() => preferencesResetConfirm = !preferencesResetConfirm}
+           onResetPreferences={resetPreferencesToDefaults}
+           onToggleLaunchAtLogin={toggleLaunchAtLogin}
+           onSetHardwareAcceleration={setHardwareAcceleration}
+         />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}
           {#if settingsTab === "user" && settingsSection === "profile"}<AccountPrivacy user={user} />{/if}
          {#if settingsSection === "voice"}
           {#if VoiceSettingsPanel}<svelte:component this={VoiceSettingsPanel}

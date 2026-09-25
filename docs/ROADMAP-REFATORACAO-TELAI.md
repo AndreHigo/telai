@@ -194,6 +194,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair cartão de notificações.
     - [x] Extrair carregamento, leitura e preferência de notificações para `frontend/src/features/notifications/controller.js`.
     - [x] Extrair workspace de voz com code-splitting sob demanda para não aumentar o bundle inicial.
+    - [x] Extrair cartões residuais de restauração, inicialização e aceleração gráfica para `frontend/src/features/settings/ProfileSettingsExtras.svelte` em chunk lazy, preservando a identidade visual.
 
 ### Fase 2 — Contratos e tempo real
 
