@@ -8,7 +8,7 @@ import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./maile
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { installWebsocketHeartbeat } from "./server/gateway/heartbeat.mjs";
 import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
-import { createGroupAccessRepository } from "./server/repositories/groups.mjs";
+import { createGroupAccessRepository, createGroupRepository } from "./server/repositories/groups.mjs";
 import { createNotificationRepository } from "./server/repositories/notifications.mjs";
 import { createChannelProfileRepository } from "./server/repositories/channel-profiles.mjs";
 import { createUserPreferenceRepository } from "./server/repositories/user-preferences.mjs";
@@ -778,6 +778,7 @@ const accountRepository = createAccountRepository(database, { legalPolicyVersion
 const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
 const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
 const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });
+const groupRepository = createGroupRepository(database, { createId: randomUUID, groupSetupRepository });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2774,36 +2775,14 @@ async function handleHttpRequest(request, response) {
   if (requestUrl.pathname === "/api/groups" && request.method === "GET") {
     const user = requireUser(request, response);
     if (!user) return;
-    const groups = database.prepare(`
-      SELECT groups.id, groups.name, groups.slug, group_members.role,
-        (SELECT COUNT(*) FROM group_members members WHERE members.group_id = groups.id) AS memberCount
-      FROM group_members JOIN groups ON groups.id = group_members.group_id
-      WHERE group_members.user_id = ? ORDER BY groups.name COLLATE NOCASE
-    `).all(user.id);
-    return json(response, 200, { groups });
+    return json(response, 200, { groups: groupRepository.listGroups(user.id) });
   }
   if (requestUrl.pathname === "/api/groups/search" && request.method === "GET") {
     const user = requireUser(request, response);
     if (!user) return;
     const query = String(requestUrl.searchParams.get("q") || "").trim().slice(0, 64);
     if (query.length < 2) return json(response, 200, { groups: [] });
-    const like = `%${query}%`;
-    const groups = database.prepare(`
-      SELECT groups.id, groups.name, groups.slug, groups.owner_id AS ownerId,
-        COALESCE(users.display_name, users.username) AS ownerName,
-        (SELECT COUNT(*) FROM group_members members WHERE members.group_id = groups.id) AS memberCount,
-        CASE WHEN joined.user_id IS NOT NULL THEN 'member'
-          WHEN requests.status IS NOT NULL THEN requests.status ELSE 'none' END AS requestStatus
-      FROM groups
-      JOIN users ON users.id = groups.owner_id
-      LEFT JOIN group_members joined ON joined.group_id = groups.id AND joined.user_id = ?
-      LEFT JOIN group_join_requests requests ON requests.group_id = groups.id AND requests.user_id = ?
-      WHERE (groups.name LIKE ? COLLATE NOCASE OR groups.slug LIKE ? COLLATE NOCASE)
-        AND joined.user_id IS NULL
-      ORDER BY CASE WHEN groups.name = ? COLLATE NOCASE THEN 0 ELSE 1 END, groups.name COLLATE NOCASE
-      LIMIT 30
-    `).all(user.id, user.id, like, like, query);
-    return json(response, 200, { groups });
+    return json(response, 200, { groups: groupRepository.searchGroups(user.id, query) });
   }
   if (requestUrl.pathname === "/api/groups" && request.method === "POST") {
     const user = requireUser(request, response);
@@ -2812,20 +2791,13 @@ async function handleHttpRequest(request, response) {
       const name = String(body.name || "").trim().slice(0, 64);
       const slug = slugFor(body.slug || name);
       if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para o grupo." });
-      const group = { id: randomUUID(), name, slug, role: "owner" };
       try {
-        database.exec("BEGIN");
-        database.prepare("INSERT INTO groups (id, name, slug, owner_id, created_at) VALUES (?, ?, ?, ?, ?)").run(group.id, name, slug, user.id, new Date().toISOString());
-        database.prepare("INSERT INTO group_members (group_id, user_id, role, created_at) VALUES (?, ?, 'owner', ?)").run(group.id, user.id, new Date().toISOString());
-        groupSetupRepository.ensureDefaultGroupRooms(group.id, user.id);
-        groupSetupRepository.ensureDefaultGroupRoles(group.id, user.id);
-        database.exec("COMMIT");
+        const group = groupRepository.createGroup({ name, slug, ownerId: user.id });
+        return json(response, 201, { group });
       } catch (error) {
-        try { database.exec("ROLLBACK"); } catch {}
         if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe um grupo com esse nome." });
         throw error;
       }
-      return json(response, 201, { group });
     }).catch(() => json(response, 400, { error: "Não foi possível criar o grupo." }));
     return;
   }
