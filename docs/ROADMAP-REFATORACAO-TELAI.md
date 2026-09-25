@@ -117,6 +117,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair buckets, políticas e limpeza de rate limit HTTP para `server/http/rate-limit.mjs`.
 - [x] Extrair métricas locais e diagnósticos de cliente para `server/http/observability-routes.mjs`.
 - [x] Extrair o runtime de logs sanitizados, contadores HTTP e identificação de observabilidade local para `server/observability/runtime.mjs`.
+- [x] Extrair o snapshot de métricas, proteções e diagnóstico para `server/observability/snapshot.mjs`, mantendo o envelope de `/metrics`.
 - [x] Centralizar contexto de requisição, confiança em headers encaminhados, IP do cliente e origem pública em `server/http/request-context.mjs`.
 - [x] Extrair descoberta, criação e saída de grupos para `server/http/group-discovery-routes.mjs`, mantendo exclusão e runtime de voz no gateway.
 - [x] Extrair solicitações de entrada, configurações e visão administrativa de grupos para `server/http/group-management-routes.mjs`.
