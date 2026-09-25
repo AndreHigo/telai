@@ -39,6 +39,7 @@
   } from "./services/media/voice-input.js";
   import { createVoiceCaptureService } from "./services/media/voice-capture.js";
   import { createVoiceTrackSyncService } from "./services/media/voice-track-sync.js";
+  import { createGroupEventGateway } from "./services/events.js";
   import {
     audioDeviceDisplayLabel,
     isUnavailableVoiceInputError,
@@ -332,6 +333,7 @@
   let voiceSpeakingSignalKnownParticipantIds = new Set();
   let GroupVoiceWorkspace = null;
   let groupVoiceWorkspaceLoad = null;
+  let groupEventGateway = null;
 
   function loadGroupVoiceWorkspace() {
     if (GroupVoiceWorkspace || groupVoiceWorkspaceLoad) return groupVoiceWorkspaceLoad;
@@ -870,6 +872,44 @@
     }
   }
 
+  function applyGroupEventPresence(groupId, members) {
+    if (selectedGroupId !== groupId || !groupOverview || !Array.isArray(members)) return;
+    const onlineById = new Map(members.map((member) => [member.id, Boolean(member.online)]));
+    groupOverview = {
+      ...groupOverview,
+      members: (groupOverview.members || []).map((member) => (
+        onlineById.has(member.id) ? { ...member, online: onlineById.get(member.id) } : member
+      )),
+    };
+  }
+
+  function handleGroupEvent(message) {
+    if (!message?.groupId || message.groupId !== selectedGroupId) return;
+    if (message.type === "group-subscribed" || message.type === "group-presence") {
+      applyGroupEventPresence(message.groupId, message.members);
+      return;
+    }
+    if (message.type !== "group-message" || !message.message || !groupOverview) return;
+    const incoming = message.message;
+    if (!incoming.id || knownGroupMessageIds.has(incoming.id)) return;
+    const messageList = document.querySelector(".chat-workspace .message-list");
+    const keepAtBottom = shouldKeepGroupMessagesAtBottom(messageList);
+    knownGroupMessageIds = new Set([...knownGroupMessageIds, incoming.id]);
+    groupOverview = { ...groupOverview, messages: [...(groupOverview.messages || []), incoming].slice(-80) };
+    if (incoming.userId !== user?.id) playVoiceSound("message");
+    if (keepAtBottom) void scrollGroupMessagesToBottom({ force: true });
+  }
+
+  function ensureGroupEventGateway() {
+    if (!groupEventGateway) {
+      groupEventGateway = createGroupEventGateway({
+        onMessage: handleGroupEvent,
+        onError: (error) => reportClientError("group_events_error", error),
+      });
+    }
+    return groupEventGateway;
+  }
+
   let groupControllerPromise = null;
   function getGroupController() {
     if (!groupControllerPromise) {
@@ -916,7 +956,12 @@
     return groupControllerPromise;
   }
   async function loadGroups(...args) { return (await getGroupController()).loadGroups(...args); }
-  async function loadGroup(...args) { return (await getGroupController()).loadGroup(...args); }
+  async function loadGroup(...args) {
+    const result = await (await getGroupController()).loadGroup(...args);
+    const groupId = args[0];
+    if (groupId && user && !isViewer) ensureGroupEventGateway().subscribeGroup(groupId);
+    return result;
+  }
 
   let settingsControllerPromise = null;
   function getSettingsController() {
@@ -6624,7 +6669,6 @@
     loading = false;
   });
 
-  const GROUP_PRESENCE_POLL_MS = 15_000;
   const GROUP_OVERVIEW_POLL_MS = 15_000;
   const STREAMS_POLL_MS = 15_000;
   const NOTIFICATIONS_POLL_MS = 30_000;
@@ -6635,16 +6679,10 @@
     return typeof document === "undefined" || document.visibilityState === "visible";
   }
 
-  const groupPresenceTimer = setInterval(() => {
-    if (!shouldPollClientData()) return;
-    if (user && !isViewer && view === "groups" && selectedGroupId) {
-      void refreshGroupPresence().catch((error) => reportClientError("group_presence_refresh_error", error, { groupId: selectedGroupId }));
-    }
-  }, GROUP_PRESENCE_POLL_MS);
   const groupOverviewTimer = setInterval(() => {
     if (!shouldPollClientData()) return;
     if (user && !isViewer && view === "groups" && groupsWorkspaceOpen && selectedGroupId) {
-      void refreshGroupOverview().catch((error) => reportClientError("group_overview_refresh_error", error, { groupId: selectedGroupId }));
+      void refreshGroupOverview({ includeMessages: false }).catch((error) => reportClientError("group_overview_refresh_error", error, { groupId: selectedGroupId }));
     }
   }, GROUP_OVERVIEW_POLL_MS);
   const streamsTimer = setInterval(() => {
@@ -6672,13 +6710,13 @@
     clearVoiceSpeakingPublishTimer();
     stopVoiceTest();
     stopVoiceInputStream(voiceLocalStream);
-    clearInterval(groupPresenceTimer);
     clearInterval(groupOverviewTimer);
     clearInterval(streamsTimer);
     clearInterval(notificationTimer);
     clearInterval(directMessagesTimer);
     clearInterval(maintenanceTimer);
     clearInterval(maintenanceCountdownTimer);
+    groupEventGateway?.close();
     clearInterval(voiceActivityTimer);
     window.removeEventListener("click", closeVoiceContextMenu);
     window.removeEventListener("click", closeRoomContextMenu);

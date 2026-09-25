@@ -75,7 +75,9 @@ export function createGroupRuntimeRoutes({
         return (order[left.kind] ?? 9) - (order[right.kind] ?? 9) || String(left.name).localeCompare(String(right.name), "pt-BR");
       });
       const members = groupMemberRepository.listMembers(groupId).map((member) => ({ ...member, online: isPresent(groupId, member.id) }));
-      const messages = groupMessageRepository.listMessages(groupId);
+      const messages = requestUrl.searchParams.get("includeMessages") === "0"
+        ? undefined
+        : groupMessageRepository.listMessages(groupId);
       const streams = streamRepository.listGroupStreams(groupId).filter(runtimeStreamIsLive);
       json(response, 200, {
         group,

@@ -6,6 +6,7 @@ export function createGroupContentRoutes({
   canGroupAction,
   groupMessageRepository,
   groupPermissionRepository,
+  publishGroupEvent = () => {},
 }) {
   return async function handleGroupContentRoutes(request, response, requestUrl) {
     const groupMessageMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages$/);
@@ -29,6 +30,7 @@ export function createGroupContentRoutes({
         if (requestedRoomId && !room) return json(response, 400, { error: "Essa sala não existe neste grupo." });
         if (room?.kind === "live") return json(response, 400, { error: "Salas de transmissão não recebem mensagens de chat." });
         const message = groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt: new Date().toISOString() });
+        publishGroupEvent(groupId, { type: "group-message", message });
         return json(response, 201, { message });
       }).catch(() => json(response, 400, { error: "Não foi possível enviar a mensagem." }));
       return true;

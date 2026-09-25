@@ -13,6 +13,8 @@
     "build:frontend": "vite build --config vite.config.js",
     "test:api": "node qa/run-api.cjs",
     "test:api-client": "node qa/test-api-client.mjs",
+    "test:events": "node qa/e2e-events.cjs",
+    "test:events-ui": "electron --no-sandbox qa/e2e-events-ui.cjs",
     "test:voice-activity": "node qa/test-voice-activity.cjs",
     "test:security": "node qa/e2e-rate-limit.cjs",
     "test:notifications": "electron --no-sandbox qa/e2e-notifications.cjs",

@@ -42,8 +42,7 @@ export function createWebsocketGateway({
   }
 
   const websocketServer = new WebSocketServer({
-    server,
-    path: "/signal",
+    noServer: true,
     maxPayload: 16 * 1024 * 1024,
     verifyClient: ({ req }, done) => {
       if (!websocketOriginAllowed(req)) {
@@ -62,6 +61,12 @@ export function createWebsocketGateway({
       }
       return done(true);
     },
+  });
+
+  server.on("upgrade", (request, socket, head) => {
+    const pathname = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`).pathname;
+    if (pathname !== "/signal") return;
+    websocketServer.handleUpgrade(request, socket, head, (client) => websocketServer.emit("connection", client, request));
   });
 
   installWebsocketHeartbeat(websocketServer);

@@ -63,22 +63,25 @@ export function createGroupController({
     }
   }
 
-  async function refreshGroupOverview() {
+  async function refreshGroupOverview({ includeMessages = true } = {}) {
     const state = getState();
     if (!state.selectedGroupId || state.groupLoading || state.groupOverviewRefreshInFlight || Date.now() < state.groupOverviewRetryAt) return;
     setState({ groupOverviewRefreshInFlight: true });
     try {
-      const result = await api(`/api/groups/${encodeURIComponent(state.selectedGroupId)}/overview`);
+      const result = await api(`/api/groups/${encodeURIComponent(state.selectedGroupId)}/overview${includeMessages ? "" : "?includeMessages=0"}`);
       const current = getState();
       setState({ groupOverviewRetryAt: 0 });
       if (current.selectedGroupId !== result.group?.id) return;
-      const newMessages = (result.messages || []).filter((message) => !current.knownGroupMessageIds.has(message.id));
+      const hasMessages = Array.isArray(result.messages);
+      const messages = hasMessages ? result.messages : (current.groupOverview?.messages || []);
+      const newMessages = hasMessages ? messages.filter((message) => !current.knownGroupMessageIds.has(message.id)) : [];
       const messageList = document.querySelector(".chat-workspace .message-list");
       const keepAtBottom = shouldKeepGroupMessagesAtBottom(messageList);
       if (current.groupOverview && newMessages.some((message) => message.userId !== current.user?.id)) playVoiceSound("message");
+      const nextOverview = mergeActiveVoicePresence({ ...result, messages });
       setState({
-        knownGroupMessageIds: new Set((result.messages || []).map((message) => message.id)),
-        groupOverview: mergeActiveVoicePresence(result),
+        knownGroupMessageIds: hasMessages ? new Set(messages.map((message) => message.id)) : current.knownGroupMessageIds,
+        groupOverview: nextOverview,
       });
       if (newMessages.length && keepAtBottom) void scrollGroupMessagesToBottom({ force: true });
     } catch (error) {

@@ -7,6 +7,7 @@ import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./maile
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { createDatabaseConfig } from "./server/config/database.mjs";
 import { createWebsocketGateway } from "./server/gateway/websocket.mjs";
+import { createEventGateway } from "./server/gateway/events.mjs";
 import { createGatewayPolicy } from "./server/gateway/policy.mjs";
 import { createGatewayMessageDispatcher } from "./server/gateway/message-dispatcher.mjs";
 import { createBinaryMessageHandler } from "./server/gateway/binary-message.mjs";
@@ -125,6 +126,7 @@ if (logPath) {
 const rooms = new Map();
 const voiceRooms = new Map();
 const groupPresence = new Map();
+let eventGateway = null;
 const oauthStates = new Map();
 const observability = {
   startedAt: new Date().toISOString(),
@@ -303,6 +305,7 @@ function metricRoute(pathname) {
   if (pathname === "/download") return "/download";
   if (pathname.startsWith("/updates/")) return "/updates/*";
   if (pathname === "/signal") return "/signal";
+  if (pathname === "/events") return "/events";
   const apiMatch = pathname.match(/^\/api\/([^/]+)/);
   return apiMatch ? `/api/${apiMatch[1]}` : pathname || "/";
 }
@@ -559,6 +562,7 @@ const handleGroupContentRoutes = createGroupContentRoutes({
   canGroupAction,
   groupMessageRepository,
   groupPermissionRepository,
+  publishGroupEvent: (...args) => eventGateway?.publishGroupEvent(...args),
 });
 const handleGroupInviteRoutes = createGroupInviteRoutes({
   json,
@@ -1055,6 +1059,28 @@ const websocketServer = createWebsocketGateway({
   leaveVoiceRoom,
 });
 
+eventGateway = createEventGateway({
+  server,
+  currentUser,
+  clientIp,
+  publicOriginForRequest,
+  allowWebsocketConnection,
+  websocketActiveCount,
+  websocketActiveConnectionLimit,
+  addWebsocketActive,
+  removeWebsocketActive,
+  websocketTextMessageMaxBytes,
+  allowWebsocketControlMessage,
+  isGroupMember,
+  groupMemberRepository,
+  isPresent,
+  touchGroupPresence,
+  randomUUID,
+  infoLog,
+  warnLog,
+  errorLog,
+});
+
 export function getRoomCountForTests() {
   return rooms.size;
 }
@@ -1065,6 +1091,10 @@ export function getVoiceRoomCountForTests() {
 
 export function getWebsocketServerForTests() {
   return websocketServer;
+}
+
+export function getEventGatewayForTests() {
+  return eventGateway;
 }
 
 export function closeDatabaseForTests() {
