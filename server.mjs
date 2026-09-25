@@ -9,6 +9,7 @@ import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./maile
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
+import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -764,11 +765,6 @@ function pruneExpiredRuntimeState() {
 
 setInterval(pruneExpiredRuntimeState, 5 * 60_000).unref();
 
-function safePreferenceColor(value) {
-  const color = String(value || "").trim();
-  return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : null;
-}
-
 function hashSessionToken(token) {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -1122,17 +1118,6 @@ function deleteUserAccount(userId) {
   disconnectUserSockets(userId);
 }
 
-function normalizePreferenceVolume(value, fallback = 1) {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? Math.min(1, Math.max(0, numericValue)) : fallback;
-}
-
-function normalizePreferenceDeviceId(value, fallback = null) {
-  if (value === null || value === undefined) return fallback;
-  const normalized = String(value).trim().slice(0, 256);
-  return normalized || null;
-}
-
 function userPreferences(userId) {
   const preferences = database.prepare("SELECT theme, default_quality AS defaultQuality, default_audio AS defaultAudio, button_color AS buttonColor, input_background_color AS inputBackgroundColor, background_color AS backgroundColor, push_to_talk_key AS pushToTalkKey, mute_shortcut AS muteShortcut, live_notification_scope AS liveNotificationScope, voice_microphone_volume AS voiceMicrophoneVolume, voice_output_volume AS voiceOutputVolume, preferred_input_device_id AS preferredInputDeviceId, preferred_output_device_id AS preferredOutputDeviceId FROM user_preferences WHERE user_id = ?").get(userId);
   return {
@@ -1311,12 +1296,6 @@ function syncNotificationsForUser(userId) {
   }
 }
 
-function parseChannelGames(value) {
-  let games = [];
-  try { games = Array.isArray(value) ? value : JSON.parse(String(value || "[]")); } catch { games = []; }
-  return [...new Set(games.map((game) => String(game || "").trim().slice(0, 32)).filter(Boolean))].slice(0, 8);
-}
-
 function channelProfileForUser(userId) {
   const row = database.prepare("SELECT channel_profiles.user_id AS userId, channel_profiles.display_name AS displayName, channel_profiles.avatar_data AS avatarData, channel_profiles.games FROM channel_profiles WHERE channel_profiles.user_id = ?").get(userId);
   if (row) return { userId: row.userId, displayName: row.displayName, avatarData: compactAvatarData(row.avatarData), games: parseChannelGames(row.games) };
@@ -1394,10 +1373,6 @@ function linkOAuthAccount(providerName, identity, userId) {
   database.prepare("INSERT INTO oauth_accounts (id, provider, provider_user_id, user_id, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .run(randomUUID(), providerName, identity.providerUserId, userId, identity.email || null, now, now);
   return { alreadyLinked: false, currentDisplayName: target.displayName, suggestedDisplayName: identity.displayName };
-}
-
-function normalizeUsername(value) {
-  return String(value || "").trim().toLowerCase();
 }
 
 function requireUser(request, response) {

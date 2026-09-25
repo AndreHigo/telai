@@ -67,8 +67,9 @@ enviada ao GitHub nem publicada em produção.
 ### Fase 1 — Monólito modular sem mudança de produto
 
 - [x] Extrair normalização de nomes e limites de sala para módulos de domínio.
-- [ ] Extrair configuração de runtime e limites operacionais.
-- [ ] Extrair validação de entrada e formato de erros.
+- [x] Extrair configuração de runtime e limites operacionais.
+- [x] Extrair validações puras de entrada e normalização de dados.
+- [ ] Padronizar formato de erros HTTP sem alterar contratos existentes.
 - [ ] Separar repositórios SQLite das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [ ] Dividir `App.svelte` em serviços, stores e features sem alterar o layout.
