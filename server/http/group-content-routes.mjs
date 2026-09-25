@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { attachmentContentDisposition, normalizeMessageAttachments, publicAttachment } from "../media/attachments.mjs";
+
 export function createGroupContentRoutes({
   json,
   readJson,
@@ -6,11 +9,43 @@ export function createGroupContentRoutes({
   canGroupAction,
   canGroupRoomAction = canGroupAction,
   groupMessageRepository,
+  groupAttachmentRepository,
+  attachmentStorage,
+  attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${groupId}/attachments/${attachmentId}`,
   groupPermissionRepository,
   groupModerationRepository,
   publishGroupEvent = () => {},
 }) {
   return async function handleGroupContentRoutes(request, response, requestUrl) {
+    const groupAttachmentMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/attachments\/([\w-]{16,64})$/);
+    if (groupAttachmentMatch && request.method === "GET") {
+      const user = requireUser(request, response);
+      if (!user) return true;
+      const [, groupId, attachmentId] = groupAttachmentMatch;
+      if (!isGroupMember(user.id, groupId)) {
+        json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      const attachment = groupAttachmentRepository.find(groupId, attachmentId);
+      if (!attachment) {
+        json(response, 404, { error: "Anexo não encontrado." });
+        return true;
+      }
+      try {
+        const content = await attachmentStorage.read(attachment.storageKey);
+        response.writeHead(200, {
+          "Content-Type": attachment.mimeType,
+          "Content-Length": String(content.length),
+          "Content-Disposition": `${attachmentContentDisposition(attachment.mimeType)}; filename="${attachment.name.replace(/["\\\r\n]/g, "_")}"`,
+          "Cache-Control": "private, max-age=3600",
+          "X-Content-Type-Options": "nosniff",
+        }).end(content);
+      } catch {
+        json(response, 404, { error: "Arquivo do anexo não encontrado." });
+      }
+      return true;
+    }
+
     const groupMessageMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages$/);
     if (groupMessageMatch && request.method === "POST") {
       const user = requireUser(request, response);
@@ -28,18 +63,52 @@ export function createGroupContentRoutes({
         json(response, 403, { error: "Você não tem permissão para enviar mensagens neste grupo." });
         return true;
       }
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request, 30 * 1024 * 1024);
         const messageBody = String(body.body || "").trim().slice(0, 1000);
-        if (!messageBody) return json(response, 400, { error: "Escreva uma mensagem antes de enviar." });
+        const attachments = normalizeMessageAttachments(body.attachments);
+        if (!messageBody && !attachments.length) {
+          json(response, 400, { error: "Escreva uma mensagem ou escolha um anexo antes de enviar." });
+          return true;
+        }
         const requestedRoomId = String(body.roomId || "");
         const room = groupMessageRepository.findTextRoom(groupId, requestedRoomId);
-        if (requestedRoomId && !room) return json(response, 400, { error: "Essa sala não existe neste grupo." });
-        if (room?.kind === "live") return json(response, 400, { error: "Salas de transmissão não recebem mensagens de chat." });
-        if (!canGroupRoomAction(user.id, groupId, room?.id || null, "canChat")) return json(response, 403, { error: "Você não tem permissão para conversar neste canal." });
-        const message = groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt: new Date().toISOString() });
-        publishGroupEvent(groupId, { type: "group-message", message });
-        return json(response, 201, { message });
-      }).catch(() => json(response, 400, { error: "Não foi possível enviar a mensagem." }));
+        if (requestedRoomId && !room) {
+          json(response, 400, { error: "Essa sala não existe neste grupo." });
+          return true;
+        }
+        if (room?.kind === "live") {
+          json(response, 400, { error: "Salas de transmissão não recebem mensagens de chat." });
+          return true;
+        }
+        if (!canGroupRoomAction(user.id, groupId, room?.id || null, "canChat")) {
+          json(response, 403, { error: "Você não tem permissão para conversar neste canal." });
+          return true;
+        }
+        const stored = [];
+        let createdMessage = null;
+        try {
+          for (const attachment of attachments) {
+            const id = randomUUID();
+            const storageKey = await attachmentStorage.write({ attachmentId: id, mimeType: attachment.mimeType, buffer: attachment.buffer });
+            stored.push({ ...attachment, id, storageKey });
+          }
+          const createdAt = new Date().toISOString();
+          createdMessage = groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt });
+          const rows = groupAttachmentRepository.createAttachments({ groupId, messageId: createdMessage.id, attachments: stored, createdAt });
+          createdMessage.attachments = rows.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor));
+          publishGroupEvent(groupId, { type: "group-message", message: createdMessage });
+          json(response, 201, { message: createdMessage });
+        } catch (error) {
+          if (createdMessage?.id) {
+            try { groupMessageRepository.deleteMessage(groupId, createdMessage.id); } catch {}
+          }
+          await Promise.all(stored.map((attachment) => attachmentStorage.remove(attachment.storageKey).catch(() => {})));
+          throw error;
+        }
+      } catch {
+        json(response, 400, { error: "Não foi possível enviar a mensagem ou seus anexos." });
+      }
       return true;
     }
 
@@ -65,10 +134,12 @@ export function createGroupContentRoutes({
         return true;
       }
       if (request.method === "DELETE") {
+        const attachments = groupAttachmentRepository.listForMessage(groupId, messageId);
         if (!groupMessageRepository.deleteMessage(groupId, messageId)) {
           json(response, 404, { error: "Mensagem não encontrada." });
           return true;
         }
+        await Promise.all(attachments.map((attachment) => attachmentStorage.remove(attachment.storageKey).catch(() => {})));
         publishGroupEvent(groupId, { type: "group-message-deleted", messageId, roomId: message.roomId || null });
         json(response, 200, { ok: true, messageId });
         return true;
@@ -85,8 +156,10 @@ export function createGroupContentRoutes({
           json(response, 404, { error: "Mensagem não encontrada." });
           return true;
         }
-        publishGroupEvent(groupId, { type: "group-message-updated", message: updated });
-        json(response, 200, { message: updated });
+        const attachments = groupAttachmentRepository.listForMessage(groupId, updated.id);
+        const publicUpdated = { ...updated, attachments: attachments.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor)) };
+        publishGroupEvent(groupId, { type: "group-message-updated", message: publicUpdated });
+        json(response, 200, { message: publicUpdated });
       } catch {
         json(response, 400, { error: "Não foi possível editar a mensagem." });
       }

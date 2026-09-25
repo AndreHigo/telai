@@ -192,6 +192,8 @@ enviada ao GitHub nem publicada em produção.
   - [x] Expor histórico paginado somente ao dono e apresentar as ações recentes na administração do grupo.
 - [x] Editar/excluir mensagens com autorização do autor/dono, sincronização por eventos e controles inline.
 - [ ] Anexos com armazenamento local controlado e posterior compatibilidade S3/MinIO.
+  - [x] Persistir metadados em SQLite/PostgreSQL, armazenar arquivos fora do banco e servir downloads somente para membros autenticados, com limites de tamanho e tipos permitidos.
+  - [ ] Extrair um adapter S3/MinIO opcional após definir retenção, expiração, antivírus e política de custo.
 - [ ] Threads, busca, não lidas e notificações em tempo real.
 - [ ] Moderação básica: bloquear, expulsar, banir e silenciar.
   - [x] Expulsar, banir, silenciar, remover silêncio e desfazer banimento no servidor, com auditoria e desconexão de voz/eventos.

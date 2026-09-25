@@ -104,6 +104,7 @@ async function main() {
     assert.equal(openApi.body.openapi, "3.0.3");
     assert.equal(openApi.body.servers[0].url, "/api/v1");
     assert.ok(openApi.body.paths["/groups/{groupId}/messages"].post);
+    assert.ok(openApi.body.paths["/groups/{groupId}/attachments/{attachmentId}"].get);
     const missingVersionedRoute = await request("/api/v1/route-that-does-not-exist");
     assert.equal(missingVersionedRoute.response.status, 404);
     assert.equal(missingVersionedRoute.body.code, "not_found");
@@ -274,6 +275,27 @@ async function main() {
     assert.equal(deletedGroupMessage.response.status, 200);
     const afterMessageDelete = await api(owner, `/api/groups/${groupId}/overview`);
     assert.equal(afterMessageDelete.body.messages.some((message) => message.id === sentGroupMessage.body.message.id), false);
+    const attachmentMessage = await api(member, `/api/groups/${groupId}/messages`, "POST", {
+      roomId: group.textRoomId,
+      attachments: [{ name: "qa.txt", type: "text/plain", data: "data:text/plain;base64,SGVsbG8gVGVsYWk=" }],
+    });
+    assert.equal(attachmentMessage.response.status, 201);
+    assert.equal(attachmentMessage.body.message.body, "");
+    assert.equal(attachmentMessage.body.message.attachments.length, 1);
+    assert.equal(Object.prototype.hasOwnProperty.call(attachmentMessage.body.message.attachments[0], "storageKey"), false);
+    const attachmentUrl = attachmentMessage.body.message.attachments[0].url;
+    const attachmentContent = await api(member, attachmentUrl);
+    assert.equal(attachmentContent.response.status, 200);
+    assert.match(attachmentContent.response.headers.get("content-type") || "", /^text\/plain/);
+    assert.equal(attachmentContent.body, "Hello Telai");
+    assert.equal((await request(attachmentUrl)).response.status, 401);
+    assert.equal((await api(outsider, attachmentUrl)).response.status, 403);
+    const attachmentOverview = await api(owner, `/api/groups/${groupId}/overview`);
+    const overviewAttachmentMessage = attachmentOverview.body.messages.find((message) => message.id === attachmentMessage.body.message.id);
+    assert.equal(overviewAttachmentMessage.attachments[0].name, "qa.txt");
+    assert.equal((await api(member, `/api/groups/${groupId}/messages`, "POST", { roomId: group.textRoomId, attachments: [{ name: "bad.exe", type: "application/x-msdownload", data: "data:application/x-msdownload;base64,QQ==" }] })).response.status, 400);
+    assert.equal((await api(owner, `/api/groups/${groupId}/messages/${attachmentMessage.body.message.id}`, "DELETE")).response.status, 200);
+    assert.equal((await api(member, attachmentUrl)).response.status, 404);
     assert.ok(overview.body.members.some((item) => item.id === member.user.id));
   });
   await check("permissions deny and restore", async () => {

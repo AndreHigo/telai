@@ -15,6 +15,7 @@ import { createVoiceMessageHandler } from "./server/gateway/voice-message-handle
 import { createBroadcastMessageHandler } from "./server/gateway/broadcast-message-handler.mjs";
 import { createBroadcastRuntime } from "./server/gateway/broadcast-runtime.mjs";
 import { createIceConfiguration } from "./server/media/ice-configuration.mjs";
+import { createLocalAttachmentStorage } from "./server/media/attachments.mjs";
 import { createAuthRuntime } from "./server/auth/runtime.mjs";
 import { hashPassword, hashSessionToken } from "./server/auth/crypto.mjs";
 import { createStreamRuntime } from "./server/domain/streams/runtime.mjs";
@@ -43,6 +44,7 @@ import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs
 import { createGroupRoomPermissionRepository } from "./server/repositories/group-room-permissions.mjs";
 import { createGroupAuditRepository } from "./server/repositories/group-audit.mjs";
 import { createGroupModerationRepository } from "./server/repositories/group-moderation.mjs";
+import { createGroupAttachmentRepository } from "./server/repositories/group-attachments.mjs";
 import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
 import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
 import { createStreamRepository } from "./server/repositories/streams.mjs";
@@ -483,6 +485,9 @@ const socialRepository = createSocialRepository(database, { compactAvatarData, c
 const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialRepository, createNotification });
 const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
 const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });
+const groupAttachmentRepository = createGroupAttachmentRepository(database, { createId: randomUUID });
+const attachmentStorage = createLocalAttachmentStorage(process.env.TELAI_ATTACHMENT_DIR || path.join(dataDir, "attachments"));
+const attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${encodeURIComponent(groupId)}/attachments/${encodeURIComponent(attachmentId)}`;
 const groupRepository = createGroupRepository(database, { createId: randomUUID, groupSetupRepository });
 const groupModerationRepository = createGroupModerationRepository(database, { createId: randomUUID });
 const groupInviteRepository = createGroupInviteRepository(database, {
@@ -605,6 +610,9 @@ const handleGroupContentRoutes = createGroupContentRoutes({
   isGroupMember,
   canGroupAction,
   groupMessageRepository,
+  groupAttachmentRepository,
+  attachmentStorage,
+  attachmentUrlFor,
   canGroupRoomAction,
   groupPermissionRepository,
   groupModerationRepository,
@@ -715,6 +723,9 @@ const handleGroupRuntimeRoutes = createGroupRuntimeRoutes({
   groupRoomRepository,
   groupMemberRepository,
   groupMessageRepository,
+  groupAttachmentRepository,
+  attachmentStorage,
+  attachmentUrlFor,
   streamRepository,
   groupPermissions,
   isGroupMember,

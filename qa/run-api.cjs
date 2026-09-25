@@ -6,6 +6,7 @@ const path = require("node:path");
 const rootDir = path.resolve(__dirname, "..");
 const port = Number(process.env.API_QA_PORT || 8799);
 const databasePath = path.join(os.tmpdir(), `telai-api-qa-${process.pid}.sqlite`);
+const attachmentDir = path.join(os.tmpdir(), `telai-api-attachments-${process.pid}`);
 const baseUrl = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, [path.join(rootDir, "server.mjs")], {
   cwd: rootDir,
@@ -15,6 +16,7 @@ const server = spawn(process.execPath, [path.join(rootDir, "server.mjs")], {
     HOST: "127.0.0.1",
     REQUIRE_LOGIN: "true",
     MIRANTE_DB_PATH: databasePath,
+    TELAI_ATTACHMENT_DIR: attachmentDir,
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -36,6 +38,7 @@ async function waitForHealth() {
 
 function removeDatabase() {
   for (const suffix of ["", "-shm", "-wal"]) fs.rmSync(`${databasePath}${suffix}`, { force: true });
+  fs.rmSync(attachmentDir, { recursive: true, force: true });
 }
 
 function stopProcess(child) {

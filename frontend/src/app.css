@@ -735,6 +735,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .message-meta strong { color: #eef3ff; font-size: 11px; }
 .message-meta time { color: #7186ac; font-size: 9px; }
 .message-item p { margin: 4px 0 0; color: #b6c4df; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+.message-attachments { display: grid; max-width: min(100%, 420px); gap: 7px; margin-top: 7px; }
+.message-attachment { display: flex; min-width: 0; align-items: center; gap: 9px; border: 1px solid #304b77; border-radius: 9px; padding: 7px 9px; color: #dce6ff; background: rgba(18, 35, 65, .72); text-decoration: none; }
+.message-attachment:hover { border-color: #6878e8; background: #182d52; }
+.message-attachment img { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 6px; object-fit: cover; }
+.message-attachment > span { display: grid; min-width: 0; gap: 3px; }
+.message-attachment strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.message-attachment small { color: #8298be; font-size: 9px; }
 .message-empty { margin: auto; text-align: center; }
 .message-empty span { display: inline-grid; width: 38px; height: 38px; place-items: center; border-radius: 12px; color: #aeb5ff; background: #1c2d50; font-size: 22px; }
 .message-empty h2 { margin: 12px 0 0; color: #eef3ff; font-size: 16px; }
@@ -745,6 +752,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .message-composer textarea::placeholder { color: #7186ad; }
 .message-composer button { border: 0; border-radius: 8px; padding: 0 13px; font-size: 10px; font-weight: 800; }
 .composer-send { width: 32px; padding: 0 !important; font-size: 16px !important; }
+.message-attachment-picker { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border: 1px solid #344d78; border-radius: 8px; color: #9eb1d2; background: #182a4a; cursor: pointer; font-size: 18px; line-height: 1; }
+.message-attachment-picker:hover { border-color: #6878e8; color: #fff; background: #293e70; }
+.message-attachment-picker input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.message-attachment-draft { position: absolute; right: 48px; bottom: calc(100% + 8px); left: 8px; display: flex; gap: 5px; overflow-x: auto; padding: 6px; border: 1px solid #304b77; border-radius: 9px; background: #0d1b32; box-shadow: 0 10px 24px rgba(2, 7, 18, .3); }
+.message-attachment-draft span { display: inline-flex; max-width: 180px; align-items: center; gap: 5px; border: 1px solid #3d5885; border-radius: 7px; padding: 4px 5px 4px 7px; color: #dce6ff; background: #172b4d; font-size: 9px; }
+.message-attachment-draft strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-attachment-draft button { width: 16px; height: 16px; flex: 0 0 16px; padding: 0; color: #aebaff; background: transparent; cursor: pointer; font-size: 14px; line-height: 1; }
 .member-section-label { margin-top: 26px; }
 .member-role-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(88,101,242,.12); }
 .member-item { display: flex; align-items: center; gap: 8px; padding: 5px 2px; }
@@ -2403,7 +2417,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mirante-shell.light .chat-workspace { background: linear-gradient(145deg, #fbfcfe, #f3f6fb); }
 .mirante-shell.light .workspace-heading .muted { color: #687a98; }
 .mirante-shell.light .message-item p { color: #40536f; }
+.mirante-shell.light .message-attachment { border-color: #c6d3e5; color: #30466b; background: #f7f9fc; }
+.mirante-shell.light .message-attachment:hover { border-color: #6878e8; background: #eaf0fb; }
+.mirante-shell.light .message-attachment small { color: #617697; }
 .mirante-shell.light .message-composer { border-color: #c6d3e5; background: #fff; box-shadow: 0 8px 22px rgba(38, 57, 91, .08); }
+.mirante-shell.light .message-attachment-picker { border-color: #c6d3e5; color: #617697; background: #f3f6fb; }
+.mirante-shell.light .message-attachment-picker:hover { border-color: #6878e8; color: #30466b; background: #e5ecfa; }
+.mirante-shell.light .message-attachment-draft { border-color: #c6d3e5; background: #fff; box-shadow: 0 10px 24px rgba(38, 57, 91, .14); }
+.mirante-shell.light .message-attachment-draft span { border-color: #c6d3e5; color: #30466b; background: #f3f6fb; }
 .mirante-shell.light .voice-room-workspace,
 .mirante-shell.light .voice-live-gallery { background: #eef3fa; }
 .mirante-shell.light .voice-live-tile { border-color: #c6d3e5; background: #fff; box-shadow: 0 10px 22px rgba(38, 57, 91, .08); }

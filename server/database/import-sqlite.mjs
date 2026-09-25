@@ -31,6 +31,7 @@ export const IMPORT_ORDER = [
   ["friendships", ["user_id", "friend_id"]],
   ["friend_requests", ["id"]],
   ["group_messages", ["id"]],
+  ["group_message_attachments", ["id"]],
   ["direct_conversations", ["id"]],
   ["direct_conversation_members", ["conversation_id", "user_id"]],
   ["direct_messages", ["id"]],

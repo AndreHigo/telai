@@ -39,6 +39,15 @@ membros também podem usar a rota, mas somente contra cargos inferiores na ordem
 do grupo. Banimentos e silêncios aceitam `durationMinutes` e `reason`; a
 autorização e o bloqueio de mensagens são aplicados no servidor.
 
+Mensagens de grupo também aceitam `attachments` no POST. Cada mensagem pode
+ter até 4 anexos, com no máximo 8 MB por arquivo e 20 MB no conjunto. Nesta
+fase são aceitos imagens, PDF, texto simples, áudio e vídeo nos tipos
+permitidos pelo servidor; o conteúdo é enviado como data URL e armazenado no
+diretório privado da aplicação, enquanto o banco guarda somente os metadados.
+`GET /api/v1/groups/{groupId}/attachments/{attachmentId}` exige sessão e
+participação no grupo. A resposta das mensagens expõe apenas `id`, nome, tipo,
+tamanho, data e URL protegida, nunca a chave interna de armazenamento.
+
 O namespace ainda não representa uma promessa de compatibilidade eterna para
 cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
 incompatíveis devem ser introduzidas em outra versão e documentadas aqui.

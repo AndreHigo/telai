@@ -15,7 +15,6 @@
   import GroupChannelRail from "./features/groups/GroupChannelRail.svelte";
   import GroupWorkspaceHeader from "./features/groups/GroupWorkspaceHeader.svelte";
   import GroupChatHeader from "./features/groups/GroupChatHeader.svelte";
-  import GroupTextChatWorkspace from "./features/groups/GroupTextChatWorkspace.svelte";
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
@@ -189,6 +188,7 @@
   let registerPassword = "";
   let registerLegalAccepted = false;
   let messageDraft = "";
+  let messageAttachments = [];
   let editingMessageId = "";
   let editingMessageDraft = "";
   let messageComposerInput;
@@ -337,6 +337,8 @@
   // para participantes atuais. O analisador remoto fica apenas como fallback
   // para clientes antigos que ainda não publicam esse estado.
   let voiceSpeakingSignalKnownParticipantIds = new Set();
+  let GroupTextChatWorkspace = null;
+  let groupTextWorkspaceLoad = null;
   let GroupVoiceWorkspace = null;
   let groupVoiceWorkspaceLoad = null;
   let GroupChannelPermissionsSettings = null;
@@ -344,6 +346,15 @@
   let GroupAuditLogSettings = null;
   let groupAuditLogSettingsLoad = null;
   let groupEventGateway = null;
+
+  function loadGroupTextWorkspace() {
+    if (GroupTextChatWorkspace || groupTextWorkspaceLoad) return groupTextWorkspaceLoad;
+    groupTextWorkspaceLoad = import("./features/groups/GroupTextChatWorkspace.svelte")
+      .then((module) => { GroupTextChatWorkspace = module.default; })
+      .catch((error) => reportClientError("text_workspace_load_error", error))
+      .finally(() => { groupTextWorkspaceLoad = null; });
+    return groupTextWorkspaceLoad;
+  }
 
   function loadGroupVoiceWorkspace() {
     if (GroupVoiceWorkspace || groupVoiceWorkspaceLoad) return groupVoiceWorkspaceLoad;
@@ -354,6 +365,7 @@
     return groupVoiceWorkspaceLoad;
   }
 
+  $: if (selectedRoom && selectedRoom.kind !== "voice" && !GroupTextChatWorkspace) void loadGroupTextWorkspace();
   $: if (selectedRoom?.kind === "voice" && !GroupVoiceWorkspace) void loadGroupVoiceWorkspace();
 
   function loadGroupChannelPermissionsSettings() {
@@ -6293,7 +6305,8 @@
   async function sendMessage(event) {
     event.preventDefault();
     const body = messageDraft.trim();
-    if (!selectedGroupId || !body || selectedRoom?.kind !== "text") return;
+    const attachments = messageAttachments.slice();
+    if (!selectedGroupId || (!body && !attachments.length) || selectedRoom?.kind !== "text") return;
     const groupId = selectedGroupId;
     const roomId = selectedRoomId;
     const pendingId = `pending-${Date.now()}`;
@@ -6305,15 +6318,17 @@
       username: user.username,
       userId: user.id,
       createdAt: new Date().toISOString(),
+      attachments: attachments.map(({ name, type, size }) => ({ name, mimeType: type, byteSize: size, pending: true })),
       pending: true,
     };
     if (groupOverview?.group?.id === groupId) {
       groupOverview = { ...groupOverview, messages: [...(groupOverview.messages || []), pendingMessage].slice(-80) };
     }
     messageDraft = "";
+    messageAttachments = [];
     await scrollGroupMessagesToBottom({ force: true });
     try {
-      const result = await api(`/api/groups/${encodeURIComponent(groupId)}/messages`, { method: "POST", body: JSON.stringify({ body, roomId }) });
+      const result = await api(`/api/groups/${encodeURIComponent(groupId)}/messages`, { method: "POST", body: JSON.stringify({ body, roomId, attachments }) });
       if (selectedGroupId === groupId && groupOverview?.group?.id === groupId && result.message) {
         knownGroupMessageIds = new Set([...knownGroupMessageIds, result.message.id]);
         const messages = groupOverview.messages || [];
@@ -6326,8 +6341,26 @@
         groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).filter((message) => message.id !== pendingId) };
       }
       messageDraft = body;
+      messageAttachments = attachments;
       notice = error.message;
     }
+  }
+
+  async function addMessageAttachments(event) {
+    const files = [...(event.currentTarget.files || [])];
+    event.currentTarget.value = "";
+    if (!files.length) return;
+    try {
+      const { readMessageAttachments } = await import("./services/media/message-attachments.js");
+      const next = await readMessageAttachments(files, messageAttachments.length, messageAttachments.reduce((total, attachment) => total + attachment.size, 0));
+      messageAttachments = [...messageAttachments, ...next];
+    } catch (error) {
+      notice = error.message;
+    }
+  }
+
+  function removeMessageAttachment(index) {
+    messageAttachments = messageAttachments.filter((_, attachmentIndex) => attachmentIndex !== index);
   }
 
   function startEditMessage(message) {
@@ -7278,7 +7311,7 @@
           onOpenVoiceSettings={openVoiceSettings}
           onLeaveVoiceRoom={leaveVoiceRoom}
         />
-        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else}<GroupTextChatWorkspace bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} />{/if}</section>
+        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
         <GroupMemberRail
           {user}
           {memberRoleGroups}

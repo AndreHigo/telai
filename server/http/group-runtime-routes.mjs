@@ -1,3 +1,5 @@
+import { publicAttachment } from "../media/attachments.mjs";
+
 export function createGroupRuntimeRoutes({
   json,
   requireUser,
@@ -6,6 +8,9 @@ export function createGroupRuntimeRoutes({
   groupRoomRepository,
   groupMemberRepository,
   groupMessageRepository,
+  groupAttachmentRepository,
+  attachmentStorage,
+  attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${groupId}/attachments/${attachmentId}`,
   streamRepository,
   groupPermissions,
   isGroupMember,
@@ -44,7 +49,9 @@ export function createGroupRuntimeRoutes({
         }
         voiceRooms.delete(voiceRoomId);
       }
+      const attachments = await groupAttachmentRepository.listForGroup(groupId);
       groupSettingsRepository.deleteGroup(groupId);
+      await Promise.all(attachments.map((attachment) => attachmentStorage.remove(attachment.storageKey).catch(() => {})));
       json(response, 200, { ok: true, group: { id: group.id, name: group.name } });
       return true;
     }
@@ -79,7 +86,8 @@ export function createGroupRuntimeRoutes({
       const visibleRoomIds = new Set(rooms.filter((room) => room.kind === "text").map((room) => room.id));
       const messages = requestUrl.searchParams.get("includeMessages") === "0"
         ? undefined
-        : groupMessageRepository.listMessages(groupId).filter((message) => !message.roomId || visibleRoomIds.has(message.roomId));
+        : groupAttachmentRepository.attachToMessages(groupId, groupMessageRepository.listMessages(groupId).filter((message) => !message.roomId || visibleRoomIds.has(message.roomId)))
+          .map((message) => ({ ...message, attachments: message.attachments.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor)) }));
       const streams = streamRepository.listGroupStreams(groupId).filter(runtimeStreamIsLive);
       json(response, 200, {
         group,

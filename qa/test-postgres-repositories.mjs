@@ -15,6 +15,7 @@ import { createPostgresAccountRepository } from "../server/repositories/accounts
 import { createPostgresSocialRepository } from "../server/repositories/social.mjs";
 import { createPostgresGroupSetupRepository } from "../server/repositories/group-setup.mjs";
 import { createPostgresGroupMessageRepository } from "../server/repositories/group-messages.mjs";
+import { createPostgresGroupAttachmentRepository } from "../server/repositories/group-attachments.mjs";
 import { createPostgresGroupInviteRepository } from "../server/repositories/group-invites.mjs";
 import { createPostgresGroupJoinRequestRepository } from "../server/repositories/group-join-requests.mjs";
 import { createPostgresGroupRoleRepository } from "../server/repositories/group-roles.mjs";
@@ -160,7 +161,21 @@ try {
   const updatedGroupMessage = await groupMessages.updateMessage({ groupId: ids.group, messageId: groupMessage.id, body: "Mensagem editada PostgreSQL", editedAt: now });
   assert.equal(updatedGroupMessage.body, "Mensagem editada PostgreSQL");
   assert.equal(updatedGroupMessage.editedAt, now);
+  const groupAttachments = createPostgresGroupAttachmentRepository(client, { createId: randomUUID });
+  const attachmentMessage = await groupMessages.createMessage({ groupId: ids.group, roomId: generalRoom.id, userId: ids.owner, body: "Mensagem com anexo PostgreSQL", displayName: "PG Owner", username: ownerUsername, createdAt: now });
+  const createdAttachments = await groupAttachments.createAttachments({
+    groupId: ids.group,
+    messageId: attachmentMessage.id,
+    attachments: [{ name: "qa.txt", mimeType: "text/plain", byteSize: 12, storageKey: `${attachmentMessage.id}.txt` }],
+    createdAt: now,
+  });
+  assert.equal(createdAttachments[0].name, "qa.txt");
+  assert.equal((await groupAttachments.listForMessage(ids.group, attachmentMessage.id))[0].storageKey, `${attachmentMessage.id}.txt`);
+  assert.equal((await groupAttachments.attachToMessages(ids.group, [attachmentMessage]))[0].attachments.length, 1);
+  assert.equal((await groupAttachments.find(ids.group, createdAttachments[0].id)).messageId, attachmentMessage.id);
+  assert.equal((await groupAttachments.listForGroup(ids.group)).some((attachment) => attachment.id === createdAttachments[0].id), true);
   assert.equal(await groupMessages.deleteMessage(ids.group, groupMessage.id), true);
+  assert.equal(await groupMessages.deleteMessage(ids.group, attachmentMessage.id), true);
   assert.equal(await groupMessages.findMessage(ids.group, groupMessage.id), null);
   assert.equal(await groups.isGroupMember(ids.member, ids.group), true);
   assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canModerateMembers: true, canViewVoiceMembers: true });
@@ -319,7 +334,7 @@ try {
   assert.equal(await groupSettings.deleteGroup(createdGroup.id), true);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-room-permissions", "group-permissions", "group-members", "group-moderation", "group-settings", "user-profile", "site-admin", "maintenance", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-attachments", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-room-permissions", "group-permissions", "group-members", "group-moderation", "group-settings", "user-profile", "site-admin", "maintenance", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

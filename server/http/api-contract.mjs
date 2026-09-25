@@ -112,11 +112,12 @@ const paths = {
   }),
   "/groups/{groupId}/members/{memberId}/role": pathItem("Permissões", { patch: ["assignMemberRole", "Atribui um cargo a um membro"] }),
   "/groups/{groupId}/permissions": pathItem("Permissões", { patch: ["updateMemberPermissions", "Atualiza permissões individuais"] }),
-  "/groups/{groupId}/messages": pathItem("Mensagens", { post: ["createGroupMessage", "Envia mensagem no grupo", { methods: ["201"] }] }),
+  "/groups/{groupId}/messages": pathItem("Mensagens", { post: ["createGroupMessage", "Envia mensagem no grupo, opcionalmente com anexos", { methods: ["201"] }] }),
   "/groups/{groupId}/messages/{messageId}": pathItem("Mensagens", {
     patch: ["editGroupMessage", "Edita uma mensagem do grupo"],
     delete: ["deleteGroupMessage", "Exclui uma mensagem do grupo"],
   }),
+  "/groups/{groupId}/attachments/{attachmentId}": pathItem("Mensagens", { get: ["getGroupMessageAttachment", "Baixa um anexo protegido da mensagem"] }),
   "/direct/conversations": pathItem("Mensagens", {
     get: ["listDirectConversations", "Lista conversas diretas"],
     post: ["createDirectConversation", "Cria conversa direta", { methods: ["201"] }],
