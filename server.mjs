@@ -20,6 +20,7 @@ import { createOAuthRepository } from "./server/repositories/oauth.mjs";
 import { createAccountRepository } from "./server/repositories/accounts.mjs";
 import { createSocialRepository } from "./server/repositories/social.mjs";
 import { createGroupSetupRepository } from "./server/repositories/group-setup.mjs";
+import { createGroupMessageRepository } from "./server/repositories/group-messages.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -776,6 +777,7 @@ const notificationSyncService = createNotificationSyncService(database, {
 const accountRepository = createAccountRepository(database, { legalPolicyVersion, createId: randomUUID });
 const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
 const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
+const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -3203,19 +3205,7 @@ async function handleHttpRequest(request, response) {
       LEFT JOIN group_member_permissions ON group_member_permissions.group_id = group_members.group_id AND group_member_permissions.user_id = group_members.user_id
       WHERE group_members.group_id = ? ORDER BY CASE WHEN group_members.role = 'owner' THEN 0 ELSE 1 END, COALESCE(group_roles.sort_order, 2147483647), users.display_name COLLATE NOCASE
     `).all(groupId).map((member) => ({ ...member, roleName: member.role === "owner" ? "Dono" : member.roleName || "Membro", roleColor: member.roleColor || "#5865f2", roleSortOrder: member.roleSortOrder === null || member.roleSortOrder === undefined ? null : Number(member.roleSortOrder), canMoveMembers: member.role === "owner" || Boolean(member.canMoveMembers), canChat: member.role === "owner" || Boolean(member.canChat), canStream: member.role === "owner" || Boolean(member.canStream), canInvite: member.role === "owner" || Boolean(member.canInvite), canViewVoiceMembers: member.role === "owner" || Boolean(member.canViewVoiceMembers), online: isPresent(groupId, member.id) }));
-    const messages = database.prepare(`
-      WITH ranked_messages AS (
-        SELECT group_messages.id, group_messages.room_id AS roomId, group_messages.user_id AS userId, group_messages.body, group_messages.created_at AS createdAt,
-          users.display_name AS displayName, users.username,
-          ROW_NUMBER() OVER (PARTITION BY COALESCE(group_messages.room_id, '__general__') ORDER BY group_messages.created_at DESC) AS messageRank
-        FROM group_messages JOIN users ON users.id = group_messages.user_id
-        WHERE group_messages.group_id = ?
-      )
-      SELECT id, roomId, userId, body, createdAt, displayName, username
-      FROM ranked_messages
-      WHERE messageRank <= 80
-      ORDER BY createdAt ASC
-    `).all(groupId);
+    const messages = groupMessageRepository.listMessages(groupId);
     const streams = database.prepare(`
       SELECT streams.id, streams.room_name AS roomName, streams.room_id AS roomId, streams.voice_room_id AS voiceRoomId, streams.title, streams.visibility, streams.started_at AS startedAt,
         COALESCE(channel_profiles.display_name, users.display_name) AS channelName,
@@ -3319,11 +3309,10 @@ async function handleHttpRequest(request, response) {
       const messageBody = String(body.body || "").trim().slice(0, 1000);
       if (!messageBody) return json(response, 400, { error: "Escreva uma mensagem antes de enviar." });
       const requestedRoomId = String(body.roomId || "");
-      const room = requestedRoomId ? database.prepare("SELECT id, kind FROM group_rooms WHERE id = ? AND group_id = ?").get(requestedRoomId, groupId) : null;
+      const room = groupMessageRepository.findTextRoom(groupId, requestedRoomId);
       if (requestedRoomId && !room) return json(response, 400, { error: "Essa sala não existe neste grupo." });
       if (room?.kind === "live") return json(response, 400, { error: "Salas de transmissão não recebem mensagens de chat." });
-      const message = { id: randomUUID(), roomId: room?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt: new Date().toISOString() };
-      database.prepare("INSERT INTO group_messages (id, group_id, room_id, user_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(message.id, groupId, message.roomId, user.id, message.body, message.createdAt);
+      const message = groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt: new Date().toISOString() });
       return json(response, 201, { message });
     }).catch(() => json(response, 400, { error: "Não foi possível enviar a mensagem." }));
     return;

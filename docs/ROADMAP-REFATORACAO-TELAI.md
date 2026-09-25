@@ -88,6 +88,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Validar o contrato PostgreSQL do domínio social com transação de teste e rollback.
 - [x] Extrair setup de canais/cargos padrão e migração de permissões legadas dos grupos.
 - [x] Extrair criação, leitura e envio transacional de conversas e mensagens diretas.
+- [x] Extrair leitura e envio de mensagens de grupo do overview/roteador.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
