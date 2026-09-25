@@ -29,7 +29,7 @@ etapa.
 - O endpoint público `/healthz` informa o driver efetivamente selecionado (`sqlite` ou `postgres`), sem expor URL, credenciais ou detalhes do pool; isso permite confirmar o runtime local antes de qualquer cutover.
 - Com `TELAI_DATABASE_DRIVER=postgres`, o runtime completo usa o pool PostgreSQL local para os domínios extraídos. `TELAI_MAINTENANCE_DATABASE_DRIVER` pode ser usado para escolher explicitamente outro driver de manutenção durante testes; por padrão, a manutenção acompanha o driver principal.
 - Os repositórios já extraídos, incluindo autenticação, consentimentos, OAuth, contas, perfil local, administração, manutenção, social, descoberta/criação, configuração e exclusão de grupos, setup, cargos, salas, permissões, membros, streams, chat da transmissão, convites, solicitações de entrada, mensagens de grupo, anexos de mensagens, cursores de leitura por canal e conversas diretas, possuem implementações PostgreSQL assíncronas paralelas. O runtime foi validado localmente contra PostgreSQL em API, gateways, segurança, administração, observabilidade, reconexão de voz e mídia.
-- Não existe um banco SQLite de aplicação válido neste checkout para importar; nenhum dado de teste foi tratado como dado real.
+- O checkout possui um banco SQLite local ignorado pelo Git, com o schema de aplicação presente e atualmente sem linhas em nenhuma das 33 tabelas importáveis; o modo `--plan` confirma esse estado antes de qualquer importação.
 - Nenhum ambiente de produção foi apontado para PostgreSQL.
 - Nenhum banco SQLite foi apagado ou alterado por esta preparação.
 

@@ -3,8 +3,10 @@ import { fileURLToPath } from "node:url";
 import { createDatabaseConfig } from "../server/config/database.mjs";
 import { inspectSqliteDatabase, importSqliteToPostgres, openSqliteReadOnly } from "../server/database/import-sqlite.mjs";
 import { createPostgresPool } from "../server/repositories/postgres.mjs";
+import { loadPostgresEnv } from "./postgres-env.mjs";
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+loadPostgresEnv({ rootDirectory: rootDir });
 const sqlitePath = process.env.MIRANTE_DB_PATH || path.join(rootDir, "data", "mirante-tv.sqlite");
 const sqlite = openSqliteReadOnly(sqlitePath);
 const plan = inspectSqliteDatabase(sqlite);
