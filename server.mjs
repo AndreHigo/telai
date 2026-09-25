@@ -14,6 +14,7 @@ import { createChannelProfileRepository } from "./server/repositories/channel-pr
 import { createUserPreferenceRepository } from "./server/repositories/user-preferences.mjs";
 import { createNotificationSyncService } from "./server/services/notification-sync.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
+import { ensureCompatibilityIndexes } from "./server/database/sqlite-compatibility.mjs";
 import { createSessionRepository } from "./server/repositories/sessions.mjs";
 import { createAuthRepository } from "./server/repositories/auth.mjs";
 import { createOAuthRepository } from "./server/repositories/oauth.mjs";
@@ -761,11 +762,7 @@ ensureColumn(database, "user_preferences", "voice_microphone_volume", "REAL NOT 
 ensureColumn(database, "user_preferences", "voice_output_volume", "REAL NOT NULL DEFAULT 1");
 ensureColumn(database, "user_preferences", "preferred_input_device_id", "TEXT");
 ensureColumn(database, "user_preferences", "preferred_output_device_id", "TEXT");
-database.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email) WHERE email IS NOT NULL AND email <> ''");
-database.exec("CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at)");
-database.exec("CREATE INDEX IF NOT EXISTS stream_chat_messages_stream_idx ON stream_chat_messages(stream_id, created_at DESC)");
-database.exec("CREATE INDEX IF NOT EXISTS group_messages_room_idx ON group_messages(group_id, room_id, created_at DESC)");
-database.exec("CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_messages(sender_id, created_at DESC)");
+ensureCompatibilityIndexes(database);
 const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
 const directConversationRepository = createDirectConversationRepository(database, { compactUserSummary, createId: randomUUID });
 const { directConversationForUser, directConversationPayload } = directConversationRepository;
