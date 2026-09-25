@@ -11,6 +11,7 @@
   export let onToggleChannels = () => {};
   export let onToggleMembers = () => {};
   export let onCreateChannel = () => {};
+  export let onSearchMessages = () => {};
 </script>
 
 <header class="workspace-heading">
@@ -18,6 +19,7 @@
   <div class="workspace-heading-actions">
     <button class="mobile-rail-toggle" type="button" on:click={onToggleChannels} aria-expanded={showMobileChannels} aria-controls="group-channel-rail"><HugeiconsIcon icon={iconFor("grid")} size={16} strokeWidth={1.8} /> Canais</button>
     <button class="mobile-rail-toggle" type="button" on:click={onToggleMembers} aria-expanded={showMobileMembers} aria-controls="group-member-rail"><HugeiconsIcon icon={iconFor("communities")} size={16} strokeWidth={1.8} /> Membros</button>
+    <button class="workspace-message-search outline rounded-xl px-3 py-2 text-xs font-extrabold" type="button" on:click={onSearchMessages} disabled={!selectedGroupId || groupLoading}><HugeiconsIcon icon={iconFor("search")} size={16} strokeWidth={1.8} /><span>Buscar</span></button>
     <button class="workspace-new-channel outline rounded-xl px-4 py-2 text-xs font-extrabold" on:click={onCreateChannel} disabled={!selectedGroupId || groupLoading}><HugeiconsIcon icon={iconFor("add")} size={16} strokeWidth={1.8} /> Canal</button>
   </div>
 </header>

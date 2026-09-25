@@ -162,6 +162,7 @@ try {
   const updatedGroupMessage = await groupMessages.updateMessage({ groupId: ids.group, messageId: groupMessage.id, body: "Mensagem editada PostgreSQL", editedAt: now });
   assert.equal(updatedGroupMessage.body, "Mensagem editada PostgreSQL");
   assert.equal(updatedGroupMessage.editedAt, now);
+  assert.equal((await groupMessages.searchMessages({ groupId: ids.group, query: "editada", roomId: generalRoom.id })).some((message) => message.id === groupMessage.id), true);
   const groupAttachments = createPostgresGroupAttachmentRepository(client, { createId: randomUUID });
   const attachmentMessage = await groupMessages.createMessage({ groupId: ids.group, roomId: generalRoom.id, userId: ids.owner, body: "Mensagem com anexo PostgreSQL", displayName: "PG Owner", username: ownerUsername, createdAt: now });
   const createdAttachments = await groupAttachments.createAttachments({

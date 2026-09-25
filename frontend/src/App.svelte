@@ -341,6 +341,8 @@
   let groupTextWorkspaceLoad = null;
   let GroupVoiceWorkspace = null;
   let groupVoiceWorkspaceLoad = null;
+  let GroupMessageSearchDialog = null;
+  let groupMessageSearchDialogLoad = null;
   let GroupChannelPermissionsSettings = null;
   let groupChannelPermissionsSettingsLoad = null;
   let GroupAuditLogSettings = null;
@@ -367,6 +369,17 @@
 
   $: if (selectedRoom && selectedRoom.kind !== "voice" && !GroupTextChatWorkspace) void loadGroupTextWorkspace();
   $: if (selectedRoom?.kind === "voice" && !GroupVoiceWorkspace) void loadGroupVoiceWorkspace();
+
+  function loadGroupMessageSearchDialog() {
+    if (GroupMessageSearchDialog || groupMessageSearchDialogLoad) return groupMessageSearchDialogLoad;
+    groupMessageSearchDialogLoad = import("./features/groups/GroupMessageSearchDialog.svelte")
+      .then((module) => { GroupMessageSearchDialog = module.default; })
+      .catch((error) => reportClientError("group_message_search_dialog_load_error", error))
+      .finally(() => { groupMessageSearchDialogLoad = null; });
+    return groupMessageSearchDialogLoad;
+  }
+
+  $: if (showGroupMessageSearch && !GroupMessageSearchDialog) void loadGroupMessageSearchDialog();
 
   function loadGroupChannelPermissionsSettings() {
     if (GroupChannelPermissionsSettings || groupChannelPermissionsSettingsLoad) return groupChannelPermissionsSettingsLoad;
@@ -670,6 +683,7 @@
   ];
   let showInviteDialog = false;
   let showGroupSearchDialog = false;
+  let showGroupMessageSearch = false;
   let showLeaveGroupDialog = false;
   let leaveGroupBusy = false;
   let leaveGroupError = "";
@@ -690,6 +704,10 @@
   let groupSearchResults = [];
   let groupSearchBusy = false;
   let groupSearchError = "";
+  let groupMessageSearchQuery = "";
+  let groupMessageSearchResults = [];
+  let groupMessageSearchBusy = false;
+  let groupMessageSearchError = "";
   let groupJoinRequests = [];
   let groupJoinActionId = "";
   let groupAuditEntries = [];
@@ -2894,6 +2912,37 @@
     if (voiceQualityTimer) window.clearInterval(voiceQualityTimer);
     voiceQualityTimer = null;
     voiceQualitySnapshots = new Map();
+  }
+
+  async function searchGroupMessages() {
+    if (groupMessageSearchBusy || !selectedGroupId) return;
+    const query = groupMessageSearchQuery.trim();
+    groupMessageSearchError = "";
+    if (query.length < 2) {
+      groupMessageSearchResults = [];
+      if (query) groupMessageSearchError = "Digite pelo menos 2 caracteres para pesquisar.";
+      return;
+    }
+    groupMessageSearchBusy = true;
+    try {
+      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/messages/search?q=${encodeURIComponent(query)}`);
+      groupMessageSearchResults = result.messages || [];
+      if (!groupMessageSearchResults.length) groupMessageSearchError = "Nenhuma mensagem encontrada.";
+    } catch (error) { groupMessageSearchError = error.message; }
+    finally { groupMessageSearchBusy = false; }
+  }
+
+  function openGroupMessageSearch() {
+    groupMessageSearchQuery = "";
+    groupMessageSearchResults = [];
+    groupMessageSearchError = "";
+    showGroupMessageSearch = true;
+  }
+
+  async function openGroupMessageSearchResult(message) {
+    const room = rooms.find((candidate) => candidate.id === message.roomId) || rooms.find((candidate) => candidate.slug === "geral" && candidate.kind === "text");
+    showGroupMessageSearch = false;
+    if (room) await selectRoom(room.id);
   }
 
   function ensureVoicePeerHealthTimer() {
@@ -7362,7 +7411,7 @@
           onOpenVoiceSettings={openVoiceSettings}
           onLeaveVoiceRoom={leaveVoiceRoom}
         />
-        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
+        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} onSearchMessages={openGroupMessageSearch} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
         <GroupMemberRail
           {user}
           {memberRoleGroups}
@@ -7626,6 +7675,24 @@
         <div class="modal-body"><form class="modal-search-row" on:submit|preventDefault={searchGroups}><input class="settings-input" bind:value={groupSearchQuery} placeholder="Nome do grupo" autocomplete="off" /> <button class="primary rounded-xl px-4 py-2 text-xs font-extrabold" type="submit" disabled={groupSearchBusy}>{groupSearchBusy ? "Buscando…" : "Pesquisar"}</button></form>{#if groupSearchError}<p class="settings-error" role="alert">{groupSearchError}</p>{/if}{#if groupSearchResults.length}<div class="group-discovery-results">{#each groupSearchResults as group}<div class="group-discovery-result"><span class="community-avatar">{group.name.slice(0, 2).toUpperCase()}</span><span><strong>{group.name}</strong><small>por {group.ownerName} · {group.memberCount} {group.memberCount === 1 ? "membro" : "membros"}</small></span>{#if group.requestStatus === "pending"}<span class="group-request-status">Pendente</span>{:else if group.requestStatus === "rejected"}<button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={groupJoinActionId === group.id} on:click={() => requestGroupEntry(group)}>Solicitar novamente</button>{:else}<button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={groupJoinActionId === group.id} on:click={() => requestGroupEntry(group)}>{groupJoinActionId === group.id ? "Enviando…" : "Solicitar entrada"}</button>{/if}</div>{/each}</div>{/if}</div>
       </div>
     </div>
+  {/if}
+  {#if showGroupMessageSearch}
+    {#if GroupMessageSearchDialog}
+      <svelte:component
+        this={GroupMessageSearchDialog}
+        query={groupMessageSearchQuery}
+        results={groupMessageSearchResults}
+        busy={groupMessageSearchBusy}
+        error={groupMessageSearchError}
+        {rooms}
+        onQueryChange={(value) => groupMessageSearchQuery = value}
+        onSearch={searchGroupMessages}
+        onClose={() => showGroupMessageSearch = false}
+        onSelect={openGroupMessageSearchResult}
+      />
+    {:else}
+      <div class="workspace-loading" role="status" aria-label="Carregando busca de mensagens"><span></span><span></span><span></span></div>
+    {/if}
   {/if}
   {#if showLeaveGroupDialog}
     <div class="modal-backdrop" role="presentation" on:click={() => !leaveGroupBusy && (showLeaveGroupDialog = false)}>

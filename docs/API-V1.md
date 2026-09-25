@@ -38,6 +38,9 @@ lido do membro no canal de texto. O overview devolve `unreadCount` por canal;
 mensagens anteriores à entrada do membro e mensagens próprias não entram nessa
 contagem.
 
+`GET /api/v1/groups/{groupId}/messages/search?q=...` busca até 50 mensagens
+visíveis ao membro; `roomId` pode restringir a busca a um canal de texto.
+
 O dono pode usar `POST /api/v1/groups/{groupId}/moderation` com `action` igual
 a `kick`, `ban`, `mute`, `unmute` ou `unban`. Cargos com a permissão de moderar
 membros também podem usar a rota, mas somente contra cargos inferiores na ordem

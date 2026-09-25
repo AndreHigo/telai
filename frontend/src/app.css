@@ -1627,13 +1627,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-rail, .member-rail, .chat-workspace { min-height: 0; }
 .chat-workspace { overflow: hidden; }
 .workspace-heading-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.workspace-message-search { display: inline-flex; min-height: 35px; align-items: center; gap: 5px; white-space: nowrap; }
 .workspace-new-channel { white-space: nowrap; }
 .mobile-rail-toggle { display: none; min-height: 31px; align-items: center; border: 1px solid #304a73; border-radius: 8px; padding: 0 9px; color: #cbd8f1; background: #111f38; font-size: 10px; font-weight: 800; }
 .mobile-rail-toggle:hover { border-color: #7482f6; color: #fff; background: #1b2d50; }
 .mirante-shell.light .group-action-bar { border-color: #d6dfec; background: transparent; }
 .mirante-shell.light .group-member-summary { color: #657792; }
 .mirante-shell.light .group-quick-action, .mirante-shell.light .mobile-rail-toggle { border-color: #c3d0e3; color: #40536f; background: #f7f9fc; }
+.mirante-shell.light .workspace-message-search { border-color: #c3d0e3; color: #40536f; background: #f7f9fc; }
 .mirante-shell.light .group-quick-action:hover:not(:disabled), .mirante-shell.light .mobile-rail-toggle:hover { border-color: #6871df; color: #1d2b45; background: #e9effb; }
+.mirante-shell.light .workspace-message-search:hover:not(:disabled) { border-color: #6871df; color: #1d2b45; background: #e9effb; }
 
 @media (max-width: 980px) {
   .discord-layout { grid-template-columns: 58px 205px minmax(0, 1fr); }
@@ -1659,6 +1662,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .chat-workspace { grid-column: 1; min-height: 0; }
   .workspace-heading { padding: 14px 15px 13px; }
   .workspace-heading-actions { gap: 4px; }
+  .workspace-message-search { width: 31px; justify-content: center; overflow: hidden; padding: 0 !important; font-size: 0 !important; }
+  .workspace-message-search span { display: none; }
   .workspace-new-channel { width: 31px; min-height: 31px; overflow: hidden; padding: 0 !important; font-size: 0 !important; }
   .workspace-new-channel::before { content: "+"; font-size: 16px; }
   .message-list { padding: 18px 15px; }
@@ -2123,6 +2128,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .workspace-heading .muted {
   color: #8297bd;
 }
+
+.group-message-search-results { display: grid; max-height: 360px; gap: 7px; overflow-y: auto; margin-top: 12px; }
+.group-message-search-result { display: flex; width: 100%; align-items: flex-start; gap: 9px; border: 1px solid #2e466f; border-radius: 10px; padding: 9px; color: inherit; background: #101f39; text-align: left; cursor: pointer; }
+.group-message-search-result:hover { border-color: #6978e8; background: #182d52; }
+.group-message-search-result > span:last-child { display: grid; min-width: 0; gap: 3px; }
+.group-message-search-result strong { color: #eef3ff; font-size: 10px; }
+.group-message-search-result small { color: #8298be; font-size: 9px; }
+.group-message-search-result p { overflow: hidden; margin: 2px 0 0; color: #b6c4df; font-size: 11px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.mirante-shell.light .group-message-search-result { border-color: #c6d3e5; background: #f7f9fc; }
+.mirante-shell.light .group-message-search-result:hover { background: #eaf0fb; }
+.mirante-shell.light .group-message-search-result strong { color: #1d2b45; }
+.mirante-shell.light .group-message-search-result small { color: #617697; }
+.mirante-shell.light .group-message-search-result p { color: #40536f; }
 
 .workspace-heading-actions {
   gap: 8px;

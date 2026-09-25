@@ -270,6 +270,9 @@ async function main() {
     assert.equal(editedGroupMessage.response.status, 200);
     assert.equal(editedGroupMessage.body.message.body, "mensagem QA editada");
     assert.ok(editedGroupMessage.body.message.editedAt);
+    const searchedGroupMessages = await api(owner, `/api/groups/${groupId}/messages/search?q=${encodeURIComponent("editada")}&roomId=${encodeURIComponent(group.textRoomId)}`);
+    assert.equal(searchedGroupMessages.response.status, 200);
+    assert.equal(searchedGroupMessages.body.messages.some((message) => message.id === sentGroupMessage.body.message.id), true);
     const overview = await api(owner, `/api/groups/${groupId}/overview`);
     assert.ok(overview.body.messages.some((message) => message.id === sentGroupMessage.body.message.id && message.body === "mensagem QA editada"));
     const roomBeforeRead = overview.body.rooms.find((room) => room.id === group.textRoomId);

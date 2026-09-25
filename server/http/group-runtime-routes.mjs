@@ -28,6 +28,36 @@ export function createGroupRuntimeRoutes({
   canGroupRoomAction = () => true,
 }) {
   return async function handleGroupRuntimeRoutes(request, response, requestUrl) {
+    const groupMessageSearchMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages\/search$/);
+    if (groupMessageSearchMatch && request.method === "GET") {
+      const user = requireUser(request, response);
+      if (!user) return true;
+      const groupId = groupMessageSearchMatch[1];
+      if (!isGroupMember(user.id, groupId)) {
+        json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      const query = String(requestUrl.searchParams.get("q") || "").trim().slice(0, 80);
+      if (query.length < 2) {
+        json(response, 400, { error: "Digite pelo menos 2 caracteres para buscar." });
+        return true;
+      }
+      const requestedRoomId = String(requestUrl.searchParams.get("roomId") || "").trim();
+      const room = requestedRoomId ? groupRoomRepository.findRoom(groupId, requestedRoomId) : null;
+      if (requestedRoomId && (!room || room.kind !== "text")) {
+        json(response, 404, { error: "Canal de texto não encontrado." });
+        return true;
+      }
+      if (room && !canGroupRoomAction(user.id, groupId, room.id, "canView")) {
+        json(response, 403, { error: "Você não tem permissão para visualizar este canal." });
+        return true;
+      }
+      const messages = groupAttachmentRepository.attachToMessages(groupId, groupMessageRepository.searchMessages({ groupId, query, roomId: room?.id || null, limit: 50 }))
+        .map((message) => ({ ...message, attachments: message.attachments.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor)) }));
+      json(response, 200, { query, roomId: room?.id || null, messages });
+      return true;
+    }
+
     const groupRoomReadMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms\/([\w-]{1,64})\/read$/);
     if (groupRoomReadMatch && request.method === "POST") {
       const user = requireUser(request, response);
