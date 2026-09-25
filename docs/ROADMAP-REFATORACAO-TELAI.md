@@ -293,9 +293,10 @@ enviada ao GitHub nem publicada em produção.
   - [x] Persistir aplicações e identidades de bot separadas do usuário humano em SQLite/PostgreSQL.
   - [x] Criar tokens aleatórios armazenados somente como hash, com listagem de metadados e revogação.
   - [x] Instalar/remover o bot em grupos autorizados pelo dono e manter a associação no banco.
-  - [x] Publicar mensagens autenticadas por token e propagar o evento pelo gateway.
-  - [x] Adicionar gerenciamento visual de aplicações, tokens, comandos e instalação de bots na área de configurações existente.
-  - [ ] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
+   - [x] Publicar mensagens autenticadas por token e propagar o evento pelo gateway.
+   - [x] Adicionar gerenciamento visual de aplicações, tokens, comandos e instalação de bots na área de configurações existente.
+   - [x] Separar rotas de gerenciamento do proprietário das rotas de bot e interações em módulos HTTP independentes, preservando os contratos existentes.
+   - [ ] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
 - [ ] Comandos, componentes e modais.
   - [x] Registrar comandos por aplicação com validação de nome, descrição e opções em SQLite/PostgreSQL.
   - [x] Expor o manifesto de comandos ao bot autenticado sem vazar tokens ou dados internos.
