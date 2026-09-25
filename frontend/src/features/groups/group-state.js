@@ -13,35 +13,10 @@ export const GROUP_STATE_DEFAULTS = Object.freeze({
 });
 
 export function createGroupStateStore(initial = {}) {
-  let current = { ...GROUP_STATE_DEFAULTS, ...initial };
-  const subscribers = new Set();
-
-  function getState() {
-    return current;
-  }
-
-  function setState(next) {
-    const patch = typeof next === "function" ? next(current) : next;
-    if (!patch || typeof patch !== "object") return current;
-    current = { ...current, ...patch };
-    for (const subscriber of subscribers) subscriber(current);
-    return current;
-  }
-
-  function subscribe(subscriber) {
-    if (typeof subscriber !== "function") return () => {};
-    subscribers.add(subscriber);
-    subscriber(current);
-    return () => subscribers.delete(subscriber);
-  }
-
-  function reset() {
-    return setState({
+  return createStateStore(GROUP_STATE_DEFAULTS, initial, () => ({
       ...GROUP_STATE_DEFAULTS,
       groups: [],
       knownGroupMessageIds: new Set(),
-    });
-  }
-
-  return { getState, setState, subscribe, reset };
+    }));
 }
+import { createStateStore } from "../../services/state-store.js";
