@@ -16,7 +16,8 @@ etapa.
 - SSL exige validação de certificado por padrão; a exceção local deve ser explícita.
 - A migration baseline e o importador SQLite → PostgreSQL já existem.
 - O comando `pnpm run db:import:postgres -- --plan` inspeciona o SQLite sem conectar no PostgreSQL.
-- A execução real da migration e o cutover ficam adiados por enquanto; SQLite continua sendo o driver ativo.
+- A migration baseline já foi executada e validada no PostgreSQL local via Docker; o cutover continua adiado e SQLite permanece sendo o driver ativo.
+- Não existe um banco SQLite de aplicação válido neste checkout para importar; nenhum dado de teste foi tratado como dado real.
 - Nenhum ambiente de produção foi apontado para PostgreSQL.
 - Nenhum banco SQLite foi apagado ou alterado por esta preparação.
 
