@@ -35,6 +35,7 @@
   import LegalConsentGate from "./LegalConsentGate.svelte";
   import { createApiClient } from "./services/api.js";
   import { createGroupRoomReadController } from "./features/groups/room-read-controller.js";
+  import { createGroupThreadRuntime } from "./features/groups/thread-runtime.js";
   import {
     createSelectedVoiceAudioConstraints,
     createVoiceAudioConstraints,
@@ -307,7 +308,6 @@
   let groupMessageSearchDialogLoad = null;
   let GroupThreadDialog = null;
   let groupThreadDialogLoad = null;
-  let groupThreadControllerPromise = null;
   let GroupChannelPermissionsSettings = null;
   let groupChannelPermissionsSettingsLoad = null;
   let GroupAuditLogSettings = null;
@@ -364,9 +364,9 @@
 
   $: if (activeGroupThread && !GroupThreadDialog) void loadGroupThreadDialog();
 
-  function getGroupThreadController() {
-    if (!groupThreadControllerPromise) {
-      groupThreadControllerPromise = import("./features/groups/thread-controller.js").then(({ createGroupThreadController }) => createGroupThreadController({
+  const groupThreadRuntime = createGroupThreadRuntime({
+    loadController: () => import("./features/groups/thread-controller.js")
+      .then(({ createGroupThreadController }) => createGroupThreadController({
         api,
         getSelectedGroupId: () => selectedGroupId,
         getSelectedRoom: () => selectedRoom,
@@ -383,13 +383,11 @@
         setKnownMessageIds: (value) => { knownGroupMessageIds = value; },
         getGroupOverview: () => groupOverview,
         setGroupOverview: (value) => { groupOverview = value; },
-      }));
-    }
-    return groupThreadControllerPromise;
-  }
+      })),
+  });
 
-  async function openGroupThread(...args) { return (await getGroupThreadController()).openGroupThread(...args); }
-  async function sendGroupThreadMessage(...args) { return (await getGroupThreadController()).sendGroupThreadMessage(...args); }
+  async function openGroupThread(...args) { return groupThreadRuntime.openGroupThread(...args); }
+  async function sendGroupThreadMessage(...args) { return groupThreadRuntime.sendGroupThreadMessage(...args); }
 
   function loadGroupChannelPermissionsSettings() {
     if (GroupChannelPermissionsSettings || groupChannelPermissionsSettingsLoad) return groupChannelPermissionsSettingsLoad;

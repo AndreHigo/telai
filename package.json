@@ -33,6 +33,7 @@
     "test:group-controller": "node qa/test-group-controller.mjs",
     "test:group-room-read-controller": "node qa/test-group-room-read-controller.mjs",
     "test:group-event-runtime": "node qa/test-group-event-runtime.mjs",
+    "test:group-thread-runtime": "node qa/test-group-thread-runtime.mjs",
     "test:voice-signaling-controller": "node qa/test-voice-signaling-controller.mjs",
     "test:voice-peer-health-controller": "node qa/test-voice-peer-health-controller.mjs",
     "test:voice-peer-recovery-controller": "node qa/test-voice-peer-recovery-controller.mjs",
