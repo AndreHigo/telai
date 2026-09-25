@@ -824,7 +824,7 @@ const handleGroupRuntimeRoutes = createGroupRuntimeRoutes({
   canGroupRoomAction,
 });
 const iceConfiguration = createIceConfiguration({ randomUUID, createHmac });
-const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, requireLogin, publicOriginForRequest });
+const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, databaseDriver, requireLogin, publicOriginForRequest });
 const {
   allowRtcSignal,
   allowVoiceSpeakingUpdate,

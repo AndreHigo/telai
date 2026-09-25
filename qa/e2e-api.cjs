@@ -80,6 +80,9 @@ async function main() {
   const guest = await register(`qaguest${suffix}`.slice(0, 32), "QA Guest");
 
   await check("health and runtime routes", async () => {
+    const health = await request("/healthz");
+    assert.equal(health.body.ok, true);
+    assert.equal(health.body.databaseDriver, "sqlite");
     for (const path of ["/healthz", "/runtime-config", "/ice-config", "/svelte/", "/favicon.svg"]) {
       const result = await request(path);
       assert.equal(result.response.status, 200, `${path} returned ${result.response.status}`);

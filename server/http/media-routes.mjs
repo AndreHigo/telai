@@ -1,4 +1,4 @@
-export function createMediaRoutes({ iceConfiguration, mediaMode, requireLogin, publicOriginForRequest }) {
+export function createMediaRoutes({ iceConfiguration, mediaMode, databaseDriver, requireLogin, publicOriginForRequest }) {
   return async function handleMediaRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/ice-config") {
       iceConfiguration().then((config) => {
@@ -8,7 +8,7 @@ export function createMediaRoutes({ iceConfiguration, mediaMode, requireLogin, p
     }
 
     if (requestUrl.pathname === "/healthz") {
-      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify({ ok: true, mediaMode, requireLogin }));
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify({ ok: true, mediaMode, databaseDriver, requireLogin }));
       return true;
     }
 
