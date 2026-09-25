@@ -41,6 +41,7 @@
   import { createVoiceSignalingController } from "./features/voice/signaling-controller.js";
   import { createVoicePeerHealthController } from "./features/voice/peer-health-controller.js";
   import { createVoicePeerRecoveryController } from "./features/voice/peer-recovery-controller.js";
+  import { createVoiceAudioTestController } from "./features/voice/audio-test-controller.js";
   import { createVoiceSoundController, readSoundPreferences, SOUND_PREFERENCE_DEFAULTS } from "./features/voice/sound-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
@@ -688,11 +689,6 @@
   });
   let voiceDevicesBusy = false;
   let voiceDevicesError = "";
-  let voiceTestStream = null;
-  let voiceTestContext = null;
-  let voiceTestAnalyser = null;
-  let voiceTestSource = null;
-  let voiceTestTimer = null;
   let voiceTestRunning = false;
   let voiceTestLevel = 0;
   let voiceTestPeak = 0;
@@ -996,6 +992,26 @@
     playVoiceSound,
     previewVoiceSound,
   } = voiceSoundController;
+  const voiceAudioTestController = createVoiceAudioTestController({
+    captureInputStream: () => captureVoiceInputStream(),
+    stopInputStream: (stream) => stopVoiceInputStream(stream),
+    getAudioContextConstructor: () => window.AudioContext || window.webkitAudioContext,
+    getAudioContext: () => getVoiceSoundContext(),
+    getCurrentAudioContext,
+    getSelectedInputDevice: () => selectedInputDeviceId,
+    getSelectedOutputDevice: () => selectedOutputDeviceId,
+    getOutputVolume: () => voiceOutputVolume,
+    getIsDesktop: () => isDesktop,
+    reportClientError,
+    onStateChange: (next) => {
+      voiceTestRunning = next.running;
+      voiceTestLevel = next.level;
+      voiceTestPeak = next.peak;
+      voiceTestError = next.error;
+      voiceTestStatus = next.status;
+      voiceTestSpeakerStatus = next.speakerStatus;
+    },
+  });
   const groupRoomReadController = createGroupRoomReadController({
     api,
     getSelectedGroupId: () => selectedGroupId,
@@ -2274,7 +2290,7 @@
     // anterior atualizava apenas voiceTestStream e deixava voiceLocalStream
     // bruto sendo enviado aos participantes.
     const updatedLocalGain = updateVoiceMicrophoneGain(voiceLocalStream);
-    updateVoiceMicrophoneGain(voiceTestStream);
+    updateVoiceMicrophoneGain(voiceAudioTestController.getState().stream);
     updateVoiceMicrophoneGain(broadcastMicrophoneStream);
     if (updatedLocalGain || !voiceLocalStream || voiceInputRecoveryInFlight) return;
     try {
@@ -2430,92 +2446,9 @@
     await reapplyVoiceInputSettings();
   }
 
-  function stopVoiceTest({ reset = true } = {}) {
-    if (voiceTestTimer) window.clearInterval(voiceTestTimer);
-    voiceTestTimer = null;
-    try { voiceTestSource?.disconnect(); } catch {}
-    try { voiceTestAnalyser?.disconnect(); } catch {}
-    voiceTestSource = null;
-    voiceTestAnalyser = null;
-    stopVoiceInputStream(voiceTestStream);
-    voiceTestStream = null;
-    if (voiceTestContext && voiceTestContext !== getCurrentAudioContext()) void voiceTestContext.close().catch(() => {});
-    voiceTestContext = null;
-    voiceTestRunning = false;
-    if (reset) {
-      voiceTestLevel = 0;
-      voiceTestPeak = 0;
-      voiceTestStatus = "Clique em testar para verificar seu microfone.";
-    }
-  }
-
-  function pollVoiceTest() {
-    if (!voiceTestAnalyser) return;
-    const samples = new Float32Array(voiceTestAnalyser.fftSize);
-    voiceTestAnalyser.getFloatTimeDomainData(samples);
-    let energy = 0;
-    for (const sample of samples) energy += sample * sample;
-    const rms = Math.sqrt(energy / samples.length);
-    const level = Math.min(1, Math.max(0, rms * 7));
-    voiceTestLevel = Math.round(level * 100);
-    voiceTestPeak = Math.max(voiceTestPeak * 0.985, voiceTestLevel);
-    voiceTestStatus = voiceTestLevel >= 12 ? "Microfone funcionando — sua voz está sendo capturada." : "Fale normalmente para testar o nível do microfone.";
-  }
-
-  async function startVoiceTest() {
-    stopVoiceTest({ reset: false });
-    voiceTestError = "";
-    voiceTestStatus = "Solicitando acesso ao microfone…";
-    try {
-      voiceTestStream = await captureVoiceInputStream();
-      const track = voiceTestStream.getAudioTracks()[0];
-      if (!track) throw new Error("Nenhum microfone foi encontrado.");
-      voiceTestContext = new (window.AudioContext || window.webkitAudioContext)();
-      await voiceTestContext.resume();
-      voiceTestSource = voiceTestContext.createMediaStreamSource(voiceTestStream);
-      voiceTestAnalyser = voiceTestContext.createAnalyser();
-      voiceTestAnalyser.fftSize = 512;
-      voiceTestAnalyser.smoothingTimeConstant = 0.2;
-      voiceTestSource.connect(voiceTestAnalyser);
-      voiceTestRunning = true;
-      voiceTestStatus = "Fale normalmente para testar o nível do microfone.";
-      voiceTestTimer = window.setInterval(pollVoiceTest, 100);
-      track.addEventListener("ended", () => {
-        if (voiceTestStream?.getAudioTracks?.()[0] !== track) return;
-        stopVoiceTest();
-        voiceTestError = "O microfone foi desconectado durante o teste.";
-      }, { once: true });
-    } catch (error) {
-      stopVoiceTest({ reset: false });
-      voiceTestError = error.name === "NotAllowedError" ? "Permita o microfone para fazer o teste." : "Não foi possível iniciar o teste do microfone.";
-      voiceTestStatus = "Teste não iniciado.";
-      reportClientError("voice_test_error", error, { isDesktop, deviceSelected: Boolean(selectedInputDeviceId) });
-    }
-  }
-
-  async function testVoiceSpeaker() {
-    voiceTestSpeakerStatus = "Reproduzindo som de teste…";
-    try {
-      const context = getVoiceSoundContext();
-      if (!context) throw new Error("Saída de áudio indisponível.");
-      if (selectedOutputDeviceId && typeof context.setSinkId === "function") await context.setSinkId(selectedOutputDeviceId);
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      const now = context.currentTime;
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(660, now);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, 0.08 * voiceOutputVolume), now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(now);
-      oscillator.stop(now + 0.38);
-      window.setTimeout(() => { voiceTestSpeakerStatus = "Som de teste reproduzido."; }, 450);
-    } catch (error) {
-      voiceTestSpeakerStatus = "Não foi possível reproduzir o som de teste.";
-      reportClientError("voice_speaker_test_error", error, { isDesktop, deviceSelected: Boolean(selectedOutputDeviceId) });
-    }
-  }
+  const stopVoiceTest = (options) => voiceAudioTestController.stop(options);
+  const startVoiceTest = () => voiceAudioTestController.start();
+  const testVoiceSpeaker = () => voiceAudioTestController.testSpeaker();
 
   async function applyVoiceOutputDevice(deviceId = selectedOutputDeviceId) {
     selectedOutputDeviceId = deviceId || "";
