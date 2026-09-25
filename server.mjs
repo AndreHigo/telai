@@ -29,6 +29,7 @@ import { createGroupPermissionRepository } from "./server/repositories/group-per
 import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
 import { createStreamRepository } from "./server/repositories/streams.mjs";
 import { createGroupSettingsRepository } from "./server/repositories/group-settings.mjs";
+import { createUserProfileRepository } from "./server/repositories/user-profile.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -806,6 +807,7 @@ const groupPermissionRepository = createGroupPermissionRepository(database);
 const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
 const streamRepository = createStreamRepository(database, { createId: randomUUID });
 const groupSettingsRepository = createGroupSettingsRepository(database);
+const userProfileRepository = createUserProfileRepository(database);
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2528,8 +2530,7 @@ async function handleHttpRequest(request, response) {
       try {
         const now = new Date().toISOString();
         database.exec("BEGIN IMMEDIATE");
-        database.prepare("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)")
-          .run(user.id, user.username, user.displayName, hashPassword(password), now);
+        userProfileRepository.createUser({ id: user.id, username: user.username, displayName: user.displayName, passwordHash: hashPassword(password), createdAt: now });
         recordLegalConsents(user.id, now);
         database.exec("COMMIT");
       } catch (error) {
@@ -2556,8 +2557,8 @@ async function handleHttpRequest(request, response) {
         response.setHeader("Retry-After", String(retryAfter));
         return json(response, 429, { error: "Muitas tentativas de login. Aguarde um minuto e tente novamente.", retryAfter });
       }
-      const row = database.prepare("SELECT id, username, display_name AS displayName, avatar_data AS avatarData, password_hash FROM users WHERE username = ?").get(username);
-      if (!row || !passwordMatches(password, row.password_hash)) {
+      const row = userProfileRepository.findCredentialsByUsername(username);
+      if (!row || !passwordMatches(password, row.passwordHash)) {
         recordLoginFailure(request, username);
         return json(response, 401, { error: "Usuário ou senha incorretos." });
       }
@@ -2584,7 +2585,7 @@ async function handleHttpRequest(request, response) {
       if (avatarData && (!/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(avatarData) || avatarData.length > maxAvatarUploadLength)) {
         return json(response, 400, { error: "A foto deve ser PNG, JPG, WEBP ou GIF com até 5 MB." });
       }
-      database.prepare("UPDATE users SET display_name = ?, avatar_data = ? WHERE id = ?").run(displayName, avatarData, user.id);
+      userProfileRepository.updateProfile(user.id, { displayName, avatarData });
       return json(response, 200, { user: userWithLinkedAccounts(currentUser(request)) });
     }).catch((error) => json(response, 400, { error: error.message === "body-too-large" ? "A foto é muito grande. Use um arquivo de até 5 MB." : "Não foi possível atualizar o perfil." }));
     return;

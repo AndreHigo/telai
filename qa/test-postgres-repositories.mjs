@@ -23,6 +23,7 @@ import { createPostgresGroupPermissionRepository } from "../server/repositories/
 import { createPostgresGroupMemberRepository } from "../server/repositories/group-members.mjs";
 import { createPostgresStreamRepository } from "../server/repositories/streams.mjs";
 import { createPostgresGroupSettingsRepository } from "../server/repositories/group-settings.mjs";
+import { createPostgresUserProfileRepository } from "../server/repositories/user-profile.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -61,6 +62,10 @@ try {
   assert.equal(await sessions.findUserByToken("token"), null);
   await sessions.create({ userId: ids.owner, token: "expired", expiresAt: new Date(Date.now() - 60_000).toISOString(), createdAt: now });
   assert.equal(await sessions.deleteExpired(now), 1);
+
+  const userProfiles = createPostgresUserProfileRepository(client);
+  assert.equal((await userProfiles.findCredentialsByUsername(ownerUsername))?.id, ids.owner);
+  assert.equal((await userProfiles.updateProfile(ids.invitee, { displayName: "PG Invitee Updated", avatarData: null }))?.displayName, "PG Invitee Updated");
 
   const auth = createPostgresAuthRepository(client, { legalPolicyVersion: "test-v1" });
   await auth.recordLegalConsents(ids.owner, now);
