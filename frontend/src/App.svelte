@@ -847,53 +847,53 @@
     }
   }
 
-  async function loadGroups() {
-    const result = await api("/api/groups");
-    groups = result.groups || [];
-    if (!selectedGroupId || !groups.some((group) => group.id === selectedGroupId)) selectedGroupId = groups[0]?.id || null;
-  }
-
-  async function loadGroup(groupId) {
-    if (!groupId) return;
-    const loadSequence = ++groupLoadSequence;
-    const switchingGroup = Boolean(selectedGroupId && selectedGroupId !== groupId);
-    groupLoading = true;
-    watchingGroupLiveStreamId = "";
-    selectedGroupId = groupId;
-    let request = pendingGroupOverviewRequests.get(groupId);
-    if (!request) {
-      request = api(`/api/groups/${encodeURIComponent(groupId)}/overview`);
-      pendingGroupOverviewRequests.set(groupId, request);
-      void request.finally(() => {
-        if (pendingGroupOverviewRequests.get(groupId) === request) pendingGroupOverviewRequests.delete(groupId);
-      }).catch(() => {});
+  let groupControllerPromise = null;
+  function getGroupController() {
+    if (!groupControllerPromise) {
+      groupControllerPromise = import("./features/groups/controller.js").then(({ createGroupController }) => createGroupController({
+        api,
+        getState: () => ({
+          broadcastState,
+          groupLoadSequence,
+          groupLoading,
+          groupOverview,
+          groupOverviewRefreshInFlight,
+          groupOverviewRetryAt,
+          groupPresenceRefreshInFlight,
+          groups,
+          knownGroupMessageIds,
+          pendingGroupOverviewRequests,
+          selectedGroupId,
+          selectedRoomId,
+          showGroupPicker,
+          user,
+          watchingGroupLiveStreamId,
+        }),
+        setState: (next) => {
+          if ("groupLoadSequence" in next) groupLoadSequence = next.groupLoadSequence;
+          if ("groupLoading" in next) groupLoading = next.groupLoading;
+          if ("groupOverview" in next) groupOverview = next.groupOverview;
+          if ("groupOverviewRefreshInFlight" in next) groupOverviewRefreshInFlight = next.groupOverviewRefreshInFlight;
+          if ("groupOverviewRetryAt" in next) groupOverviewRetryAt = next.groupOverviewRetryAt;
+          if ("groupPresenceRefreshInFlight" in next) groupPresenceRefreshInFlight = next.groupPresenceRefreshInFlight;
+          if ("groups" in next) groups = next.groups;
+          if ("knownGroupMessageIds" in next) knownGroupMessageIds = next.knownGroupMessageIds;
+          if ("selectedGroupId" in next) selectedGroupId = next.selectedGroupId;
+          if ("selectedRoomId" in next) selectedRoomId = next.selectedRoomId;
+          if ("showGroupPicker" in next) showGroupPicker = next.showGroupPicker;
+          if ("watchingGroupLiveStreamId" in next) watchingGroupLiveStreamId = next.watchingGroupLiveStreamId;
+        },
+        mergeActiveVoicePresence,
+        shouldKeepGroupMessagesAtBottom,
+        scrollGroupMessagesToBottom,
+        playVoiceSound,
+        setNotice: (message) => { notice = message; },
+      }));
     }
-    try {
-      const result = await request;
-      groupOverviewRetryAt = 0;
-      if (loadSequence !== groupLoadSequence || selectedGroupId !== groupId) return;
-      groupOverview = mergeActiveVoicePresence(result);
-      knownGroupMessageIds = new Set((result.messages || []).map((message) => message.id));
-      selectedRoomId = result.rooms?.find((room) => room.kind === "text")?.id || result.rooms?.[0]?.id || null;
-    } catch (error) {
-      if (error?.status === 429) {
-        groupOverviewRetryAt = Date.now() + Math.max(5_000, (error.retryAfter || 30) * 1_000);
-      }
-      if (loadSequence !== groupLoadSequence || selectedGroupId !== groupId) return;
-      groupOverview = null;
-      knownGroupMessageIds = new Set();
-      selectedRoomId = null;
-      notice = error.message;
-    } finally {
-      if (loadSequence !== groupLoadSequence) return;
-      groupLoading = false;
-      showGroupPicker = false;
-      void scrollGroupMessagesToBottom({ force: true });
-      if (switchingGroup && broadcastState === "live") {
-        notice = "Sua live continua ativa. Use “Voltar à live” no topo ou encerre-a antes de iniciar outra.";
-      }
-    }
+    return groupControllerPromise;
   }
+  async function loadGroups(...args) { return (await getGroupController()).loadGroups(...args); }
+  async function loadGroup(...args) { return (await getGroupController()).loadGroup(...args); }
 
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
@@ -906,6 +906,9 @@
     if (!list || (!force && !shouldKeepGroupMessagesAtBottom(list))) return;
     list.scrollTop = list.scrollHeight;
   }
+
+  async function refreshGroupOverview(...args) { return (await getGroupController()).refreshGroupOverview(...args); }
+  async function refreshGroupPresence(...args) { return (await getGroupController()).refreshGroupPresence(...args); }
 
   async function loadStreams() {
     if (streamsRefreshInFlight) return;
@@ -4562,50 +4565,10 @@
     return groupLiveStreams.find((stream) => stream.visibility === "private" && stream.voiceRoomId === roomId && stream.createdBy === participant.userId) || null;
   }
 
-  async function refreshGroupOverview() {
-    if (!selectedGroupId || groupLoading || groupOverviewRefreshInFlight || Date.now() < groupOverviewRetryAt) return;
-    groupOverviewRefreshInFlight = true;
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/overview`);
-      groupOverviewRetryAt = 0;
-      if (selectedGroupId === result.group?.id) {
-        const newMessages = (result.messages || []).filter((message) => !knownGroupMessageIds.has(message.id));
-        const messageList = document.querySelector(".chat-workspace .message-list");
-        const keepAtBottom = shouldKeepGroupMessagesAtBottom(messageList);
-        if (groupOverview && newMessages.some((message) => message.userId !== user?.id)) playVoiceSound("message");
-        knownGroupMessageIds = new Set((result.messages || []).map((message) => message.id));
-        groupOverview = mergeActiveVoicePresence(result);
-        if (newMessages.length && keepAtBottom) void scrollGroupMessagesToBottom({ force: true });
-      }
-    } catch (error) {
-      if (error?.status === 429) {
-        groupOverviewRetryAt = Date.now() + Math.max(5_000, (error.retryAfter || 30) * 1_000);
-      }
-    }
-    finally { groupOverviewRefreshInFlight = false; }
-  }
-
   function selectSettingsSection(section, tab = "user") {
     settingsSection = section;
     settingsTab = tab;
     void tick().then(() => settingsPageElement?.scrollTo({ top: 0, left: 0, behavior: "auto" }));
-  }
-
-  async function refreshGroupPresence() {
-    if (!selectedGroupId || groupLoading || groupPresenceRefreshInFlight || !groupOverview) return;
-    groupPresenceRefreshInFlight = true;
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/presence`);
-      if (selectedGroupId !== result.groupId || !groupOverview) return;
-      const onlineById = new Map((result.members || []).map((member) => [member.id, Boolean(member.online)]));
-      groupOverview = {
-        ...groupOverview,
-        members: (groupOverview.members || []).map((member) => (
-          onlineById.has(member.id) ? { ...member, online: onlineById.get(member.id) } : member
-        )),
-      };
-    } catch {}
-    finally { groupPresenceRefreshInFlight = false; }
   }
 
   function clearBroadcastPeerRetry(viewerId) {
