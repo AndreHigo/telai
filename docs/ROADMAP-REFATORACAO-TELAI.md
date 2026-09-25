@@ -137,6 +137,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair coordenação de desconexão de membros em voz, presença e eventos para `server/domain/groups/runtime.mjs`, mantendo autorização na rota de moderação.
 - [x] Centralizar a composição das rotas de grupos e seu runtime em `server/http/group-routes-runtime.mjs`, mantendo contratos de autorização, eventos e persistência.
 - [x] Extrair início, callback e vínculo OAuth para `server/http/oauth-routes.mjs`, mantendo a sessão local e os provedores existentes.
+- [x] Extrair normalização e validação de aplicações, comandos, componentes e modais para `server/domain/applications/normalization.mjs`, mantendo as rotas focadas em autorização e orquestração.
 - [x] Extrair páginas SEO, legais, download, updates e fallback de arquivos para `server/http/static-routes.mjs`.
 - [x] Extrair o despacho HTTP e a página administrativa para `server/http/router.mjs`, mantendo a ordem dos domínios e dos fallbacks.
 - [x] Extrair ciclo de vida, headers de segurança, métricas e despacho de cada requisição para `server/http/request-handler.mjs`.
