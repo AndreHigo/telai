@@ -13,8 +13,8 @@ import { createNotificationRepository } from "./server/repositories/notification
 import { createChannelProfileRepository } from "./server/repositories/channel-profiles.mjs";
 import { createUserPreferenceRepository } from "./server/repositories/user-preferences.mjs";
 import { createNotificationSyncService } from "./server/services/notification-sync.mjs";
-import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
-import { ensureCompatibilityIndexes } from "./server/database/sqlite-compatibility.mjs";
+import { openSqliteDatabase } from "./server/repositories/sqlite.mjs";
+import { ensureCompatibilityColumns, ensureCompatibilityIndexes } from "./server/database/sqlite-compatibility.mjs";
 import { createSessionRepository } from "./server/repositories/sessions.mjs";
 import { createAuthRepository } from "./server/repositories/auth.mjs";
 import { createOAuthRepository } from "./server/repositories/oauth.mjs";
@@ -735,33 +735,7 @@ const databaseSchema = `
 `;
 const database = openSqliteDatabase(databasePath, databaseSchema);
 
-ensureColumn(database, "group_messages", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE CASCADE");
-ensureColumn(database, "streams", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE SET NULL");
-// Salas de voz ficam em uma tabela separada dos canais de transmissão.
-// Guardamos o vínculo em uma coluna própria para manter compatibilidade com
-// os bancos antigos e não apontar a FK para a tabela errada.
-ensureColumn(database, "streams", "voice_room_id", "TEXT");
-ensureColumn(database, "group_members", "role_id", "TEXT");
-ensureColumn(database, "group_roles", "can_chat", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn(database, "group_roles", "can_stream", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn(database, "group_roles", "can_invite", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn(database, "group_roles", "can_view_voice_members", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn(database, "group_roles", "can_move_members", "INTEGER NOT NULL DEFAULT 0");
-ensureColumn(database, "group_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
-ensureColumn(database, "group_member_permissions", "can_view_voice_members", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn(database, "group_voice_rooms", "max_participants", "INTEGER NOT NULL DEFAULT 8");
-ensureColumn(database, "users", "email", "TEXT");
-ensureColumn(database, "users", "avatar_data", "TEXT");
-ensureColumn(database, "user_preferences", "button_color", "TEXT");
-ensureColumn(database, "user_preferences", "input_background_color", "TEXT");
-ensureColumn(database, "user_preferences", "background_color", "TEXT");
-ensureColumn(database, "user_preferences", "push_to_talk_key", "TEXT");
-ensureColumn(database, "user_preferences", "mute_shortcut", "TEXT");
-ensureColumn(database, "user_preferences", "live_notification_scope", "TEXT NOT NULL DEFAULT 'related'");
-ensureColumn(database, "user_preferences", "voice_microphone_volume", "REAL NOT NULL DEFAULT 1");
-ensureColumn(database, "user_preferences", "voice_output_volume", "REAL NOT NULL DEFAULT 1");
-ensureColumn(database, "user_preferences", "preferred_input_device_id", "TEXT");
-ensureColumn(database, "user_preferences", "preferred_output_device_id", "TEXT");
+ensureCompatibilityColumns(database);
 ensureCompatibilityIndexes(database);
 const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
 const directConversationRepository = createDirectConversationRepository(database, { compactUserSummary, createId: randomUUID });
