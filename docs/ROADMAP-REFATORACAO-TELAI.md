@@ -122,7 +122,8 @@ enviada ao GitHub nem publicada em produção.
   - [ ] Separar a tela de configurações por domínio e reduzir o markup restante do shell.
     - [x] Extrair navegação, cabeçalho, subnavegação interna e formulário de perfil do canal para `frontend/src/features/settings`.
     - [x] Extrair cartões de perfil, preferências, contas conectadas e administração de grupo.
-    - [ ] Extrair os cartões restantes de voz e notificações.
+    - [x] Extrair cartão de notificações.
+    - [ ] Extrair cartão de voz com code-splitting para não aumentar o bundle inicial.
 
 ### Fase 2 — Contratos e tempo real
 
