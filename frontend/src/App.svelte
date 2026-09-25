@@ -68,39 +68,6 @@
     return true;
   }
 
-  const RELEASE_NOTES_CONTENT = {
-      title: "Notas da atualização",
-      summary: "Uma rodada de melhorias para deixar o Telai mais claro, compacto e confiável durante transmissões e chamadas.",
-      sections: [
-        {
-          title: "Transmissões públicas",
-          items: [
-            "Novo fluxo antes de iniciar a live: título, fonte, áudio, câmera, microfone e qualidade ficam definidos antes da publicação.",
-            "A câmera pode ser incluída ou removida, trocada e posicionada sem interromper a transmissão.",
-            "Melhorias na captura de tela, áudio do aplicativo escolhido e recuperação quando a captura é perdida.",
-          ],
-        },
-        {
-          title: "Áudio e chamadas",
-          items: [
-            "O perfil Isolamento de Voz usa os filtros nativos do WebRTC no app desktop e na web. Estúdio mantém o áudio cru.",
-            "O teste de microfone voltou a exibir o indicador de nível e os controles de áudio ficaram mais consistentes.",
-            "Os ícones do player agora refletem corretamente quando o áudio está mutado ou ativo.",
-          ],
-        },
-        {
-          title: "Interface e estabilidade",
-          items: [
-            "Cabeçalho, menu lateral e cartões de grupos receberam ajustes de espaçamento e responsividade.",
-            "O painel de reconexão e o encerramento de transmissões ficaram mais previsíveis quando uma captura cai.",
-          ],
-        },
-      ],
-  };
-  const RELEASE_NOTES = {
-    desktop: { "0.2.68": { platformLabel: "app desktop", ...RELEASE_NOTES_CONTENT } },
-    web: { "2026-09-22": { platformLabel: "versão web", ...RELEASE_NOTES_CONTENT } },
-  };
   const reportClientError = createClientDiagnostics({
     routineKinds: ["voice_activity_sample", "voice_activity_state"],
     getRoute: () => window.location.pathname,
@@ -1506,6 +1473,26 @@
   function setGroupsView(...args) { void getNavigationController().then((controller) => controller.setGroupsView(...args)); }
   function openGroupWorkspace(...args) { void getNavigationController().then((controller) => controller.openGroupWorkspace(...args)); }
   function toggleGlobalNavigation(...args) { void getNavigationController().then((controller) => controller.toggleGlobalNavigation(...args)); }
+
+  let releaseNotesControllerPromise = null;
+  function getReleaseNotesController() {
+    if (!releaseNotesControllerPromise) {
+      releaseNotesControllerPromise = import("./features/shell/release-notes-controller.js").then(({ createReleaseNotesController }) => createReleaseNotesController({
+        getState: () => ({ isDesktop, desktopVersion, releaseNotes, showReleaseNotes, showUserMenu, user }),
+        setState: (next) => {
+          if ("releaseNotes" in next) releaseNotes = next.releaseNotes;
+          if ("showReleaseNotes" in next) showReleaseNotes = next.showReleaseNotes;
+          if ("showUserMenu" in next) showUserMenu = next.showUserMenu;
+        },
+        setNotice: (message) => { notice = message; },
+        webVersion: WEB_VERSION,
+      }));
+    }
+    return releaseNotesControllerPromise;
+  }
+  function openReleaseNotes(...args) { void getReleaseNotesController().then((controller) => controller.openReleaseNotes(...args)); }
+  function maybeShowReleaseNotes(...args) { void getReleaseNotesController().then((controller) => controller.maybeShowReleaseNotes(...args)); }
+  function dismissReleaseNotes(...args) { void getReleaseNotesController().then((controller) => controller.dismissReleaseNotes(...args)); }
 
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
@@ -6410,52 +6397,8 @@
     window.location.assign(`/api/auth/${provider}`);
   }
 
-  function currentReleaseNotes() {
-    const platform = isDesktop ? "desktop" : "web";
-    const version = isDesktop ? desktopVersion : WEB_VERSION;
-    const notes = RELEASE_NOTES[platform]?.[version];
-    return notes ? { platform, version, ...notes } : null;
-  }
-
   function runtimeVersion() {
     return isDesktop ? desktopVersion : WEB_VERSION;
-  }
-
-  function releaseNotesStorageKey(account = user) {
-    const accountKey = account?.id || account?.username;
-    const platform = isDesktop ? "desktop" : "web";
-    return accountKey ? `mirante-release-notes-seen:${platform}:${accountKey}` : "";
-  }
-
-  function openReleaseNotes() {
-    const notes = currentReleaseNotes();
-    if (!notes) {
-      notice = "Ainda não há notas cadastradas para esta versão.";
-      return;
-    }
-    releaseNotes = notes;
-    showReleaseNotes = true;
-    showUserMenu = false;
-  }
-
-  function maybeShowReleaseNotes(account) {
-    const notes = currentReleaseNotes();
-    const storageKey = releaseNotesStorageKey(account);
-    if (!notes || !storageKey) return;
-    try {
-      if (localStorage.getItem(storageKey) !== notes.version) {
-        releaseNotes = notes;
-        showReleaseNotes = true;
-      }
-    } catch {}
-  }
-
-  function dismissReleaseNotes() {
-    const storageKey = releaseNotesStorageKey();
-    if (storageKey && releaseNotes?.version) {
-      try { localStorage.setItem(storageKey, releaseNotes.version); } catch {}
-    }
-    showReleaseNotes = false;
   }
 
   function handleLegalConsentAccepted(event) {
