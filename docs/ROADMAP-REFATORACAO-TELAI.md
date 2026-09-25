@@ -122,6 +122,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair páginas SEO, legais, download, updates e fallback de arquivos para `server/http/static-routes.mjs`.
 - [x] Extrair bootstrap, limites, heartbeat e lifecycle do WebSocket para `server/gateway/websocket.mjs`, mantendo handlers de voz/transmissão e o protocolo `/signal`.
 - [x] Extrair o handler binário do relay de mídia para `server/gateway/binary-message.mjs`, mantendo limites e ressincronização.
+- [x] Extrair a configuração ICE/STUN/TURN para `server/media/ice-configuration.mjs`, mantendo credenciais TURN temporárias.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
