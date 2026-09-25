@@ -45,6 +45,7 @@ import { createObservabilityRoutes } from "./server/http/observability-routes.mj
 import { createGroupDiscoveryRoutes } from "./server/http/group-discovery-routes.mjs";
 import { createGroupManagementRoutes } from "./server/http/group-management-routes.mjs";
 import { createGroupRoleRoutes } from "./server/http/group-role-routes.mjs";
+import { createGroupRoomRoutes } from "./server/http/group-room-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -836,6 +837,17 @@ const handleGroupManagementRoutes = createGroupManagementRoutes({
   slugFor,
 });
 const handleGroupRoleRoutes = createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRepository, groupPermissionRepository });
+const handleGroupRoomRoutes = createGroupRoomRoutes({
+  json,
+  readJson,
+  requireUser,
+  isGroupMember,
+  canGroupAction,
+  groupPermissionRepository,
+  groupRoomRepository,
+  roomSlugFor,
+  parseVoiceRoomParticipantLimit,
+});
 const userProfileRepository = createUserProfileRepository(database);
 const handleUserSettingsRoutes = createUserSettingsRoutes({
   json,
@@ -2427,60 +2439,7 @@ async function handleHttpRequest(request, response) {
       streams: streams.map((stream) => ({ ...stream, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) })),
     });
   }
-  const groupRoomsMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms$/);
-  if (groupRoomsMatch && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = groupRoomsMatch[1];
-    if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
-    readJson(request).then((body) => {
-      const name = String(body.name || "").trim().slice(0, 48);
-      const slug = roomSlugFor(body.slug || name);
-      const kind = body.kind === "voice" ? "voice" : body.kind === "text" ? "text" : null;
-      if (!kind) return json(response, 400, { error: "Escolha uma sala de texto ou de voz." });
-      if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para a sala." });
-      const maxParticipants = kind === "voice" ? parseVoiceRoomParticipantLimit(body.maxParticipants) : null;
-      if (kind === "voice" && !canGroupAction(user.id, groupId, "canChat")) return json(response, 403, { error: "Você não tem permissão para criar salas de voz." });
-      try {
-        const duplicate = groupRoomRepository.findBySlug(groupId, slug);
-        if (duplicate) return json(response, 409, { error: "Já existe uma sala com esse nome neste grupo." });
-        const room = groupRoomRepository.createRoom({ groupId, name, slug, kind, maxParticipants, createdBy: user.id });
-        return json(response, 201, { room });
-      } catch (error) {
-        if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe uma sala com esse nome neste grupo." });
-        throw error;
-      }
-    }).catch(() => json(response, 400, { error: "Não foi possível criar a sala." }));
-    return;
-  }
-  const groupRoomActionMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms\/([\w-]{1,64})$/);
-  if (groupRoomActionMatch && ["PATCH", "DELETE"].includes(request.method)) {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const [, groupId, roomId] = groupRoomActionMatch;
-    const member = groupPermissionRepository.member(groupId, user.id);
-    if (member?.role !== "owner") return json(response, 403, { error: "Somente o dono pode gerenciar canais." });
-    const room = groupRoomRepository.findRoom(groupId, roomId);
-    if (!room) return json(response, 404, { error: "Canal não encontrado." });
-    if (room.slug === "geral") return json(response, 400, { error: "O canal Geral não pode ser alterado ou excluído." });
-    if (request.method === "DELETE") {
-      groupRoomRepository.deleteRoom(groupId, roomId, room.kind);
-      return json(response, 200, { ok: true });
-    }
-    readJson(request).then((body) => {
-      const name = String(body.name || "").trim().slice(0, 48);
-      const slug = roomSlugFor(name);
-      if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para o canal." });
-      const duplicate = groupRoomRepository.findBySlug(groupId, slug, roomId);
-      if (duplicate) return json(response, 409, { error: "Já existe um canal com esse nome neste grupo." });
-      if (room.kind === "voice") {
-        const maxParticipants = parseVoiceRoomParticipantLimit(body.maxParticipants, room.maxParticipants);
-        return json(response, 200, { room: groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug, maxParticipants }) });
-      }
-      return json(response, 200, { room: groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug }) });
-    }).catch(() => json(response, 400, { error: "Não foi possível atualizar o canal." }));
-    return;
-  }
+  if (await handleGroupRoomRoutes(request, response, requestUrl)) return;
   const groupPresenceMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/presence$/);
   if (groupPresenceMatch && ["GET", "POST"].includes(request.method)) {
     const user = requireUser(request, response);
