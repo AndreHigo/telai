@@ -81,6 +81,7 @@ import { createMediaRoutes } from "./server/http/media-routes.mjs";
 import { createOAuthRoutes } from "./server/http/oauth-routes.mjs";
 import { createStaticRoutes } from "./server/http/static-routes.mjs";
 import { createStreamRoutes } from "./server/http/stream-routes.mjs";
+import { createObservabilityRuntime } from "./server/observability/runtime.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -121,43 +122,24 @@ const siteAdminUsernames = new Set(String(process.env.TELAI_ADMIN_USERNAMES || "
 const maintenanceToken = String(process.env.TELAI_MAINTENANCE_TOKEN || process.env.MIRANTE_MAINTENANCE_TOKEN || "").trim();
 // A versão identifica exatamente qual texto jurídico foi aceito pelo titular.
 // Ela pode ser trocada no ambiente quando uma nova política entrar em vigor.
-let logFileStream = null;
-if (logPath) {
-  try {
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    logFileStream = fs.createWriteStream(logPath, { flags: "a" });
-    logFileStream.on("error", (error) => console.error(JSON.stringify({ event: "log_file_error", error: error.message })));
-  } catch (error) {
-    console.error(JSON.stringify({ event: "log_file_open_error", path: path.basename(logPath), error: error.message }));
-  }
-}
 const rooms = new Map();
 const voiceRooms = new Map();
 const groupPresence = new Map();
 let eventGateway = null;
 const oauthStates = new Map();
-const observability = {
-  startedAt: new Date().toISOString(),
-  activeRequests: 0,
-  requestsTotal: 0,
-  requestsCompleted: 0,
-  requestsAborted: 0,
-  responseBytes: 0,
-  statusCounts: new Map(),
-  routeCounts: new Map(),
-  routeBytes: new Map(),
-  clientEventCounts: new Map(),
-  websocket: {
-    active: 0,
-    connections: 0,
-    closed: 0,
-    messagesIn: 0,
-    messagesOut: 0,
-    bytesIn: 0,
-    bytesOut: 0,
-  },
-  recentEvents: [],
-};
+const observabilityRuntime = createObservabilityRuntime({ fs, path, logPath, logLevels, logLevel });
+const {
+  observability,
+  hasLogFile,
+  debugLog,
+  infoLog,
+  warnLog,
+  errorLog,
+  metricRoute,
+  addMapCount,
+  addResponseBytes,
+  isLocalObservabilityRequest,
+} = observabilityRuntime;
 const downloadRateLimitPerMinute = Math.max(1, Number(process.env.MIRANTE_DOWNLOAD_RATE_LIMIT_PER_MIN || 20));
 const downloadRateWindowMs = 60_000;
 const downloadRate = new Map();
@@ -238,34 +220,6 @@ function clientIp(request) {
   return forwarded || request.socket.remoteAddress || "unknown";
 }
 
-function safeLogValue(value, key = "", depth = 0) {
-  const sensitiveKey = /token|secret|password|credential|authorization|cookie|body|sdp|candidate|payload|avatardata|avatar_data|access_token|refresh_token/i.test(key);
-  if (sensitiveKey) return "[redacted]";
-  if (value == null || typeof value === "boolean" || typeof value === "number") return value;
-  if (depth > 2) return "[truncated]";
-  if (typeof value === "string") return value.length > 240 ? `${value.slice(0, 237)}...` : value;
-  if (Array.isArray(value)) return value.slice(0, 20).map((item) => safeLogValue(item, key, depth + 1));
-  if (typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).slice(0, 30).map(([childKey, childValue]) => [childKey, safeLogValue(childValue, childKey, depth + 1)]));
-  }
-  return String(value);
-}
-
-function logEvent(level, event, fields = {}) {
-  if (logLevels[level] > logLevels[logLevel]) return;
-  const entry = { time: new Date().toISOString(), level, event, ...safeLogValue(fields) };
-  const line = JSON.stringify(entry);
-  observability.recentEvents.push(entry);
-  if (observability.recentEvents.length > 100) observability.recentEvents.shift();
-  if (logFileStream) logFileStream.write(`${line}\n`);
-  if (level === "error" || level === "warn") console.error(line);
-  else console.log(line);
-}
-
-const debugLog = (event, fields) => logEvent("debug", event, fields);
-const infoLog = (event, fields) => logEvent("info", event, fields);
-const warnLog = (event, fields) => logEvent("warn", event, fields);
-const errorLog = (event, fields) => logEvent("error", event, fields);
 const {
   allowClientErrorRequest,
   allowLargeArtifactRequest,
@@ -309,34 +263,8 @@ process.on("unhandledRejection", (reason) => {
   errorLog("process_unhandled_rejection", { name: error.name, error: error.message, stack: error.stack });
 });
 
-function metricRoute(pathname) {
-  if (pathname === "/download") return "/download";
-  if (pathname.startsWith("/updates/")) return "/updates/*";
-  if (pathname === "/signal") return "/signal";
-  if (pathname === "/events") return "/events";
-  const apiMatch = pathname.match(/^\/api\/([^/]+)/);
-  return apiMatch ? `/api/${apiMatch[1]}` : pathname || "/";
-}
-
-function addMapCount(map, key, amount = 1) {
-  map.set(key, (map.get(key) || 0) + amount);
-}
-
-function addResponseBytes(response, chunk) {
-  if (chunk == null) return;
-  if (typeof chunk === "string") return Buffer.byteLength(chunk);
-  if (Buffer.isBuffer(chunk)) return chunk.length;
-  if (ArrayBuffer.isView(chunk)) return chunk.byteLength;
-  return 0;
-}
-
 function isLoopback(address) {
   return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
-}
-
-function isLocalObservabilityRequest(request) {
-  const forwarded = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  return !forwarded && isLoopback(request.socket.remoteAddress);
 }
 
 function observabilitySnapshot() {
@@ -364,7 +292,7 @@ function observabilitySnapshot() {
     },
     websocket: { ...observability.websocket },
     clientEvents: topRoutes(observability.clientEventCounts),
-    logging: { level: logLevel, file: Boolean(logFileStream), recentEvents: observability.recentEvents.slice(-50) },
+    logging: { level: logLevel, file: hasLogFile(), recentEvents: observability.recentEvents.slice(-50) },
     downloadProtection: {
       limitPerMinute: downloadRateLimitPerMinute,
       trackedClients: downloadRate.size,

@@ -114,6 +114,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair hashing de senha e token de sessão para `server/auth/crypto.mjs`, mantendo o formato e a validação existentes.
 - [x] Extrair buckets, políticas e limpeza de rate limit HTTP para `server/http/rate-limit.mjs`.
 - [x] Extrair métricas locais e diagnósticos de cliente para `server/http/observability-routes.mjs`.
+- [x] Extrair o runtime de logs sanitizados, contadores HTTP e identificação de observabilidade local para `server/observability/runtime.mjs`.
 - [x] Extrair descoberta, criação e saída de grupos para `server/http/group-discovery-routes.mjs`, mantendo exclusão e runtime de voz no gateway.
 - [x] Extrair solicitações de entrada, configurações e visão administrativa de grupos para `server/http/group-management-routes.mjs`.
 - [x] Extrair criação, ordenação, edição, exclusão e atribuição de cargos para `server/http/group-role-routes.mjs`.

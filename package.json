@@ -41,6 +41,7 @@
     "test:tray": "electron --no-sandbox qa/e2e-tray.cjs",
     "generate:tray-icons": "electron --no-sandbox qa/generate-tray-icons.cjs",
     "test:observability": "node qa/e2e-observability.cjs",
+    "test:observability-runtime": "node qa/test-observability-runtime.mjs",
     "db:migrate:postgres": "node qa/migrate-postgres.mjs",
     "db:import:postgres": "node qa/import-sqlite-to-postgres.mjs",
     "db:test:postgres-import": "node qa/test-postgres-import.mjs",
