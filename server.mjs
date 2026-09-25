@@ -30,6 +30,7 @@ import { createGroupMemberRepository } from "./server/repositories/group-members
 import { createStreamRepository } from "./server/repositories/streams.mjs";
 import { createGroupSettingsRepository } from "./server/repositories/group-settings.mjs";
 import { createUserProfileRepository } from "./server/repositories/user-profile.mjs";
+import { createSiteAdminRepository } from "./server/repositories/site-admin.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -808,6 +809,7 @@ const groupMemberRepository = createGroupMemberRepository(database, { compactAva
 const streamRepository = createStreamRepository(database, { createId: randomUUID });
 const groupSettingsRepository = createGroupSettingsRepository(database);
 const userProfileRepository = createUserProfileRepository(database);
+const siteAdminRepository = createSiteAdminRepository(database);
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -1175,30 +1177,8 @@ function siteAdminOverview() {
   for (const stream of activeStreams) {
     if (stream.groupId) liveCountByGroup.set(stream.groupId, (liveCountByGroup.get(stream.groupId) || 0) + 1);
   }
-  const accounts = database.prepare(`
-    SELECT users.id, users.username, users.display_name AS displayName, users.email,
-      users.created_at AS createdAt,
-      (SELECT COUNT(*) FROM group_members WHERE user_id = users.id) AS groupCount,
-      (SELECT COUNT(*) FROM groups WHERE owner_id = users.id) AS ownedGroupCount,
-      EXISTS(SELECT 1 FROM sessions WHERE user_id = users.id AND expires_at > ?) AS hasActiveSession
-    FROM users
-    ORDER BY users.created_at DESC
-  `).all(now).map((account) => ({
-    ...account,
-    hasActiveSession: Boolean(account.hasActiveSession),
-  }));
-  const groups = database.prepare(`
-    SELECT groups.id, groups.name, groups.slug, groups.created_at AS createdAt,
-      groups.owner_id AS ownerId,
-      COALESCE(users.display_name, users.username) AS ownerName,
-      (SELECT COUNT(*) FROM group_members WHERE group_id = groups.id) AS memberCount
-    FROM groups
-    JOIN users ON users.id = groups.owner_id
-    ORDER BY groups.created_at DESC
-  `).all().map((group) => ({
-    ...group,
-    liveCount: liveCountByGroup.get(group.id) || 0,
-  }));
+  const accounts = siteAdminRepository.listAccounts(now);
+  const groups = siteAdminRepository.listGroups().map((group) => ({ ...group, liveCount: liveCountByGroup.get(group.id) || 0 }));
   const streams = activeStreams.map((stream) => {
     const room = rooms.get(stream.roomName);
     return {
@@ -1222,7 +1202,7 @@ function siteAdminOverview() {
       accounts: accounts.length,
       groups: groups.length,
       openStreams: streams.length,
-      activeSessions: database.prepare("SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ?").get(now).count,
+      activeSessions: siteAdminRepository.countActiveSessions(now),
       runtimeBroadcastRooms: rooms.size,
       runtimeVoiceRooms: voiceRooms.size,
     },
@@ -1238,10 +1218,10 @@ function siteAdminSummary() {
   return {
     generatedAt: new Date().toISOString(),
     summary: {
-      accounts: Number(database.prepare("SELECT COUNT(*) AS count FROM users").get().count || 0),
-      groups: Number(database.prepare("SELECT COUNT(*) AS count FROM groups").get().count || 0),
+      accounts: siteAdminRepository.countAccounts(),
+      groups: siteAdminRepository.countGroups(),
       openStreams: activeStreams.length,
-      activeSessions: Number(database.prepare("SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ?").get(now).count || 0),
+      activeSessions: siteAdminRepository.countActiveSessions(now),
       runtimeBroadcastRooms: rooms.size,
       runtimeVoiceRooms: voiceRooms.size,
     },
@@ -1272,45 +1252,21 @@ function adminPage(items, total, page, pageSize) {
 function siteAdminAccountsPage(requestUrl) {
   const { page, pageSize, offset } = adminPagination(requestUrl);
   const now = new Date().toISOString();
-  const total = database.prepare("SELECT COUNT(*) AS count FROM users").get().count;
-  const accounts = database.prepare(`
-    SELECT users.id, users.username, users.display_name AS displayName, users.email,
-      users.created_at AS createdAt,
-      (SELECT COUNT(*) FROM group_members WHERE user_id = users.id) AS groupCount,
-      (SELECT COUNT(*) FROM groups WHERE owner_id = users.id) AS ownedGroupCount,
-      EXISTS(SELECT 1 FROM sessions WHERE user_id = users.id AND expires_at > ?) AS hasActiveSession
-    FROM users
-    ORDER BY users.created_at DESC
-    LIMIT ? OFFSET ?
-  `).all(now, pageSize, offset).map((account) => ({
-    ...account,
-    hasActiveSession: Boolean(account.hasActiveSession),
-  }));
+  const total = siteAdminRepository.countAccounts();
+  const accounts = siteAdminRepository.listAccounts(now, pageSize, offset);
   return adminPage(accounts, total, page, pageSize);
 }
 
 function siteAdminGroupsPage(requestUrl) {
   const { page, pageSize, offset } = adminPagination(requestUrl);
-  const total = database.prepare("SELECT COUNT(*) AS count FROM groups").get().count;
+  const total = siteAdminRepository.countGroups();
   const liveGroups = new Map();
   streamRepository.listActiveStreams()
     .filter(runtimeStreamIsLive)
     .forEach((stream) => {
       if (stream.groupId) liveGroups.set(stream.groupId, (liveGroups.get(stream.groupId) || 0) + 1);
     });
-  const groups = database.prepare(`
-    SELECT groups.id, groups.name, groups.slug, groups.created_at AS createdAt,
-      groups.owner_id AS ownerId,
-      COALESCE(users.display_name, users.username) AS ownerName,
-      (SELECT COUNT(*) FROM group_members WHERE group_id = groups.id) AS memberCount
-    FROM groups
-    JOIN users ON users.id = groups.owner_id
-    ORDER BY groups.created_at DESC
-    LIMIT ? OFFSET ?
-  `).all(pageSize, offset).map((group) => ({
-    ...group,
-    liveCount: liveGroups.get(group.id) || 0,
-  }));
+  const groups = siteAdminRepository.listGroups(pageSize, offset).map((group) => ({ ...group, liveCount: liveGroups.get(group.id) || 0 }));
   return adminPage(groups, total, page, pageSize);
 }
 
@@ -1322,24 +1278,10 @@ function siteAdminStreamsPage(requestUrl) {
 
 function siteAdminGroupMembersPage(requestUrl, groupId) {
   const { page, pageSize, offset } = adminPagination(requestUrl);
-  const group = database.prepare(`
-    SELECT groups.id, groups.name, groups.slug,
-      COALESCE(users.display_name, users.username) AS ownerName
-    FROM groups
-    JOIN users ON users.id = groups.owner_id
-    WHERE groups.id = ?
-  `).get(groupId);
+  const group = siteAdminRepository.findGroupWithOwner(groupId);
   if (!group) return null;
-  const total = database.prepare("SELECT COUNT(*) AS count FROM group_members WHERE group_id = ?").get(groupId).count;
-  const members = database.prepare(`
-    SELECT users.id, users.username, users.display_name AS displayName,
-      group_members.role, group_members.created_at AS joinedAt
-    FROM group_members
-    JOIN users ON users.id = group_members.user_id
-    WHERE group_members.group_id = ?
-    ORDER BY CASE group_members.role WHEN 'owner' THEN 0 ELSE 1 END, users.display_name COLLATE NOCASE
-    LIMIT ? OFFSET ?
-  `).all(groupId, pageSize, offset);
+  const total = siteAdminRepository.countGroupMembers(groupId);
+  const members = siteAdminRepository.listGroupMembers(groupId, pageSize, offset);
   return { group, ...adminPage(members, total, page, pageSize) };
 }
 

@@ -24,6 +24,7 @@ import { createPostgresGroupMemberRepository } from "../server/repositories/grou
 import { createPostgresStreamRepository } from "../server/repositories/streams.mjs";
 import { createPostgresGroupSettingsRepository } from "../server/repositories/group-settings.mjs";
 import { createPostgresUserProfileRepository } from "../server/repositories/user-profile.mjs";
+import { createPostgresSiteAdminRepository } from "../server/repositories/site-admin.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -54,6 +55,13 @@ try {
   await client.query("INSERT INTO direct_conversations (id, created_at, updated_at) VALUES ($1, $2, $2)", [ids.conversation, now]);
   await client.query("INSERT INTO direct_conversation_members (conversation_id, user_id, created_at) VALUES ($1, $2, $3), ($1, $4, $3)", [ids.conversation, ids.owner, now, ids.member]);
   await client.query("INSERT INTO channel_profiles (user_id, display_name, avatar_data, games, updated_at) VALUES ($1, 'Owner Channel', NULL, '[]', $2)", [ids.owner, now]);
+
+  const siteAdmin = createPostgresSiteAdminRepository(client);
+  assert.equal((await siteAdmin.listAccounts(now)).some((account) => account.id === ids.owner), true);
+  assert.equal((await siteAdmin.listGroups()).find((group) => group.id === ids.group)?.memberCount, 2);
+  assert.equal((await siteAdmin.findGroupWithOwner(ids.group))?.ownerName, "PG Owner");
+  assert.equal(await siteAdmin.countGroupMembers(ids.group), 2);
+  assert.equal((await siteAdmin.listGroupMembers(ids.group, 10, 0)).length, 2);
 
   const sessions = createPostgresSessionRepository(client, { hashSessionToken: (token) => `hash:${token}` });
   await sessions.create({ userId: ids.owner, token: "token", expiresAt: new Date(Date.now() + 60_000).toISOString(), createdAt: now });
@@ -262,7 +270,7 @@ try {
   assert.equal(await groupSettings.deleteGroup(createdGroup.id), true);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "group-members", "group-settings", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "group-members", "group-settings", "user-profile", "site-admin", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

@@ -98,6 +98,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair listagem, presença de membros e saída transacional de grupos.
 - [x] Extrair persistência de streams, chat da transmissão, follows e encerramento sem acoplar o WebRTC ao banco.
 - [x] Extrair atualização e exclusão persistente de grupos, mantendo cleanup de runtime no gateway.
+- [x] Extrair consultas paginadas de administração e membros, mantendo métricas de runtime fora do repositório.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
