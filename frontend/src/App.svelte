@@ -313,6 +313,8 @@
   let multistreamPageLoad = null;
   let ContextMenus = null;
   let contextMenusLoad = null;
+  let GroupDialogs = null;
+  let groupDialogsLoad = null;
   let ProfileSettingsExtras = null;
   let profileSettingsExtrasLoad = null;
   let VoiceSettingsPanel = null;
@@ -448,6 +450,17 @@
   }
 
   $: if ((groupContextMenu || roomContextMenu || voiceContextMenu || profilePreview) && !ContextMenus) void loadContextMenus();
+
+  function loadGroupDialogs() {
+    if (GroupDialogs || groupDialogsLoad) return groupDialogsLoad;
+    groupDialogsLoad = import("./features/groups/GroupDialogs.svelte")
+      .then((module) => { GroupDialogs = module.default; })
+      .catch((error) => reportClientError("group_dialogs_load_error", error))
+      .finally(() => { groupDialogsLoad = null; });
+    return groupDialogsLoad;
+  }
+
+  $: if ((showInviteDialog || showGroupSearchDialog || showLeaveGroupDialog || showDeleteRoomDialog || showDeleteGroupDialog || showGroupDialog || showRoomDialog) && !GroupDialogs) void loadGroupDialogs();
 
   function loadProfileSettingsExtras() {
     if (ProfileSettingsExtras || profileSettingsExtrasLoad) return profileSettingsExtrasLoad;
@@ -6357,31 +6370,68 @@
       onCloseProfilePreview={() => profilePreview = null}
     />
   {/if}
-  {#if showInviteDialog}
-    <div class="modal-backdrop" role="presentation">
-      <div class="modal-shell invite-dialog" role="dialog" aria-modal="true" aria-labelledby="invite-dialog-title">
-        <header class="modal-header">
-          <div><p class="eyebrow">membros do grupo</p><h2 id="invite-dialog-title">Convidar para {selectedGroup?.name}</h2><p class="muted">Pesquise pelo nome ou pelo @usuário e envie um convite direto.</p></div>
-          <button class="modal-close outline" type="button" aria-label="Fechar convite" on:click={() => showInviteDialog = false}>×</button>
-        </header>
-        <div class="modal-body">
-          <form class="modal-search-row" on:submit|preventDefault={searchUsers}><input class="settings-input" bind:value={inviteSearchQuery} placeholder="Nome ou @usuário" autocomplete="off" /><button class="primary rounded-xl px-4 py-2 text-xs font-extrabold" type="submit" disabled={inviteSearchBusy}>{inviteSearchBusy ? "Buscando…" : "Pesquisar"}</button></form>
-          {#if inviteSearchError}<p class="settings-error" role="alert">{inviteSearchError}</p>{/if}
-          <div class="invite-search-results">{#each inviteSearchResults as target}<div class="invite-search-result"><span class="member-avatar">{#if target.avatarData}<img src={target.avatarData} alt="" />{:else}{target.displayName?.slice(0, 1) || "M"}{/if}</span><span><strong>{target.displayName}</strong><small>@{target.username}</small></span><button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={inviteActionId === target.id} on:click={() => inviteUser(target)}>{inviteActionId === target.id ? "Enviando…" : "Convidar"}</button></div>{/each}</div>
-          <div class="invite-dialog-divider"><span>ou compartilhe um link temporário</span></div>
-          <button class="outline w-full rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={createGroupInvite} disabled={groupInviteCreating}>{groupInviteCreating ? "Gerando…" : "Gerar link de convite"}</button>
-          {#if groupInviteLink}<div class="invite-link-row"><input class="settings-input" readonly value={groupInviteLink} aria-label="Link do convite" /><button class="outline rounded-xl px-3 py-2 text-xs font-extrabold" type="button" on:click={copyGroupInvite}>Copiar</button></div>{/if}
-        </div>
-      </div>
-    </div>
-  {/if}
-  {#if showGroupSearchDialog}
-    <div class="modal-backdrop" role="presentation" on:click={() => showGroupSearchDialog = false}>
-      <div class="modal-shell modal-compact group-search-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="group-search-dialog-title" on:click|stopPropagation on:keydown|stopPropagation>
-        <header class="modal-header"><div><p class="eyebrow">descobrir comunidades</p><h2 id="group-search-dialog-title">Pesquisar grupos</h2><p class="muted">Encontre um grupo pelo nome e solicite sua entrada.</p></div><button class="modal-close outline" type="button" aria-label="Fechar pesquisa de grupos" on:click={() => showGroupSearchDialog = false}>×</button></header>
-        <div class="modal-body"><form class="modal-search-row" on:submit|preventDefault={searchGroups}><input class="settings-input" bind:value={groupSearchQuery} placeholder="Nome do grupo" autocomplete="off" /> <button class="primary rounded-xl px-4 py-2 text-xs font-extrabold" type="submit" disabled={groupSearchBusy}>{groupSearchBusy ? "Buscando…" : "Pesquisar"}</button></form>{#if groupSearchError}<p class="settings-error" role="alert">{groupSearchError}</p>{/if}{#if groupSearchResults.length}<div class="group-discovery-results">{#each groupSearchResults as group}<div class="group-discovery-result"><span class="community-avatar">{group.name.slice(0, 2).toUpperCase()}</span><span><strong>{group.name}</strong><small>por {group.ownerName} · {group.memberCount} {group.memberCount === 1 ? "membro" : "membros"}</small></span>{#if group.requestStatus === "pending"}<span class="group-request-status">Pendente</span>{:else if group.requestStatus === "rejected"}<button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={groupJoinActionId === group.id} on:click={() => requestGroupEntry(group)}>Solicitar novamente</button>{:else}<button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={groupJoinActionId === group.id} on:click={() => requestGroupEntry(group)}>{groupJoinActionId === group.id ? "Enviando…" : "Solicitar entrada"}</button>{/if}</div>{/each}</div>{/if}</div>
-      </div>
-    </div>
+  {#if GroupDialogs}
+    <svelte:component
+      this={GroupDialogs}
+      {showInviteDialog}
+      {showGroupSearchDialog}
+      {showLeaveGroupDialog}
+      {showDeleteRoomDialog}
+      {showDeleteGroupDialog}
+      {showGroupDialog}
+      {showRoomDialog}
+      {selectedGroup}
+      {deleteRoomTarget}
+      {inviteSearchQuery}
+      {inviteSearchBusy}
+      {inviteSearchError}
+      {inviteSearchResults}
+      {inviteActionId}
+      {groupInviteCreating}
+      {groupInviteLink}
+      {groupSearchQuery}
+      {groupSearchBusy}
+      {groupSearchError}
+      {groupSearchResults}
+      {groupJoinActionId}
+      {leaveGroupBusy}
+      {leaveGroupError}
+      {deleteRoomBusy}
+      {deleteRoomError}
+      {deleteGroupBusy}
+      {deleteGroupError}
+      {groupName}
+      {roomDialogMode}
+      {roomName}
+      {roomKind}
+      {roomMaxParticipants}
+      onCloseInvite={() => showInviteDialog = false}
+      onInviteSearchQueryChange={(value) => inviteSearchQuery = value}
+      onSearchUsers={searchUsers}
+      onInviteUser={inviteUser}
+      onCreateGroupInvite={createGroupInvite}
+      onCopyGroupInvite={copyGroupInvite}
+      onCloseGroupSearch={() => showGroupSearchDialog = false}
+      onGroupSearchQueryChange={(value) => groupSearchQuery = value}
+      onSearchGroups={searchGroups}
+      onRequestGroupEntry={requestGroupEntry}
+      onCloseLeaveGroup={() => showLeaveGroupDialog = false}
+      onLeaveSelectedGroup={leaveSelectedGroup}
+      onCloseDeleteRoom={() => showDeleteRoomDialog = false}
+      onConfirmDeleteGroupRoom={confirmDeleteGroupRoom}
+      onCloseDeleteGroup={() => showDeleteGroupDialog = false}
+      onDeleteSelectedGroup={deleteSelectedGroup}
+      onCloseGroup={() => showGroupDialog = false}
+      onGroupNameChange={(value) => groupName = value}
+      onCreateGroup={createGroup}
+      onCloseRoom={() => showRoomDialog = false}
+      onRoomNameChange={(value) => roomName = value}
+      onRoomKindChange={(value) => roomKind = value}
+      onRoomMaxParticipantsChange={(value) => roomMaxParticipants = value}
+      onCreateRoom={createRoom}
+    />
+  {:else if showInviteDialog || showGroupSearchDialog || showLeaveGroupDialog || showDeleteRoomDialog || showDeleteGroupDialog || showGroupDialog || showRoomDialog}
+    <div class="workspace-loading" role="status" aria-label="Carregando diálogos"><span></span><span></span><span></span></div>
   {/if}
   {#if showGroupMessageSearch}
     {#if GroupMessageSearchDialog}
@@ -6420,37 +6470,6 @@
     {:else}
       <div class="workspace-loading" role="status" aria-label="Carregando respostas"><span></span><span></span><span></span></div>
     {/if}
-  {/if}
-  {#if showLeaveGroupDialog}
-    <div class="modal-backdrop" role="presentation" on:click={() => !leaveGroupBusy && (showLeaveGroupDialog = false)}>
-      <div class="modal-shell modal-compact" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="leave-group-title" on:click|stopPropagation on:keydown|stopPropagation>
-        <form on:submit|preventDefault={leaveSelectedGroup}>
-          <header class="modal-header"><div><p class="eyebrow">sair da comunidade</p><h2 id="leave-group-title">Sair de {selectedGroup?.name}</h2><p class="muted">Você perderá acesso aos canais e precisará solicitar entrada novamente para voltar.</p></div><button class="modal-close outline" type="button" aria-label="Fechar confirmação" on:click={() => !leaveGroupBusy && (showLeaveGroupDialog = false)}>×</button></header>
-          <div class="modal-body">{#if leaveGroupError}<p class="settings-error" role="alert">{leaveGroupError}</p>{/if}<p class="settings-callout danger-callout">Essa ação remove você do grupo, mas não exclui a comunidade.</p></div>
-          <footer class="modal-footer"><button type="button" class="outline rounded-xl px-4 py-2 text-sm font-bold" on:click={() => showLeaveGroupDialog = false} disabled={leaveGroupBusy}>Cancelar</button><button type="submit" class="danger-outline rounded-xl px-4 py-2 text-sm font-bold" disabled={leaveGroupBusy}>{leaveGroupBusy ? "Saindo…" : "Sair do grupo"}</button></footer>
-        </form>
-      </div>
-    </div>
-  {/if}
-  {#if showDeleteRoomDialog}
-    <div class="modal-backdrop" role="presentation" on:click={() => !deleteRoomBusy && (showDeleteRoomDialog = false)}>
-      <div class="modal-shell modal-compact" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="delete-room-title" on:click|stopPropagation on:keydown|stopPropagation>
-        <header class="modal-header"><div><p class="eyebrow">excluir canal</p><h2 id="delete-room-title">Excluir #{deleteRoomTarget?.name}</h2><p class="muted">As mensagens deste canal também serão removidas. Essa ação não pode ser desfeita.</p></div><button class="modal-close outline" type="button" aria-label="Fechar confirmação" on:click={() => !deleteRoomBusy && (showDeleteRoomDialog = false)}>×</button></header>
-        <div class="modal-body">{#if deleteRoomError}<p class="settings-error" role="alert">{deleteRoomError}</p>{/if}<p class="settings-callout danger-callout">Confirme somente se você deseja apagar o canal e todo o histórico dele.</p></div>
-        <footer class="modal-footer"><button type="button" class="outline rounded-xl px-4 py-2 text-sm font-bold" on:click={() => !deleteRoomBusy && (showDeleteRoomDialog = false)} disabled={deleteRoomBusy}>Cancelar</button><button type="button" class="danger-outline rounded-xl px-4 py-2 text-sm font-bold" on:click={confirmDeleteGroupRoom} disabled={deleteRoomBusy}>{deleteRoomBusy ? "Excluindo…" : "Excluir canal"}</button></footer>
-      </div>
-    </div>
-  {/if}
-  {#if showDeleteGroupDialog}
-    <div class="modal-backdrop" role="presentation" on:click={() => !deleteGroupBusy && (showDeleteGroupDialog = false)}>
-      <div class="modal-shell modal-compact" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="delete-group-title" on:click|stopPropagation on:keydown|stopPropagation>
-        <form on:submit|preventDefault={deleteSelectedGroup}>
-          <header class="modal-header"><div><p class="eyebrow">excluir comunidade</p><h2 id="delete-group-title">Excluir {selectedGroup?.name}</h2><p class="muted">Essa ação remove o grupo, os canais, mensagens, cargos e convites de forma permanente.</p></div><button class="modal-close outline" type="button" aria-label="Fechar confirmação" on:click={() => !deleteGroupBusy && (showDeleteGroupDialog = false)}>×</button></header>
-          <div class="modal-body">{#if deleteGroupError}<p class="settings-error" role="alert">{deleteGroupError}</p>{/if}<p class="settings-callout danger-callout">Não será possível recuperar esta comunidade depois da exclusão.</p></div>
-          <footer class="modal-footer"><button type="button" class="outline rounded-xl px-4 py-2 text-sm font-bold" on:click={() => showDeleteGroupDialog = false} disabled={deleteGroupBusy}>Cancelar</button><button type="submit" class="danger-outline rounded-xl px-4 py-2 text-sm font-bold" disabled={deleteGroupBusy}>{deleteGroupBusy ? "Excluindo…" : "Excluir grupo"}</button></footer>
-        </form>
-      </div>
-    </div>
   {/if}
   {#if showPublicBroadcastSetup}
     <div class="modal-backdrop" role="presentation" on:click={cancelPublicBroadcastSetup}>
@@ -6532,25 +6551,6 @@
         </div>
         <footer class="modal-footer display-picker-footer"><span class="muted">O áudio do Discord e do Telai não será incluído.</span><button class="outline rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={skipBroadcastAudioSource}>Continuar sem áudio</button></footer>
       </div>
-    </div>
-  {/if}
-  {#if showGroupDialog}
-    <div class="modal-backdrop" role="presentation">
-      <form class="modal-shell modal-compact" on:submit|preventDefault={createGroup}>
-        <header class="modal-header"><div><p class="eyebrow">organização</p><h2 id="group-dialog-title">Criar grupo</h2><p class="muted">Crie um espaço para organizar seus canais e pessoas.</p></div><button class="modal-close outline" type="button" aria-label="Fechar criação de grupo" on:click={() => showGroupDialog = false}>×</button></header>
-        <div class="modal-body"><label class="modal-field">Nome do grupo<input bind:value={groupName} class="settings-input" placeholder="Nome do grupo" maxlength="64" required /></label></div>
-        <footer class="modal-footer"><button type="button" class="outline rounded-xl px-4 py-2 text-sm font-bold" on:click={() => showGroupDialog = false}>Cancelar</button><button class="primary rounded-xl px-4 py-2 text-sm font-bold">Criar grupo <HugeiconsIcon icon={iconFor("arrowRight")} size={16} strokeWidth={1.8} /></button></footer>
-      </form>
-    </div>
-  {/if}
-  {#if showRoomDialog}
-    <div class="modal-backdrop" role="presentation">
-      <form class="modal-shell modal-compact" on:submit|preventDefault={createRoom}>
-        <header class="modal-header"><div><p class="eyebrow">sala do grupo</p><h2>{roomDialogMode === "edit" ? "Editar canal" : "Criar sala"}</h2><p class="muted">{roomDialogMode === "edit" ? "Altere o nome do canal de texto." : "Escolha o nome e o tipo do novo canal."}</p></div><button class="modal-close outline" type="button" aria-label="Fechar janela de canal" on:click={() => showRoomDialog = false}>×</button></header>
-        <div class="modal-body"><label class="modal-field">Nome da sala<input bind:value={roomName} class="settings-input" placeholder="ex.: conversa, estudos" maxlength="48" required /></label>{#if roomDialogMode !== "edit"}<label class="modal-field">Tipo<select bind:value={roomKind} class="settings-input"><option value="text">Texto e chat</option><option value="voice">Canal de voz</option></select></label>{/if}</div>
-        {#if roomKind === "voice"}<div class="modal-body room-capacity-field"><label class="modal-field">Limite de participantes<input bind:value={roomMaxParticipants} class="settings-input" type="number" min="1" max="50" step="1" required aria-describedby="room-capacity-help" /></label><small id="room-capacity-help" class="muted">Defina de 1 a 50 pessoas nesta sala. O padrão é 8.</small></div>{/if}
-        <footer class="modal-footer"><button type="button" class="outline rounded-xl px-4 py-2 text-sm font-bold" on:click={() => showRoomDialog = false}>Cancelar</button><button class="primary rounded-xl px-4 py-2 text-sm font-bold">{roomDialogMode === "edit" ? "Salvar alterações" : "Criar sala"} {#if roomDialogMode !== "edit"}<HugeiconsIcon icon={iconFor("arrowRight")} size={16} strokeWidth={1.8} />{/if}</button></footer>
-      </form>
     </div>
   {/if}
   {#if showReleaseNotes && releaseNotes}
