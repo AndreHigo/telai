@@ -48,6 +48,7 @@ import { createGroupRoleRoutes } from "./server/http/group-role-routes.mjs";
 import { createGroupRoomRoutes } from "./server/http/group-room-routes.mjs";
 import { createGroupContentRoutes } from "./server/http/group-content-routes.mjs";
 import { createGroupInviteRoutes } from "./server/http/group-invite-routes.mjs";
+import { createGroupRuntimeRoutes } from "./server/http/group-runtime-routes.mjs";
 import { createMediaRoutes } from "./server/http/media-routes.mjs";
 import { createStreamRoutes } from "./server/http/stream-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
@@ -898,6 +899,28 @@ const handleStreamRoutes = createStreamRoutes({
   parseChannelGames,
   slugFor,
   createNotification,
+});
+const handleGroupRuntimeRoutes = createGroupRuntimeRoutes({
+  json,
+  requireUser,
+  groupJoinRequestRepository,
+  groupSettingsRepository,
+  groupRoomRepository,
+  groupMemberRepository,
+  groupMessageRepository,
+  streamRepository,
+  groupPermissions,
+  isGroupMember,
+  runtimeStreamIsLive,
+  streamPublicPath,
+  compactAvatarData,
+  parseChannelGames,
+  voiceRooms,
+  send,
+  leaveVoiceRoom,
+  voiceParticipantFor,
+  touchGroupPresence,
+  isPresent,
 });
 const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, requireLogin, publicOriginForRequest });
 const userProfileRepository = createUserProfileRepository(database);
@@ -2414,70 +2437,10 @@ async function handleHttpRequest(request, response) {
   if (await handleUserSettingsRoutes(request, response, requestUrl)) return;
   if (await handleSocialRoutes(request, response, requestUrl)) return;
   if (await handleGroupDiscoveryRoutes(request, response, requestUrl)) return;
-  const groupDeleteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})$/);
-  if (groupDeleteMatch && request.method === "DELETE") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = groupDeleteMatch[1];
-    const group = groupJoinRequestRepository.findGroup(groupId);
-    if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o dono pode excluir este grupo." });
-    for (const [voiceRoomId, voiceRoom] of voiceRooms) {
-      if (voiceRoom.groupId !== groupId) continue;
-      for (const participant of [...voiceRoom.participants.values()]) {
-        send(participant, { type: "voice-disconnected", message: "O grupo foi excluído pelo proprietário." });
-        leaveVoiceRoom(participant);
-      }
-      voiceRooms.delete(voiceRoomId);
-    }
-    groupSettingsRepository.deleteGroup(groupId);
-    return json(response, 200, { ok: true, group: { id: group.id, name: group.name } });
-  }
+  if (await handleGroupRuntimeRoutes(request, response, requestUrl)) return;
   if (await handleGroupManagementRoutes(request, response, requestUrl)) return;
   if (await handleGroupRoleRoutes(request, response, requestUrl)) return;
-  const groupOverviewMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/overview$/);
-  if (groupOverviewMatch && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = groupOverviewMatch[1];
-    if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
-    touchGroupPresence(groupId, user.id);
-    const group = groupSettingsRepository.findGroup(groupId);
-    if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    const rooms = groupRoomRepository.listTextRooms(groupId);
-    const voiceRoomsForGroup = groupRoomRepository.listVoiceRooms(groupId).map((room) => {
-      const runtimeRoom = voiceRooms.get(room.id);
-      const canView = groupPermissions(groupId, user.id)?.canViewVoiceMembers !== false;
-      return { ...room, participants: canView ? [...(runtimeRoom?.participants?.values() || [])].map(voiceParticipantFor) : [] };
-    });
-    rooms.push(...voiceRoomsForGroup);
-    rooms.sort((left, right) => {
-      const order = { text: 0, live: 1, voice: 2 };
-      return (order[left.kind] ?? 9) - (order[right.kind] ?? 9) || String(left.name).localeCompare(String(right.name), "pt-BR");
-    });
-    const members = groupMemberRepository.listMembers(groupId).map((member) => ({ ...member, online: isPresent(groupId, member.id) }));
-    const messages = groupMessageRepository.listMessages(groupId);
-    const streams = streamRepository.listGroupStreams(groupId).filter(runtimeStreamIsLive);
-    return json(response, 200, {
-      group,
-      rooms,
-      members: members.map((member) => ({ ...member, avatarData: compactAvatarData(member.avatarData) })),
-      messages,
-      streams: streams.map((stream) => ({ ...stream, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) })),
-    });
-  }
   if (await handleGroupRoomRoutes(request, response, requestUrl)) return;
-  const groupPresenceMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/presence$/);
-  if (groupPresenceMatch && ["GET", "POST"].includes(request.method)) {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = groupPresenceMatch[1];
-    if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
-    touchGroupPresence(groupId, user.id);
-    if (request.method === "POST") return json(response, 200, { ok: true });
-    const members = groupMemberRepository.listMemberIds(groupId).map((id) => ({ id, online: isPresent(groupId, id) }));
-    return json(response, 200, { groupId, members });
-  }
   if (await handleGroupContentRoutes(request, response, requestUrl)) return;
   if (await handleGroupInviteRoutes(request, response, requestUrl)) return;
   if (await handleDirectRoutes(request, response, requestUrl)) return;
