@@ -12,6 +12,10 @@ uma forma de contornar rate limit.
 `GET /api/v1` retorna a disponibilidade da versão. Rotas inexistentes usam o
 envelope JSON de erro com `code: "not_found"`.
 
+O contrato está disponível em `GET /api/v1/openapi.json`. Ele descreve as
+rotas HTTP versionadas e o esquema comum de erros sem adicionar dependências
+ao runtime.
+
 O namespace ainda não representa uma promessa de compatibilidade eterna para
 cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
 incompatíveis devem ser introduzidas em outra versão e documentadas aqui.

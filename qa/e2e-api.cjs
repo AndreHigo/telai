@@ -99,6 +99,11 @@ async function main() {
     const version = await request("/api/v1");
     assert.equal(version.response.status, 200);
     assert.deepEqual(version.body, { version: "v1", status: "available" });
+    const openApi = await request("/api/v1/openapi.json");
+    assert.equal(openApi.response.status, 200);
+    assert.equal(openApi.body.openapi, "3.0.3");
+    assert.equal(openApi.body.servers[0].url, "/api/v1");
+    assert.ok(openApi.body.paths["/groups/{groupId}/messages"].post);
     const missingVersionedRoute = await request("/api/v1/route-that-does-not-exist");
     assert.equal(missingVersionedRoute.response.status, 404);
     assert.equal(missingVersionedRoute.body.code, "not_found");

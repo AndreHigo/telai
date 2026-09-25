@@ -1,5 +1,6 @@
 import { isVersionedApiPath, normalizeApiRequestUrl } from "./api-versioning.mjs";
 import { json } from "./body.mjs";
+import { createApiV1Document } from "./api-contract.mjs";
 
 export function createHttpRouter({
   fs,
@@ -27,6 +28,14 @@ export function createHttpRouter({
   handleStaticRoutes,
 }) {
   return async function handleHttpRoutes(request, response, requestUrl) {
+    if (requestUrl.pathname === "/api/v1/openapi.json") {
+      if (!["GET", "HEAD"].includes(request.method)) {
+        json(response, 405, { error: "Método não permitido." });
+      } else {
+        json(response, 200, createApiV1Document());
+      }
+      return true;
+    }
     const routedUrl = normalizeApiRequestUrl(requestUrl);
     const versionedApiRoot = isVersionedApiPath(requestUrl.pathname) && routedUrl.pathname === "/api";
     if (versionedApiRoot) {
