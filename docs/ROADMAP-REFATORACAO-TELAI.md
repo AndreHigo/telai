@@ -247,7 +247,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Editar/excluir mensagens com autorização do autor/dono, sincronização por eventos e controles inline.
 - [ ] Anexos com armazenamento local controlado e posterior compatibilidade S3/MinIO.
   - [x] Persistir metadados em SQLite/PostgreSQL, armazenar arquivos fora do banco e servir downloads somente para membros autenticados, com limites de tamanho e tipos permitidos.
-  - [ ] Extrair um adapter S3/MinIO opcional após definir retenção, expiração, antivírus e política de custo.
+  - [x] Extrair um adapter S3/MinIO opcional em `server/media/attachment-storage.mjs`, mantendo local como padrão leve e documentando retenção, expiração, antivírus e custo.
+  - [ ] Integrar varredura antivírus e lifecycle operacional antes de ativar S3 em produção.
 - [x] Threads, busca, não lidas e notificações em tempo real.
   - [x] Persistir cursores de leitura por membro/canal, expor `unreadCount` no overview e atualizar o badge pelo gateway de eventos.
   - [x] Buscar mensagens por grupo/canal com limite de resultados e modal leve no frontend.

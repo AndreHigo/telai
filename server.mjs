@@ -17,7 +17,7 @@ import { createVoiceMessageHandler } from "./server/gateway/voice-message-handle
 import { createBroadcastMessageHandler } from "./server/gateway/broadcast-message-handler.mjs";
 import { createBroadcastRuntime } from "./server/gateway/broadcast-runtime.mjs";
 import { createIceConfiguration } from "./server/media/ice-configuration.mjs";
-import { createLocalAttachmentStorage } from "./server/media/attachments.mjs";
+import { createAttachmentStorage } from "./server/media/attachment-storage.mjs";
 import { createAuthRuntime } from "./server/auth/runtime.mjs";
 import { createRequireUser } from "./server/auth/guards.mjs";
 import { hashPassword, hashSessionToken } from "./server/auth/crypto.mjs";
@@ -78,6 +78,9 @@ const {
   desktopArtifactName,
   desktopArtifactPath,
   desktopReleaseDir,
+  attachmentStorageMode,
+  attachmentStorageRoot,
+  attachmentS3,
   logLevels,
   logLevel,
   logPath,
@@ -363,7 +366,7 @@ const { liveNotificationPresentation, syncNotificationsForUser } = createNotific
   canAccessStream,
 });
 const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialRepository, createNotification });
-const attachmentStorage = createLocalAttachmentStorage(process.env.TELAI_ATTACHMENT_DIR || path.join(dataDir, "attachments"));
+const attachmentStorage = createAttachmentStorage({ mode: attachmentStorageMode, localRootDir: attachmentStorageRoot, s3: attachmentS3 });
 const attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${encodeURIComponent(groupId)}/attachments/${encodeURIComponent(attachmentId)}`;
 const handleNotificationRoutes = createNotificationRoutes({
   json,

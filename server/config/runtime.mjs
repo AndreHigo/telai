@@ -18,6 +18,19 @@ export function createRuntimeConfig({ rootDir, packageVersion = "0.0.0", env = p
   const desktopArtifactName = env.MIRANTE_DESKTOP_ARTIFACT_NAME || `Telai-Setup-${packageVersion}.exe`;
   const desktopArtifactPath = env.MIRANTE_DESKTOP_ARTIFACT_PATH || path.join(rootDir, "release", desktopArtifactName);
   const desktopReleaseDir = path.join(rootDir, "release");
+  const attachmentStorageMode = String(env.TELAI_ATTACHMENT_STORAGE || "local").trim().toLowerCase();
+  if (!["local", "s3"].includes(attachmentStorageMode)) throw new Error("attachment-storage-mode-invalid");
+  const attachmentStorageRoot = env.TELAI_ATTACHMENT_DIR || path.join(dataDir, "attachments");
+  const attachmentS3 = Object.freeze({
+    endpoint: String(env.TELAI_S3_ENDPOINT || "").trim(),
+    bucket: String(env.TELAI_S3_BUCKET || "").trim(),
+    region: String(env.TELAI_S3_REGION || "us-east-1").trim(),
+    accessKeyId: String(env.TELAI_S3_ACCESS_KEY_ID || "").trim(),
+    secretAccessKey: String(env.TELAI_S3_SECRET_ACCESS_KEY || ""),
+    prefix: String(env.TELAI_S3_PREFIX || "telai/").trim(),
+    forcePathStyle: String(env.TELAI_S3_FORCE_PATH_STYLE || "true").toLowerCase() !== "false",
+    timeoutMs: Math.max(1_000, Number(env.TELAI_S3_TIMEOUT_MS || 10_000)),
+  });
   const configuredLogLevel = String(env.MIRANTE_LOG_LEVEL || (env.MIRANTE_DEBUG === "1" ? "debug" : "info")).trim().toLowerCase();
   const logLevel = Object.hasOwn(DEFAULT_LOG_LEVELS, configuredLogLevel) ? configuredLogLevel : "info";
   const logPath = String(env.MIRANTE_LOG_PATH || "").trim();
@@ -35,6 +48,9 @@ export function createRuntimeConfig({ rootDir, packageVersion = "0.0.0", env = p
     desktopArtifactName,
     desktopArtifactPath,
     desktopReleaseDir,
+    attachmentStorageMode,
+    attachmentStorageRoot,
+    attachmentS3,
     logLevels: DEFAULT_LOG_LEVELS,
     logLevel,
     logPath,

@@ -1,5 +1,5 @@
-import fs from "node:fs/promises";
 import path from "node:path";
+export { createAttachmentStorage, createLocalAttachmentStorage, createS3AttachmentStorage } from "./attachment-storage.mjs";
 
 export const MAX_MESSAGE_ATTACHMENTS = 4;
 export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -25,11 +25,6 @@ function safeFileName(value) {
   return normalized || "arquivo";
 }
 
-function extensionForMimeType(mimeType) {
-  const extension = String(mimeType || "").split("/", 2)[1]?.replace(/[^a-z0-9]/gi, "").slice(0, 8);
-  return extension ? `.${extension}` : "";
-}
-
 export function normalizeMessageAttachments(value) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value) || value.length > MAX_MESSAGE_ATTACHMENTS) throw new Error("attachments-invalid");
@@ -49,30 +44,6 @@ export function normalizeMessageAttachments(value) {
     if (totalBytes > MAX_MESSAGE_ATTACHMENTS_BYTES) throw new Error("attachments-too-large");
     return { name, mimeType, byteSize: buffer.length, buffer };
   });
-}
-
-export function createLocalAttachmentStorage(rootDir) {
-  const absoluteRoot = path.resolve(rootDir);
-  const storagePath = (storageKey) => {
-    const normalized = String(storageKey || "");
-    if (!/^[a-zA-Z0-9_-]+\.[a-z0-9]+$/.test(normalized)) throw new Error("attachment-key-invalid");
-    return path.join(absoluteRoot, normalized);
-  };
-
-  return {
-    async write({ attachmentId, mimeType, buffer }) {
-      await fs.mkdir(absoluteRoot, { recursive: true });
-      const storageKey = `${attachmentId}${extensionForMimeType(mimeType) || ".bin"}`;
-      await fs.writeFile(storagePath(storageKey), buffer, { flag: "wx" });
-      return storageKey;
-    },
-    async read(storageKey) {
-      return fs.readFile(storagePath(storageKey));
-    },
-    async remove(storageKey) {
-      await fs.rm(storagePath(storageKey), { force: true });
-    },
-  };
 }
 
 export function attachmentContentDisposition(mimeType) {
