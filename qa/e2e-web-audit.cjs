@@ -287,7 +287,7 @@ async function main() {
     assert.equal(await evaluate(authenticatedWindow, () => localStorage.getItem("mirante-voice-sensitivity")), "68", "sensibilidade manual não persistiu");
     for (const [width, height] of [[1024, 768], [640, 800]]) layouts.push(await inspectLayout(authenticatedWindow, "Áudio e voz", width, height));
     const viewerStream = await request(baseUrl, "/api/streams", {
-      method: "POST", headers: { cookie },
+      method: "POST", headers: { cookie: directTargetCookie },
       body: JSON.stringify({ roomName: `qa-viewer-${Date.now()}`.slice(0, 40), title: "QA Viewer Offline" }),
     });
     await authenticatedWindow.loadURL(`${baseUrl}${viewerStream.body.stream.publicPath}`);
