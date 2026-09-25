@@ -102,6 +102,9 @@ async function main() {
     const missingVersionedRoute = await request("/api/v1/route-that-does-not-exist");
     assert.equal(missingVersionedRoute.response.status, 404);
     assert.equal(missingVersionedRoute.body.code, "not_found");
+    const missingLegacyRoute = await request("/api/route-that-does-not-exist");
+    assert.equal(missingLegacyRoute.response.status, 404);
+    assert.equal(missingLegacyRoute.body.code, "not_found");
   });
   await check("amizades, seguir canais e mensagem sem amizade", async () => {
     assert.equal((await api(member, "/api/social")).response.status, 200);

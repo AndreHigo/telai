@@ -22,3 +22,7 @@ Códigos padronizados: `bad_request`, `unauthorized`, `forbidden`, `not_found`,
 Metadados existentes, como `retryAfter` e códigos específicos de SMTP, são
 preservados. O namespace versionado inicial `/api/v1` reutiliza esse mesmo
 envelope e mantém os códigos iguais aos da rota legada correspondente.
+
+Rotas inexistentes nos namespaces `/api` e `/api/v1` retornam JSON com
+`code: "not_found"`; páginas e assets fora desses namespaces continuam usando
+as respostas estáticas apropriadas.

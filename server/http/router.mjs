@@ -76,7 +76,7 @@ export function createHttpRouter({
     if (await handleNotificationRoutes(request, response, routedUrl)) return true;
     if (await handleMemberInviteRoutes(request, response, routedUrl)) return true;
     if (await handleStreamRoutes(request, response, routedUrl)) return true;
-    if (isVersionedApiPath(requestUrl.pathname)) {
+    if (routedUrl.pathname === "/api" || routedUrl.pathname.startsWith("/api/")) {
       json(response, 404, { error: "Rota API não encontrada." });
       return true;
     }
