@@ -21,6 +21,7 @@ import { createAccountRepository } from "./server/repositories/accounts.mjs";
 import { createSocialRepository } from "./server/repositories/social.mjs";
 import { createGroupSetupRepository } from "./server/repositories/group-setup.mjs";
 import { createGroupMessageRepository } from "./server/repositories/group-messages.mjs";
+import { createGroupInviteRepository } from "./server/repositories/group-invites.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -779,6 +780,12 @@ const socialRepository = createSocialRepository(database, { compactAvatarData, c
 const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
 const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });
 const groupRepository = createGroupRepository(database, { createId: randomUUID, groupSetupRepository });
+const groupInviteRepository = createGroupInviteRepository(database, {
+  createId: randomUUID,
+  hashToken: hashSessionToken,
+  groupSetupRepository,
+  ensureGroupPermissionRow,
+});
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2956,13 +2963,7 @@ async function handleHttpRequest(request, response) {
       canMoveMembers: Boolean(role.canMoveMembers),
       isDefault: Boolean(role.isDefault),
     }));
-    const invites = database.prepare(`
-      SELECT group_invites.token_hash AS tokenHash, group_invites.created_at AS createdAt, group_invites.expires_at AS expiresAt,
-        group_invites.max_uses AS maxUses, group_invites.uses,
-        users.display_name AS createdBy
-      FROM group_invites JOIN users ON users.id = group_invites.created_by
-      WHERE group_invites.group_id = ? ORDER BY group_invites.created_at DESC LIMIT 20
-    `).all(groupId);
+    const invites = groupInviteRepository.listGroupInvites(groupId);
     const joinRequests = group.ownerId === user.id ? database.prepare(`
       SELECT group_join_requests.id, group_join_requests.status, group_join_requests.created_at AS createdAt,
         group_join_requests.updated_at AS updatedAt, users.id AS userId, users.display_name AS displayName,
@@ -3117,16 +3118,14 @@ async function handleHttpRequest(request, response) {
     if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
     if (!canGroupAction(user.id, groupId, "canInvite")) return json(response, 403, { error: "Você não tem permissão para convidar pessoas neste grupo." });
     readJson(request).then((body) => {
-      const group = database.prepare("SELECT id, name FROM groups WHERE id = ?").get(groupId);
+      const group = groupInviteRepository.findGroup(groupId);
       const invitedUserId = String(body.userId || "").trim();
-      const target = database.prepare("SELECT id, username, display_name AS displayName, email, avatar_data AS avatarData FROM users WHERE id = ?").get(invitedUserId);
+      const target = groupInviteRepository.findMemberInviteTarget(invitedUserId);
       if (!target || target.id === user.id) return json(response, 404, { error: "Usuário não encontrado." });
       if (isGroupMember(target.id, groupId)) return json(response, 409, { error: "Essa pessoa já está no grupo." });
       const now = new Date().toISOString();
-      const pending = database.prepare(`SELECT id FROM group_user_invites WHERE group_id = ? AND invited_user_id = ? AND status = 'pending' AND expires_at > ? LIMIT 1`).get(groupId, target.id, now);
-      if (pending) return json(response, 409, { error: "Já existe um convite pendente para essa pessoa." });
-      const invite = { id: randomUUID(), groupId, invitedUserId: target.id, invitedBy: user.id, expiresAt: new Date(Date.now() + 72 * 3600000).toISOString(), createdAt: now };
-      database.prepare("INSERT INTO group_user_invites (id, group_id, invited_user_id, invited_by, status, expires_at, created_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)").run(invite.id, invite.groupId, invite.invitedUserId, invite.invitedBy, invite.expiresAt, invite.createdAt);
+      if (groupInviteRepository.hasPendingMemberInvite(groupId, target.id, now)) return json(response, 409, { error: "Já existe um convite pendente para essa pessoa." });
+      const invite = groupInviteRepository.createMemberInvite({ groupId, invitedUserId: target.id, invitedBy: user.id, expiresAt: new Date(Date.now() + 72 * 3600000).toISOString(), createdAt: now });
       createNotification({ userId: target.id, type: "group_invite", entityId: invite.id, groupId, title: `Convite para ${group?.name || "um grupo"}`, body: `${user.displayName} convidou você para entrar neste grupo.`, createdAt: now });
       if (target.email) {
         void sendGroupInviteEmail({ to: target.email, displayName: target.displayName, groupName: group?.name, baseUrl: publicOriginForRequest(request) })
@@ -3329,8 +3328,7 @@ async function handleHttpRequest(request, response) {
       const rawToken = randomBytes(24).toString("base64url");
       const hours = Math.max(1, Math.min(Number(body.hours) || 72, 168));
       const maxUses = Math.max(1, Math.min(Number(body.maxUses) || 5, 50));
-      database.prepare("INSERT INTO group_invites (token_hash, group_id, created_by, expires_at, max_uses, uses, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)")
-        .run(hashSessionToken(rawToken), groupId, user.id, new Date(Date.now() + hours * 3600000).toISOString(), maxUses, new Date().toISOString());
+      groupInviteRepository.createGroupInvite({ token: rawToken, groupId, createdBy: user.id, expiresAt: new Date(Date.now() + hours * 3600000).toISOString(), maxUses });
       return json(response, 201, { token: rawToken, expiresInHours: hours, maxUses });
     }).catch(() => json(response, 400, { error: "Não foi possível criar o convite." }));
     return;
@@ -3343,26 +3341,15 @@ async function handleHttpRequest(request, response) {
     const group = database.prepare("SELECT owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o dono pode revogar convites." });
-    const deleted = database.prepare("DELETE FROM group_invites WHERE group_id = ? AND token_hash = ?").run(groupId, tokenHash);
-    if (!deleted.changes) return json(response, 404, { error: "Convite não encontrado." });
+    if (!groupInviteRepository.deleteGroupInvite(groupId, tokenHash)) return json(response, 404, { error: "Convite não encontrado." });
     return json(response, 200, { ok: true });
   }
   if (requestUrl.pathname === "/api/member-invites/pending" && request.method === "GET") {
     const user = requireUser(request, response);
     if (!user) return;
     const now = new Date().toISOString();
-    database.prepare("UPDATE group_user_invites SET status = 'expired' WHERE invited_user_id = ? AND status = 'pending' AND expires_at <= ?").run(user.id, now);
-    const invites = database.prepare(`
-      SELECT group_user_invites.id, group_user_invites.group_id AS groupId,
-        group_user_invites.expires_at AS expiresAt, group_user_invites.created_at AS createdAt,
-        groups.name AS groupName, groups.slug AS groupSlug,
-        users.display_name AS invitedBy, users.username AS invitedByUsername
-      FROM group_user_invites
-      JOIN groups ON groups.id = group_user_invites.group_id
-      JOIN users ON users.id = group_user_invites.invited_by
-      WHERE group_user_invites.invited_user_id = ? AND group_user_invites.status = 'pending'
-      ORDER BY group_user_invites.created_at DESC
-    `).all(user.id);
+    groupInviteRepository.expireMemberInvites(user.id, now);
+    const invites = groupInviteRepository.listPendingMemberInvites(user.id);
     return json(response, 200, { invites });
   }
   if (requestUrl.pathname === "/api/direct/conversations" && request.method === "GET") {
@@ -3433,7 +3420,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const now = new Date().toISOString();
-    database.prepare("UPDATE group_user_invites SET status = 'expired' WHERE invited_user_id = ? AND status = 'pending' AND expires_at <= ?").run(user.id, now);
+    groupInviteRepository.expireMemberInvites(user.id, now);
     syncNotificationsForUser(user.id);
     const notifications = notificationRepository.listNotifications(user.id, now).map((notification) => {
       const presentation = liveNotificationPresentation(notification, user.id);
@@ -3474,27 +3461,21 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const [, inviteId, action] = memberInviteActionMatch;
-    const invite = database.prepare("SELECT id, group_id AS groupId, expires_at AS expiresAt, status FROM group_user_invites WHERE id = ? AND invited_user_id = ?").get(inviteId, user.id);
+    const invite = groupInviteRepository.findMemberInvite(inviteId, user.id);
     if (!invite) return json(response, 404, { error: "Convite não encontrado." });
     if (invite.status !== "pending") return json(response, 400, { error: "Esse convite já foi respondido." });
     if (invite.expiresAt <= new Date().toISOString()) {
-      database.prepare("UPDATE group_user_invites SET status = 'expired' WHERE id = ?").run(inviteId);
+      groupInviteRepository.updateMemberInviteStatus(inviteId, "expired");
       return json(response, 400, { error: "Esse convite expirou." });
     }
     if (action === "decline") {
-      database.prepare("UPDATE group_user_invites SET status = 'declined' WHERE id = ?").run(inviteId);
+      groupInviteRepository.updateMemberInviteStatus(inviteId, "declined");
       return json(response, 200, { ok: true, status: "declined" });
     }
     try {
-      database.exec("BEGIN");
-      const roleId = groupSetupRepository.ensureDefaultGroupRoles(invite.groupId, database.prepare("SELECT owner_id FROM groups WHERE id = ?").get(invite.groupId)?.owner_id);
-      database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, role_id, created_at) VALUES (?, ?, 'member', ?, ?)").run(invite.groupId, user.id, roleId, new Date().toISOString());
-      ensureGroupPermissionRow(invite.groupId, user.id);
-      database.prepare("UPDATE group_user_invites SET status = 'accepted' WHERE id = ?").run(inviteId);
-      database.exec("COMMIT");
-      return json(response, 200, { ok: true, status: "accepted", groupId: invite.groupId });
+      const result = groupInviteRepository.acceptMemberInvite(inviteId, user.id);
+      return json(response, 200, { ok: true, status: result.kind, groupId: result.groupId });
     } catch (error) {
-      try { database.exec("ROLLBACK"); } catch {}
       return json(response, 400, { error: "Não foi possível aceitar o convite." });
     }
   }
@@ -3502,17 +3483,9 @@ async function handleHttpRequest(request, response) {
   if (redeemMatch && request.method === "POST") {
     const user = requireUser(request, response);
     if (!user) return;
-    const invite = database.prepare("SELECT group_id, expires_at, max_uses, uses FROM group_invites WHERE token_hash = ?").get(hashSessionToken(redeemMatch[1]));
-    if (!invite || invite.expires_at <= new Date().toISOString() || invite.uses >= invite.max_uses) return json(response, 400, { error: "Este convite expirou ou não está mais disponível." });
-    database.exec("BEGIN");
-    try {
-      const ownerId = database.prepare("SELECT owner_id AS ownerId FROM groups WHERE id = ?").get(invite.group_id)?.ownerId;
-      const roleId = groupSetupRepository.ensureDefaultGroupRoles(invite.group_id, ownerId);
-      const joined = database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, role_id, created_at) VALUES (?, ?, 'member', ?, ?)").run(invite.group_id, user.id, roleId, new Date().toISOString());
-      if (joined.changes) database.prepare("UPDATE group_invites SET uses = uses + 1 WHERE token_hash = ?").run(hashSessionToken(redeemMatch[1]));
-      database.exec("COMMIT");
-    } catch (error) { database.exec("ROLLBACK"); throw error; }
-    return json(response, 200, { ok: true, groupId: invite.group_id });
+    const result = groupInviteRepository.redeemGroupInvite(redeemMatch[1], user.id);
+    if (result.kind === "unavailable") return json(response, 400, { error: "Este convite expirou ou não está mais disponível." });
+    return json(response, 200, { ok: true, groupId: result.groupId });
   }
   if (requestUrl.pathname === "/api/streams/resolve" && request.method === "GET") {
     const parts = String(requestUrl.searchParams.get("path") || "").split("/").filter(Boolean).map(slugFor);

@@ -15,16 +15,19 @@ import { createPostgresAccountRepository } from "../server/repositories/accounts
 import { createPostgresSocialRepository } from "../server/repositories/social.mjs";
 import { createPostgresGroupSetupRepository } from "../server/repositories/group-setup.mjs";
 import { createPostgresGroupMessageRepository } from "../server/repositories/group-messages.mjs";
+import { createPostgresGroupInviteRepository } from "../server/repositories/group-invites.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
 
 const pool = createPostgresPool(config);
 const client = await pool.connect();
-const ids = { owner: randomUUID(), member: randomUUID(), group: randomUUID(), conversation: randomUUID() };
+const ids = { owner: randomUUID(), member: randomUUID(), invitee: randomUUID(), redeemer: randomUUID(), group: randomUUID(), conversation: randomUUID() };
 const now = new Date().toISOString();
 const ownerUsername = `pg-owner-${ids.owner.slice(0, 8)}`;
 const memberUsername = `pg-member-${ids.member.slice(0, 8)}`;
+const inviteeUsername = `pg-invitee-${ids.invitee.slice(0, 8)}`;
+const redeemerUsername = `pg-redeemer-${ids.redeemer.slice(0, 8)}`;
 const oauthEmail = `pg-oauth-${ids.owner.slice(0, 8)}@example.test`;
 const compactUserSummary = (user) => ({ id: user.id, username: user.username, displayName: user.displayName });
 const normalizePreferenceVolume = (value) => Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 1;
@@ -34,8 +37,10 @@ try {
   await client.query(`
     INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES
       ($1, $2, 'PG Owner', 'test', $5),
-      ($3, $4, 'PG Member', 'test', $5)
-  `, [ids.owner, ownerUsername, ids.member, memberUsername, now]);
+      ($3, $4, 'PG Member', 'test', $5),
+      ($6, $7, 'PG Invitee', 'test', $5),
+      ($8, $9, 'PG Redeemer', 'test', $5)
+  `, [ids.owner, ownerUsername, ids.member, memberUsername, now, ids.invitee, inviteeUsername, ids.redeemer, redeemerUsername]);
   await client.query("INSERT INTO groups (id, name, slug, owner_id, created_at) VALUES ($1, 'PG Group', $2, $3, $4)", [ids.group, `pg-${ids.group}`, ids.owner, now]);
   await client.query("INSERT INTO group_members (group_id, user_id, role, created_at) VALUES ($1, $2, 'owner', $3), ($1, $4, 'member', $3)", [ids.group, ids.owner, now, ids.member]);
   await client.query("INSERT INTO direct_conversations (id, created_at, updated_at) VALUES ($1, $2, $2)", [ids.conversation, now]);
@@ -114,6 +119,26 @@ try {
   assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canViewVoiceMembers: true });
   assert.equal(await groups.canGroupAction(ids.member, ids.group, "canChat"), true);
 
+  const groupInvites = createPostgresGroupInviteRepository(client, {
+    createId: randomUUID,
+    hashToken: (token) => `hash:${token}`,
+    groupSetupRepository: createPostgresGroupSetupRepository(client, { transactionClient: true }),
+    ensureGroupPermissionRow: (groupId, userId, queryDatabase = client) => groups.ensureGroupPermissionRow(groupId, userId, queryDatabase),
+    transactionClient: true,
+  });
+  const memberInvite = await groupInvites.createMemberInvite({ groupId: ids.group, invitedUserId: ids.invitee, invitedBy: ids.owner, expiresAt: new Date(Date.now() + 3600000).toISOString(), createdAt: now });
+  assert.equal((await groupInvites.findMemberInviteTarget(ids.invitee))?.username, inviteeUsername);
+  assert.equal(await groupInvites.hasPendingMemberInvite(ids.group, ids.invitee, now), true);
+  assert.equal((await groupInvites.listPendingMemberInvites(ids.invitee))[0].id, memberInvite.id);
+  assert.equal((await groupInvites.acceptMemberInvite(memberInvite.id, ids.invitee, now)).kind, "accepted");
+  assert.equal((await client.query("SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2", [ids.group, ids.invitee])).rowCount, 1);
+  const rawInvite = "group-token";
+  await groupInvites.createGroupInvite({ token: rawInvite, groupId: ids.group, createdBy: ids.owner, expiresAt: new Date(Date.now() + 3600000).toISOString(), maxUses: 2, createdAt: now });
+  assert.equal((await groupInvites.findGroupInvite(rawInvite)).groupId, ids.group);
+  assert.equal((await groupInvites.redeemGroupInvite(rawInvite, ids.redeemer, now)).kind, "redeemed");
+  assert.equal((await client.query("SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2", [ids.group, ids.redeemer])).rowCount, 1);
+  assert.equal(await groupInvites.deleteGroupInvite(ids.group, "hash:group-token"), true);
+
   const conversations = createPostgresDirectConversationRepository(client, { compactUserSummary, transactionClient: true });
   assert.equal((await conversations.directConversationForUser(ids.conversation, ids.owner))?.id, ids.conversation);
   assert.equal((await conversations.directConversationPayload(ids.conversation, ids.owner))?.otherUser.username, memberUsername);
@@ -154,7 +179,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

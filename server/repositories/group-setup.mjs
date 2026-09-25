@@ -111,16 +111,16 @@ async function withPostgresTransaction(database, callback, useProvidedClient = f
 }
 
 export function createPostgresGroupSetupRepository(database, { createId = randomUUID, transactionClient = false } = {}) {
-  async function ensureDefaultGroupRooms(groupId, ownerId) {
-    await database.query(`
+  async function ensureDefaultGroupRooms(groupId, ownerId, queryDatabase = database) {
+    await queryDatabase.query(`
       INSERT INTO group_rooms (id, group_id, name, slug, kind, created_by, created_at)
       VALUES ($1, $2, 'Geral', 'geral', 'text', $3, $4)
       ON CONFLICT (group_id, slug) DO NOTHING
     `, [createId(), groupId, ownerId, new Date().toISOString()]);
   }
 
-  async function migrateLegacyGroupMemberRoles(groupId, ownerId, defaultRoleId) {
-    const result = await database.query(`
+  async function migrateLegacyGroupMemberRoles(groupId, ownerId, defaultRoleId, queryDatabase = database) {
+    const result = await queryDatabase.query(`
       SELECT group_members.user_id AS "userId", group_member_permissions.can_chat AS "canChat",
         group_member_permissions.can_stream AS "canStream", group_member_permissions.can_invite AS "canInvite",
         group_member_permissions.can_view_voice_members AS "canViewVoiceMembers"
@@ -142,7 +142,7 @@ export function createPostgresGroupSetupRepository(database, { createId = random
         const signature = Object.values(permissions).map((value) => (value ? 1 : 0)).join("");
         roleId = roleCache.get(signature);
         if (!roleId) {
-          const existingResult = await database.query(`
+          const existingResult = await queryDatabase.query(`
             SELECT id FROM group_roles WHERE group_id = $1 AND can_chat = $2 AND can_stream = $3 AND can_invite = $4
               AND can_view_voice_members = $5 AND can_move_members = 0 LIMIT 1
           `, [groupId, permissions.canChat ? 1 : 0, permissions.canStream ? 1 : 0, permissions.canInvite ? 1 : 0, permissions.canViewVoiceMembers ? 1 : 0]);
@@ -151,9 +151,9 @@ export function createPostgresGroupSetupRepository(database, { createId = random
             const baseName = "Membro migrado";
             let name = baseName;
             let suffix = 2;
-            while ((await database.query("SELECT 1 FROM group_roles WHERE group_id = $1 AND name = $2 LIMIT 1", [groupId, name])).rowCount) name = `${baseName} ${suffix++}`;
+            while ((await queryDatabase.query("SELECT 1 FROM group_roles WHERE group_id = $1 AND name = $2 LIMIT 1", [groupId, name])).rowCount) name = `${baseName} ${suffix++}`;
             roleId = createId();
-            await database.query(`
+            await queryDatabase.query(`
               INSERT INTO group_roles (id, group_id, name, color, can_chat, can_stream, can_invite, can_view_voice_members, can_move_members, is_default, created_by, created_at)
               VALUES ($1, $2, $3, '#5865f2', $4, $5, $6, $7, 0, 0, $8, $9)
             `, [roleId, groupId, name, permissions.canChat ? 1 : 0, permissions.canStream ? 1 : 0, permissions.canInvite ? 1 : 0, permissions.canViewVoiceMembers ? 1 : 0, ownerId, new Date().toISOString()]);
@@ -161,18 +161,18 @@ export function createPostgresGroupSetupRepository(database, { createId = random
           roleCache.set(signature, roleId);
         }
       }
-      await database.query("UPDATE group_members SET role_id = $1 WHERE group_id = $2 AND user_id = $3 AND role_id IS NULL", [roleId, groupId, member.userId]);
+      await queryDatabase.query("UPDATE group_members SET role_id = $1 WHERE group_id = $2 AND user_id = $3 AND role_id IS NULL", [roleId, groupId, member.userId]);
     }
   }
 
-  async function ensureDefaultGroupRoles(groupId, ownerId) {
-    let roleResult = await database.query("SELECT id FROM group_roles WHERE group_id = $1 AND is_default = 1 LIMIT 1", [groupId]);
+  async function ensureDefaultGroupRoles(groupId, ownerId, queryDatabase = database) {
+    let roleResult = await queryDatabase.query("SELECT id FROM group_roles WHERE group_id = $1 AND is_default = 1 LIMIT 1", [groupId]);
     let roleId = roleResult.rows[0]?.id;
     if (!roleId) {
       roleId = createId();
-      await database.query("INSERT INTO group_roles (id, group_id, name, color, is_default, created_by, created_at) VALUES ($1, $2, 'Membro', '#5865f2', 1, $3, $4)", [roleId, groupId, ownerId, new Date().toISOString()]);
+      await queryDatabase.query("INSERT INTO group_roles (id, group_id, name, color, is_default, created_by, created_at) VALUES ($1, $2, 'Membro', '#5865f2', 1, $3, $4)", [roleId, groupId, ownerId, new Date().toISOString()]);
     }
-    await migrateLegacyGroupMemberRoles(groupId, ownerId, roleId);
+    await migrateLegacyGroupMemberRoles(groupId, ownerId, roleId, queryDatabase);
     return roleId;
   }
 

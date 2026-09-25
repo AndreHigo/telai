@@ -51,24 +51,24 @@ export function createGroupAccessRepository(database) {
 }
 
 export function createPostgresGroupAccessRepository(database) {
-  async function isGroupMember(userId, groupId) {
-    const result = await database.query(
+  async function isGroupMember(userId, groupId, queryDatabase = database) {
+    const result = await queryDatabase.query(
       "SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2",
       [groupId, userId],
     );
     return result.rowCount > 0;
   }
 
-  async function ensureGroupPermissionRow(groupId, userId) {
-    await database.query(`
+  async function ensureGroupPermissionRow(groupId, userId, queryDatabase = database) {
+    await queryDatabase.query(`
       INSERT INTO group_member_permissions (group_id, user_id, can_chat, can_stream, can_invite, can_view_voice_members, updated_at)
       VALUES ($1, $2, 1, 1, 1, 1, $3)
       ON CONFLICT (group_id, user_id) DO NOTHING
     `, [groupId, userId, new Date().toISOString()]);
   }
 
-  async function groupPermissions(groupId, userId) {
-    const memberResult = await database.query(
+  async function groupPermissions(groupId, userId, queryDatabase = database) {
+    const memberResult = await queryDatabase.query(
       'SELECT role, role_id AS "roleId" FROM group_members WHERE group_id = $1 AND user_id = $2',
       [groupId, userId],
     );
@@ -76,15 +76,15 @@ export function createPostgresGroupAccessRepository(database) {
     if (!member) return null;
     if (member.role === "owner") return { canChat: true, canStream: true, canInvite: true, canViewVoiceMembers: true, canMoveMembers: true };
 
-    await ensureGroupPermissionRow(groupId, userId);
-    const permissionsResult = await database.query(`
+    await ensureGroupPermissionRow(groupId, userId, queryDatabase);
+    const permissionsResult = await queryDatabase.query(`
       SELECT can_chat AS "canChat", can_stream AS "canStream", can_invite AS "canInvite",
         can_view_voice_members AS "canViewVoiceMembers"
       FROM group_member_permissions WHERE group_id = $1 AND user_id = $2
     `, [groupId, userId]);
     const permissions = permissionsResult.rows[0];
     const roleResult = member.roleId
-      ? await database.query(`
+      ? await queryDatabase.query(`
         SELECT can_chat AS "canChat", can_stream AS "canStream", can_invite AS "canInvite",
           can_view_voice_members AS "canViewVoiceMembers", can_move_members AS "canMoveMembers"
         FROM group_roles WHERE id = $1 AND group_id = $2

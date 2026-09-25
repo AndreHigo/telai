@@ -11,7 +11,7 @@ O objetivo é preservar a experiência e os diferenciais atuais do Telai enquant
 - Trabalhar somente na branch `codex/refactor-telai` deste checkout.
 - Preservar o comportamento existente antes de adicionar novos recursos.
 - Manter o núcleo como um monólito modular inicialmente.
-- Não introduzir Redis, RabbitMQ, Kubernetes ou PostgreSQL sem uma necessidade comprovada.
+- Não introduzir Redis, RabbitMQ ou Kubernetes sem uma necessidade comprovada; PostgreSQL já foi decidido como próximo banco principal.
 - Não gerar instalador para mudanças exclusivamente web/backend.
 - Validar cada fatia com build, testes aplicáveis e revisão do diff.
 - Manter arquivos locais, GitHub, build/testes e produção como estados separados.
@@ -90,6 +90,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair criação, leitura e envio transacional de conversas e mensagens diretas.
 - [x] Extrair leitura e envio de mensagens de grupo do overview/roteador.
 - [x] Extrair lista, busca e criação transacional de grupos.
+- [x] Extrair convites de membro e convites por token, incluindo aceitação, expiração, resgate e revogação.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
