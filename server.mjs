@@ -560,7 +560,7 @@ const {
   canGroupRoomAction,
 });
 
-function disconnectGroupUser(groupId, userId, reason) {
+async function disconnectGroupUser(groupId, userId, reason) {
   for (const voiceRoom of voiceRooms.values()) {
     if (voiceRoom.groupId !== groupId) continue;
     for (const participant of [...voiceRoom.participants.values()]) {
@@ -571,7 +571,7 @@ function disconnectGroupUser(groupId, userId, reason) {
   }
   groupPresence.delete(`${groupId}:${userId}`);
   eventGateway?.disconnectUserFromGroup(groupId, userId, reason);
-  eventGateway?.publishGroupPresence(groupId);
+  await eventGateway?.publishGroupPresence(groupId);
 }
 const groupPermissionRepository = createGroupPermissionRepository(database);
 const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });

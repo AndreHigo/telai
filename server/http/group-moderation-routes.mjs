@@ -57,9 +57,9 @@ export function createGroupModerationRoutes({
       }
       const durationMinutes = hasDuration ? Math.max(1, Math.min(Math.round(Number(body.durationMinutes)), 43_200)) : null;
       const result = await groupModerationRepository.apply({ groupId, actorUserId: user.id, userId: memberId, action, reason, durationMinutes, now: new Date().toISOString() });
-      if (action === "kick" || action === "ban") disconnectGroupUser(groupId, memberId, action === "ban" ? "ban" : "kick");
+      if (action === "kick" || action === "ban") await disconnectGroupUser(groupId, memberId, action === "ban" ? "ban" : "kick");
       await groupAuditRepository?.record({ groupId, actorUserId: user.id, action: `member_${action}`, targetType: "member", targetId: memberId, metadata: { reason, durationMinutes, expiresAt: result.expiresAt } });
-      publishGroupEvent(groupId, { type: "group-member-moderated", userId: memberId, action, reason, expiresAt: result.expiresAt });
+      await publishGroupEvent(groupId, { type: "group-member-moderated", userId: memberId, action, reason, expiresAt: result.expiresAt });
       json(response, 200, { ok: true, ...result });
     } catch {
       json(response, 400, { error: "Não foi possível concluir a moderação." });

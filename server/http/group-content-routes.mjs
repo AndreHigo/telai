@@ -103,7 +103,7 @@ export function createGroupContentRoutes({
           createdMessage = await groupMessageRepository.createMessage({ groupId, roomId: room?.id || null, parentMessageId: parentMessage?.id || null, userId: user.id, body: messageBody, displayName: user.displayName, username: user.username, createdAt });
           const rows = await groupAttachmentRepository.createAttachments({ groupId, messageId: createdMessage.id, attachments: stored, createdAt });
           createdMessage.attachments = rows.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor));
-          publishGroupEvent(groupId, { type: "group-message", message: createdMessage });
+          await publishGroupEvent(groupId, { type: "group-message", message: createdMessage });
           json(response, 201, { message: createdMessage });
         } catch (error) {
           if (createdMessage?.id) {
@@ -146,7 +146,7 @@ export function createGroupContentRoutes({
           return true;
         }
         await Promise.all(attachments.map((attachment) => attachmentStorage.remove(attachment.storageKey).catch(() => {})));
-        publishGroupEvent(groupId, { type: "group-message-deleted", messageId, parentMessageId: message.parentMessageId || null, roomId: message.roomId || null });
+        await publishGroupEvent(groupId, { type: "group-message-deleted", messageId, parentMessageId: message.parentMessageId || null, roomId: message.roomId || null });
         json(response, 200, { ok: true, messageId });
         return true;
       }
@@ -164,7 +164,7 @@ export function createGroupContentRoutes({
         }
         const attachments = await groupAttachmentRepository.listForMessage(groupId, updated.id);
         const publicUpdated = { ...updated, attachments: attachments.map((attachment) => publicAttachment(attachment, groupId, attachmentUrlFor)) };
-        publishGroupEvent(groupId, { type: "group-message-updated", message: publicUpdated });
+        await publishGroupEvent(groupId, { type: "group-message-updated", message: publicUpdated });
         json(response, 200, { message: publicUpdated });
       } catch {
         json(response, 400, { error: "Não foi possível editar a mensagem." });

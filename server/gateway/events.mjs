@@ -82,25 +82,26 @@ export function createEventGateway({
     }
   }
 
-  function membersFor(groupId) {
-    return groupMemberRepository.listMemberIds(groupId).map((id) => ({ id, online: isPresent(groupId, id) }));
+  async function membersFor(groupId) {
+    const memberIds = await groupMemberRepository.listMemberIds(groupId);
+    return memberIds.map((id) => ({ id, online: isPresent(groupId, id) }));
   }
 
-  function publishGroupEvent(groupId, message) {
+  async function publishGroupEvent(groupId, message) {
     const normalizedGroupId = String(groupId || "");
     if (!normalizedGroupId || !message || typeof message !== "object") return 0;
     let delivered = 0;
     for (const socket of clients) {
       if (!socket.eventGroups?.has(normalizedGroupId)) continue;
       const roomId = message.roomId || message.message?.roomId || null;
-      if (roomId && !canGroupRoomAction(socket.user?.id, normalizedGroupId, roomId, "canView")) continue;
+      if (roomId && !await canGroupRoomAction(socket.user?.id, normalizedGroupId, roomId, "canView")) continue;
       if (send(socket, { ...message, groupId: normalizedGroupId })) delivered += 1;
     }
     return delivered;
   }
 
-  function publishGroupPresence(groupId) {
-    return publishGroupEvent(groupId, { type: "group-presence", members: membersFor(groupId) });
+  async function publishGroupPresence(groupId) {
+    return publishGroupEvent(groupId, { type: "group-presence", members: await membersFor(groupId) });
   }
 
   function publishUserEvent(userId, message) {
@@ -125,16 +126,16 @@ export function createEventGateway({
     return disconnected;
   }
 
-  function subscribe(socket, groupId) {
+  async function subscribe(socket, groupId) {
     const normalizedGroupId = String(groupId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
-    if (normalizedGroupId.length < 12 || !socket.user || !isGroupMember(socket.user.id, normalizedGroupId)) {
+    if (normalizedGroupId.length < 12 || !socket.user || !await isGroupMember(socket.user.id, normalizedGroupId)) {
       send(socket, { type: "events-error", code: "forbidden", message: "Você não participa deste grupo." });
       return false;
     }
     socket.eventGroups.add(normalizedGroupId);
     touchGroupPresence(normalizedGroupId, socket.user.id);
-    send(socket, { type: "group-subscribed", groupId: normalizedGroupId, members: membersFor(normalizedGroupId) });
-    publishGroupPresence(normalizedGroupId);
+    send(socket, { type: "group-subscribed", groupId: normalizedGroupId, members: await membersFor(normalizedGroupId) });
+    await publishGroupPresence(normalizedGroupId);
     return true;
   }
 
@@ -161,22 +162,22 @@ export function createEventGateway({
     socket.on("message", (raw, isBinary) => {
       if (isBinary || !allowWebsocketControlMessage(socket)) return;
       if (Buffer.byteLength(raw) > websocketTextMessageMaxBytes) return socket.close(1009, "Mensagem muito grande");
-      try {
+      Promise.resolve().then(async () => {
         const message = JSON.parse(raw.toString());
         const groupId = String(message.groupId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
         if (message.type === "subscribe-group") return subscribe(socket, groupId);
         if (!["group-presence", "unsubscribe-group"].includes(message.type) || !socket.eventGroups.has(groupId)) return;
         if (message.type === "group-presence") {
           touchGroupPresence(groupId, socket.user.id);
-          publishGroupPresence(groupId);
+          await publishGroupPresence(groupId);
         } else {
           socket.eventGroups.delete(groupId);
           send(socket, { type: "group-unsubscribed", groupId });
         }
-      } catch (error) {
+      }).catch((error) => {
         warnLog("events_invalid_message", { clientId: socket.clientId, error: error.message });
         send(socket, { type: "events-error", code: "invalid_message", message: "Mensagem inválida." });
-      }
+      });
     });
     }).catch((error) => {
       errorLog("events_authentication_error", { clientId: socket.clientId, error: error.message });

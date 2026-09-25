@@ -17,7 +17,7 @@ export function createVoiceMessageHandler({
   reportVoiceSpeakingRateLimited,
   normalizeRtcSignalPayload,
 }) {
-  return function handleVoiceMessage(socket, message) {
+  return async function handleVoiceMessage(socket, message) {
     if (message.type === "voice-join") {
       const voiceRoomId = String(message.voiceRoomId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
       const groupId = String(message.groupId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
@@ -25,7 +25,7 @@ export function createVoiceMessageHandler({
         send(socket, { type: "error", message: "Sala de voz inválida." });
         return true;
       }
-      const authorization = authorizeVoiceRoomJoin(voiceRoomId, groupId, socket);
+      const authorization = await authorizeVoiceRoomJoin(voiceRoomId, groupId, socket);
       if (!authorization.ok) {
         send(socket, { type: "error", message: authorization.message });
         return true;
@@ -69,11 +69,14 @@ export function createVoiceMessageHandler({
       const targetRoomId = String(message.targetRoomId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
       const movingParticipant = sourceRoom?.participants.get(participantId);
       const groupId = sourceRoom?.groupId;
-      if (!sourceRoom || !movingParticipant || !groupId || !socket.user || !canGroupAction(socket.user.id, groupId, "canMoveMembers")) {
+      const canMoveMembers = socket.user && groupId
+        ? await canGroupAction(socket.user.id, groupId, "canMoveMembers")
+        : false;
+      if (!sourceRoom || !movingParticipant || !groupId || !socket.user || !canMoveMembers) {
         send(socket, { type: "voice-error", action: "move", message: "Você não tem permissão para mover pessoas entre salas." });
         return true;
       }
-      const targetRoomRecord = groupRoomRepository.findVoiceRoomById(targetRoomId);
+      const targetRoomRecord = await groupRoomRepository.findVoiceRoomById(targetRoomId);
       if (!targetRoomRecord || targetRoomRecord.groupId !== groupId) {
         send(socket, { type: "voice-error", action: "move", message: "A sala de destino não pertence a este grupo." });
         return true;
@@ -110,7 +113,10 @@ export function createVoiceMessageHandler({
       const participantId = String(message.participantId || "");
       const target = voiceRoom?.participants.get(participantId);
       const groupId = voiceRoom?.groupId;
-      if (!voiceRoom || !target || !groupId || !socket.user || !canGroupAction(socket.user.id, groupId, "canMoveMembers")) {
+      const canMuteMembers = socket.user && groupId
+        ? await canGroupAction(socket.user.id, groupId, "canMoveMembers")
+        : false;
+      if (!voiceRoom || !target || !groupId || !socket.user || !canMuteMembers) {
         send(socket, { type: "voice-error", action: "mute", message: "Você não tem permissão para silenciar pessoas nesta sala." });
         return true;
       }
@@ -165,7 +171,10 @@ export function createVoiceMessageHandler({
       const participantId = String(message.participantId || "");
       const target = voiceRoom?.participants.get(participantId);
       const groupId = voiceRoom?.groupId;
-      if (!voiceRoom || !target || !groupId || !socket.user || !canGroupAction(socket.user.id, groupId, "canMoveMembers")) {
+      const canDisconnectMembers = socket.user && groupId
+        ? await canGroupAction(socket.user.id, groupId, "canMoveMembers")
+        : false;
+      if (!voiceRoom || !target || !groupId || !socket.user || !canDisconnectMembers) {
         send(socket, { type: "voice-error", action: "disconnect", message: "Você não tem permissão para desconectar pessoas desta sala." });
         return true;
       }

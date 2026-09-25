@@ -24,7 +24,7 @@ export function createGatewayMessageDispatcher({
         });
       }
     }
-    if (handleVoiceMessage(socket, message)) return;
+    if (await handleVoiceMessage(socket, message)) return;
 
     if (await handleBroadcastMessage(socket, message)) return;
   };

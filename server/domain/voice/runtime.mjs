@@ -78,12 +78,12 @@ export function createVoiceRuntime({
     }
   }
 
-  function authorizeVoiceRoomJoin(voiceRoomId, groupId, socket) {
+  async function authorizeVoiceRoomJoin(voiceRoomId, groupId, socket) {
     if (!socket.user) return { ok: false, message: "Entre com sua conta para entrar numa sala de voz." };
-    const room = groupRoomRepository.findRoom(groupId, voiceRoomId);
+    const room = await groupRoomRepository.findRoom(groupId, voiceRoomId);
     const voiceRoom = room?.kind === "voice" ? { ...room, groupId } : null;
-    if (!voiceRoom || !isGroupMember(socket.user.id, groupId)) return { ok: false, message: "Você não tem acesso a esta sala de voz." };
-    if (!canGroupRoomAction(socket.user.id, groupId, voiceRoomId, "canConnect")) return { ok: false, message: "Você não tem permissão para entrar nesta sala de voz." };
+    if (!voiceRoom || !await isGroupMember(socket.user.id, groupId)) return { ok: false, message: "Você não tem acesso a esta sala de voz." };
+    if (!await canGroupRoomAction(socket.user.id, groupId, voiceRoomId, "canConnect")) return { ok: false, message: "Você não tem permissão para entrar nesta sala de voz." };
     return { ok: true, voiceRoom };
   }
 
