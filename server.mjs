@@ -9,6 +9,7 @@ import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { installWebsocketHeartbeat } from "./server/gateway/heartbeat.mjs";
 import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
 import { createGroupAccessRepository } from "./server/repositories/groups.mjs";
+import { createNotificationRepository } from "./server/repositories/notifications.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { createSessionRepository } from "./server/repositories/sessions.mjs";
 import { json, readJson } from "./server/http/body.mjs";
@@ -748,6 +749,7 @@ database.exec("CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_m
 const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
 const { directConversationForUser, directConversationPayload } = createDirectConversationRepository(database, { compactUserSummary });
 const sessionRepository = createSessionRepository(database, { hashSessionToken });
+const { createNotification } = createNotificationRepository(database);
 
 function pruneExpiredRuntimeState() {
   const now = Date.now();
@@ -1129,13 +1131,6 @@ function userPreferences(userId) {
     preferredInputDeviceId: preferences?.preferredInputDeviceId || null,
     preferredOutputDeviceId: preferences?.preferredOutputDeviceId || null,
   };
-}
-
-function createNotification({ userId, type, entityId, groupId = null, title, body, createdAt = new Date().toISOString() }) {
-  database.prepare(`
-    INSERT OR IGNORE INTO notifications (id, user_id, type, entity_id, group_id, title, body, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(randomUUID(), userId, type, entityId, groupId, title, body, createdAt);
 }
 
 function liveNotificationContext(stream, canRevealPrivate = true) {
