@@ -62,6 +62,19 @@ docker compose --env-file deploy/.env.postgres -f deploy/docker-compose.postgres
 
 O arquivo `.env.postgres` é local e não deve ser commitado.
 
+Depois que o container estiver saudável, é possível abrir uma instância local do
+Telai usando PostgreSQL sem alterar a instância SQLite padrão:
+
+```powershell
+$env:PORT = "8788"
+pnpm run start:postgres
+```
+
+Esse comando carrega `deploy/.env.postgres`, aplica as migrations com lock
+concorrente e inicia o mesmo `server.mjs`. O health check deve informar
+`databaseDriver: "postgres"` em `http://127.0.0.1:8788/healthz`. O comando é
+opt-in e não altera produção nem o banco SQLite local.
+
 Para validar a cobertura do schema sem Docker:
 
 ```powershell

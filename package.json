@@ -8,6 +8,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "start": "node server.mjs",
+    "start:postgres": "node qa/start-postgres.mjs",
     "desktop": "electron .",
     "dev:frontend": "vite --config vite.config.js",
     "build:frontend": "vite build --config vite.config.js",
