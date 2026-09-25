@@ -2,11 +2,11 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-export function createPostgresPool({ connectionString, max = 10, ssl = false, sslRejectUnauthorized = true } = {}) {
+export function createPostgresPool({ connectionString, max, poolMax = 10, ssl = false, sslRejectUnauthorized = true } = {}) {
   if (!connectionString) throw new Error("DATABASE_URL is required for PostgreSQL");
   return new Pool({
     connectionString,
-    max,
+    max: max ?? poolMax,
     ssl: ssl ? { rejectUnauthorized: sslRejectUnauthorized } : undefined,
     application_name: "telai",
     connectionTimeoutMillis: 10_000,
