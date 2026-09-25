@@ -16,6 +16,10 @@ O contrato está disponível em `GET /api/v1/openapi.json`. Ele descreve as
 rotas HTTP versionadas e o esquema comum de erros sem adicionar dependências
 ao runtime.
 
+O cliente HTTP interno do frontend já usa `/api/v1` automaticamente para as
+rotas `/api/*`; os componentes continuam usando seus caminhos lógicos atuais,
+sem alteração visual ou duplicação de URLs.
+
 O namespace ainda não representa uma promessa de compatibilidade eterna para
 cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
 incompatíveis devem ser introduzidas em outra versão e documentadas aqui.

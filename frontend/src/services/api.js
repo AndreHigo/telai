@@ -1,3 +1,11 @@
+const VERSIONED_API_PREFIX = "/api/v1";
+
+function versionedApiPath(path) {
+  const value = String(path || "");
+  if (!value.startsWith("/api/")) return value;
+  return `${VERSIONED_API_PREFIX}${value.slice("/api".length)}`;
+}
+
 export function createApiClient({ reportError, fetchImpl = globalThis.fetch, timeoutMs = 12_000 } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("fetch is required");
 
@@ -5,7 +13,7 @@ export function createApiClient({ reportError, fetchImpl = globalThis.fetch, tim
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetchImpl(path, {
+      const response = await fetchImpl(versionedApiPath(path), {
         ...options,
         signal: options.signal || controller.signal,
         headers: { "Content-Type": "application/json", ...(options.headers || {}) },

@@ -174,11 +174,12 @@ enviada ao GitHub nem publicada em produção.
 
 - [x] Definir `/api/v1` como namespace compatível inicial e envelope de erros consistente.
 - [x] Gerar documento OpenAPI versionado em `/api/v1/openapi.json`.
-- [ ] Criar cliente TypeScript interno.
+- [x] Migrar o cliente HTTP interno para o namespace `/api/v1`.
+- [ ] Criar tipos TypeScript para o cliente interno.
 - [ ] Criar Gateway de eventos separado da sinalização WebRTC.
 - [x] Adicionar heartbeat nativo ao WebSocket para detectar conexões mortas.
 - [x] Adicionar sequência monotônica por conexão e descarte de eventos de controle antigos no cliente.
-- [ ] Adicionar reconexão, sequência e descarte seguro de eventos antigos.
+- [ ] Adicionar reconexão automática e ressincronização segura após queda.
 - [ ] Trocar polling de chat/presença por eventos onde isso reduzir carga sem prejudicar simplicidade.
 
 ### Fase 3 — Núcleo funcional de comunidade
