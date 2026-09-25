@@ -1159,6 +1159,57 @@
   async function searchGroups(...args) { return (await getGroupMembershipController()).searchGroups(...args); }
   async function searchUsers(...args) { return (await getGroupMembershipController()).searchUsers(...args); }
 
+  let groupAdministrationControllerPromise = null;
+  function getGroupAdministrationController() {
+    if (!groupAdministrationControllerPromise) {
+      groupAdministrationControllerPromise = import("./features/groups/administration-controller.js").then(({ createGroupAdministrationController }) => createGroupAdministrationController({
+        api,
+        getState: () => ({
+          dragOverRoleId,
+          draggedRoleId,
+          groupAdminError,
+          groupAuditEntries,
+          groupInvites,
+          groupJoinRequests,
+          groupOverview,
+          groupRoles,
+          groupRoomPermissions,
+          roleOrderSaving,
+          roomPermissionBusyKey,
+          selectedGroup,
+          selectedGroupId,
+          selectedRoomPermissionId,
+        }),
+        setState: (next) => {
+          if ("dragOverRoleId" in next) dragOverRoleId = next.dragOverRoleId;
+          if ("draggedRoleId" in next) draggedRoleId = next.draggedRoleId;
+          if ("groupAdminError" in next) groupAdminError = next.groupAdminError;
+          if ("groupAuditEntries" in next) groupAuditEntries = next.groupAuditEntries;
+          if ("groupInvites" in next) groupInvites = next.groupInvites;
+          if ("groupJoinRequests" in next) groupJoinRequests = next.groupJoinRequests;
+          if ("groupOverview" in next) groupOverview = next.groupOverview;
+          if ("groupRoles" in next) groupRoles = next.groupRoles;
+          if ("groupRoomPermissions" in next) groupRoomPermissions = next.groupRoomPermissions;
+          if ("notice" in next) notice = next.notice;
+          if ("roleOrderSaving" in next) roleOrderSaving = next.roleOrderSaving;
+          if ("roomPermissionBusyKey" in next) roomPermissionBusyKey = next.roomPermissionBusyKey;
+          if ("selectedRoomPermissionId" in next) selectedRoomPermissionId = next.selectedRoomPermissionId;
+        },
+      }));
+    }
+    return groupAdministrationControllerPromise;
+  }
+  async function loadGroupAdministration(...args) { return (await getGroupAdministrationController()).loadGroupAdministration(...args); }
+  async function loadGroupRoomPermissions(...args) { return (await getGroupAdministrationController()).loadGroupRoomPermissions(...args); }
+  async function refreshGroupAfterModeration(...args) { return (await getGroupAdministrationController()).refreshGroupAfterModeration(...args); }
+  async function updateGroupRoomPermission(...args) { return (await getGroupAdministrationController()).updateGroupRoomPermission(...args); }
+  async function resetGroupRoomPermission(...args) { return (await getGroupAdministrationController()).resetGroupRoomPermission(...args); }
+  function startRoleDrag(...args) { void getGroupAdministrationController().then((controller) => controller.startRoleDrag(...args)); }
+  function handleRoleDragOver(...args) { void getGroupAdministrationController().then((controller) => controller.handleRoleDragOver(...args)); }
+  async function dropRole(...args) { return (await getGroupAdministrationController()).dropRole(...args); }
+  function endRoleDrag(...args) { void getGroupAdministrationController().then((controller) => controller.endRoleDrag(...args)); }
+  async function moveRole(...args) { return (await getGroupAdministrationController()).moveRole(...args); }
+
   let groupMessageControllerPromise = null;
   function getGroupMessageController() {
     if (!groupMessageControllerPromise) {
@@ -2267,151 +2318,6 @@
             ? "O navegador não entregou o microfone escolhido. A seleção foi preservada; atualize os dispositivos e tente novamente."
           : "Não foi possível trocar o microfone.";
     }
-  }
-
-  async function loadGroupAdministration() {
-    if (!selectedGroupId) return;
-    groupAdminError = "";
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/admin`);
-      groupRoles = result.roles || [];
-      groupInvites = result.invites || [];
-      groupJoinRequests = result.joinRequests || [];
-      groupAuditEntries = result.auditLog?.entries || [];
-      const firstRoom = (groupOverview?.rooms || []).find((room) => room.kind === "text" || room.kind === "voice");
-      selectedRoomPermissionId = firstRoom?.id || "";
-      if (selectedRoomPermissionId && selectedGroup?.role === "owner") await loadGroupRoomPermissions(selectedRoomPermissionId);
-    } catch (error) { groupAdminError = error.message; }
-  }
-
-  async function refreshGroupAfterModeration({ action, memberId }) {
-    if (["kick", "ban"].includes(action) && groupOverview) groupOverview = { ...groupOverview, members: groupOverview.members.filter((member) => member.id !== memberId) };
-    await loadGroupAdministration();
-  }
-
-  async function loadGroupRoomPermissions(roomId) {
-    selectedRoomPermissionId = roomId;
-    groupRoomPermissions = [];
-    if (!selectedGroupId || !roomId || selectedGroup?.role !== "owner") return;
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms/${encodeURIComponent(roomId)}/permissions`);
-      groupRoomPermissions = result.permissions || [];
-    } catch (error) {
-      groupAdminError = error.message;
-    }
-  }
-
-  async function updateGroupRoomPermission(role, key, event) {
-    if (!selectedGroupId || !selectedRoomPermissionId || selectedGroup?.role !== "owner") return;
-    roomPermissionBusyKey = `${role.id}:${key}`;
-    groupAdminError = "";
-    const current = groupRoomPermissions.find((permission) => permission.roleId === role.id);
-    const next = {
-      roleId: role.id,
-      canView: current?.canView ?? true,
-      canChat: current?.canChat ?? true,
-      canConnect: current?.canConnect ?? true,
-    };
-    next[key] = event.currentTarget.checked;
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms/${encodeURIComponent(selectedRoomPermissionId)}/permissions`, { method: "PATCH", body: JSON.stringify(next) });
-      groupRoomPermissions = [...groupRoomPermissions.filter((permission) => permission.roleId !== role.id), result.permission];
-      notice = `Permissões de ${role.name} atualizadas neste canal.`;
-    } catch (error) {
-      groupAdminError = error.message;
-    } finally {
-      roomPermissionBusyKey = "";
-    }
-  }
-
-  async function resetGroupRoomPermission(role) {
-    if (!selectedGroupId || !selectedRoomPermissionId || selectedGroup?.role !== "owner") return;
-    roomPermissionBusyKey = `${role.id}:reset`;
-    try {
-      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms/${encodeURIComponent(selectedRoomPermissionId)}/permissions?roleId=${encodeURIComponent(role.id)}`, { method: "DELETE" });
-      groupRoomPermissions = groupRoomPermissions.filter((permission) => permission.roleId !== role.id);
-      notice = `O cargo ${role.name} voltou a herdar o canal.`;
-    } catch (error) {
-      groupAdminError = error.message;
-    } finally {
-      roomPermissionBusyKey = "";
-    }
-  }
-
-  function roleListAfterMove(roleId, targetIndex) {
-    const currentIndex = groupRoles.findIndex((role) => role.id === roleId);
-    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= groupRoles.length || currentIndex === targetIndex) return groupRoles;
-    const nextRoles = [...groupRoles];
-    const [movedRole] = nextRoles.splice(currentIndex, 1);
-    nextRoles.splice(targetIndex, 0, movedRole);
-    return nextRoles;
-  }
-
-  async function saveGroupRoleOrder(nextRoles, previousRoles = groupRoles) {
-    if (!selectedGroupId || selectedGroup?.role !== "owner" || roleOrderSaving || nextRoles === previousRoles) return;
-    roleOrderSaving = true;
-    groupAdminError = "";
-    groupRoles = nextRoles;
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/roles/order`, {
-        method: "PATCH",
-        body: JSON.stringify({ roleIds: nextRoles.map((role) => role.id) }),
-      });
-      const orderedRoles = result.roles || nextRoles;
-      const sortOrders = new Map(orderedRoles.map((role, index) => [role.id, role.sortOrder ?? index]));
-      groupRoles = orderedRoles;
-      groupOverview = groupOverview ? {
-        ...groupOverview,
-        members: groupOverview.members.map((member) => ({
-          ...member,
-          roleSortOrder: member.roleId ? sortOrders.get(member.roleId) ?? member.roleSortOrder : member.roleSortOrder,
-        })),
-      } : groupOverview;
-      notice = "Ordem dos cargos atualizada.";
-    } catch (error) {
-      groupRoles = previousRoles;
-      groupAdminError = error.message;
-    } finally {
-      roleOrderSaving = false;
-    }
-  }
-
-  function startRoleDrag(event, roleId) {
-    if (selectedGroup?.role !== "owner" || roleOrderSaving) return;
-    draggedRoleId = roleId;
-    dragOverRoleId = roleId;
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", roleId);
-  }
-
-  function handleRoleDragOver(event, roleId) {
-    if (!draggedRoleId || draggedRoleId === roleId || roleOrderSaving) return;
-    event.dataTransfer.dropEffect = "move";
-    dragOverRoleId = roleId;
-  }
-
-  async function dropRole(roleId) {
-    const sourceRoleId = draggedRoleId;
-    draggedRoleId = "";
-    dragOverRoleId = "";
-    if (!sourceRoleId || sourceRoleId === roleId || roleOrderSaving) return;
-    const targetIndex = groupRoles.findIndex((role) => role.id === roleId);
-    const previousRoles = groupRoles;
-    await saveGroupRoleOrder(roleListAfterMove(sourceRoleId, targetIndex), previousRoles);
-  }
-
-  function endRoleDrag() {
-    draggedRoleId = "";
-    dragOverRoleId = "";
-  }
-
-  async function moveRole(roleId, direction) {
-    if (selectedGroup?.role !== "owner" || roleOrderSaving) return;
-    const currentIndex = groupRoles.findIndex((role) => role.id === roleId);
-    const targetIndex = currentIndex + direction;
-    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= groupRoles.length) return;
-    const previousRoles = groupRoles;
-    await saveGroupRoleOrder(roleListAfterMove(roleId, targetIndex), previousRoles);
   }
 
   function handleAvatarChange(event) {
