@@ -1,109 +1,13 @@
 import { randomUUID } from "node:crypto";
-
-function publicApplication(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    bot: {
-      id: row.botUserId,
-      username: row.botUsername,
-      displayName: row.botDisplayName,
-    },
-  };
-}
-
-function publicToken(row) {
-  return {
-    id: row.id,
-    applicationId: row.applicationId,
-    label: row.label,
-    createdAt: row.createdAt,
-    lastUsedAt: row.lastUsedAt || null,
-    revokedAt: row.revokedAt || null,
-  };
-}
-
-function publicInstallation(row) {
-  if (!row) return null;
-  return {
-    applicationId: row.applicationId,
-    groupId: row.groupId,
-    createdAt: row.createdAt,
-    permissions: {
-      commands: Boolean(row.allowCommands ?? row.allow_commands ?? 1),
-      messages: Boolean(row.allowMessages ?? row.allow_messages ?? 1),
-      interactions: Boolean(row.allowInteractions ?? row.allow_interactions ?? 1),
-    },
-  };
-}
-
-function installationPermissionValues(permissions = {}) {
-  return {
-    allowCommands: permissions.commands !== false ? 1 : 0,
-    allowMessages: permissions.messages !== false ? 1 : 0,
-    allowInteractions: permissions.interactions !== false ? 1 : 0,
-  };
-}
-
-function parseCommandOptions(value) {
-  try {
-    const parsed = JSON.parse(String(value || "[]"));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function publicCommand(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    applicationId: row.applicationId,
-    name: row.name,
-    description: row.description,
-    options: parseCommandOptions(row.optionsJson),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
-
-function publicInstalledCommand(row) {
-  return {
-    id: row.commandId,
-    applicationId: row.applicationId,
-    name: row.commandName,
-    description: row.commandDescription,
-    options: parseCommandOptions(row.commandOptionsJson),
-    createdAt: row.commandCreatedAt || null,
-    updatedAt: row.commandUpdatedAt || null,
-  };
-}
-
-function groupInstalledCommands(rows) {
-  const applications = new Map();
-  for (const row of rows) {
-    let application = applications.get(row.applicationId);
-    if (!application) {
-      application = {
-        applicationId: row.applicationId,
-        applicationName: row.applicationName,
-        bot: {
-          id: row.botUserId,
-          username: row.botUsername,
-          displayName: row.botDisplayName,
-        },
-        commands: [],
-      };
-      applications.set(row.applicationId, application);
-    }
-    if (row.commandId) application.commands.push(publicInstalledCommand(row));
-  }
-  return [...applications.values()];
-}
+import {
+  groupInstalledCommands,
+  installationPermissionValues,
+  parseCommandOptions,
+  publicApplication,
+  publicCommand,
+  publicInstallation,
+  publicToken,
+} from "../domain/applications/presentation.mjs";
 
 export function createApplicationRepository(database, { createId = randomUUID } = {}) {
   function findOwned(ownerId, applicationId) {
