@@ -12,9 +12,9 @@ export function createNotificationRoutes({
       const user = requireUser(request, response);
       if (!user) return true;
       const now = new Date().toISOString();
-      groupInviteRepository.expireMemberInvites(user.id, now);
-      syncNotificationsForUser(user.id);
-      const notifications = notificationRepository.listNotifications(user.id, now).map((notification) => {
+      await groupInviteRepository.expireMemberInvites(user.id, now);
+      await syncNotificationsForUser(user.id);
+      const notifications = (await notificationRepository.listNotifications(user.id, now)).map((notification) => {
         const presentation = liveNotificationPresentation(notification, user.id);
         const streamPath = notification.streamId && presentation.liveContext
           ? streamPublicPath({ visibility: notification.streamVisibility, channelName: notification.streamChannelName, channelUsername: notification.streamChannelUsername, groupSlug: notification.streamGroupSlug })
@@ -38,7 +38,7 @@ export function createNotificationRoutes({
     if (requestUrl.pathname === "/api/notifications/read-all" && request.method === "POST") {
       const user = requireUser(request, response);
       if (!user) return true;
-      notificationRepository.markAllRead(user.id, new Date().toISOString());
+      await notificationRepository.markAllRead(user.id, new Date().toISOString());
       json(response, 200, { ok: true });
       return true;
     }
@@ -48,11 +48,11 @@ export function createNotificationRoutes({
       const user = requireUser(request, response);
       if (!user) return true;
       const notificationId = notificationMatch[1];
-      if (!notificationRepository.hasNotification(user.id, notificationId)) {
+      if (!await notificationRepository.hasNotification(user.id, notificationId)) {
         json(response, 404, { error: "Notificação não encontrada." });
         return true;
       }
-      notificationRepository.markRead(notificationId, new Date().toISOString());
+      await notificationRepository.markRead(notificationId, new Date().toISOString());
       json(response, 200, { ok: true });
       return true;
     }

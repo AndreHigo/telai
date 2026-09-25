@@ -4,8 +4,8 @@ export function createMemberInviteRoutes({ json, requireUser, groupInviteReposit
       const user = requireUser(request, response);
       if (!user) return true;
       const now = new Date().toISOString();
-      groupInviteRepository.expireMemberInvites(user.id, now);
-      const invites = groupInviteRepository.listPendingMemberInvites(user.id);
+      await groupInviteRepository.expireMemberInvites(user.id, now);
+      const invites = await groupInviteRepository.listPendingMemberInvites(user.id);
       json(response, 200, { invites });
       return true;
     }
@@ -15,7 +15,7 @@ export function createMemberInviteRoutes({ json, requireUser, groupInviteReposit
       const user = requireUser(request, response);
       if (!user) return true;
       const [, inviteId, action] = memberInviteActionMatch;
-      const invite = groupInviteRepository.findMemberInvite(inviteId, user.id);
+      const invite = await groupInviteRepository.findMemberInvite(inviteId, user.id);
       if (!invite) {
         json(response, 404, { error: "Convite não encontrado." });
         return true;
@@ -25,17 +25,17 @@ export function createMemberInviteRoutes({ json, requireUser, groupInviteReposit
         return true;
       }
       if (invite.expiresAt <= new Date().toISOString()) {
-        groupInviteRepository.updateMemberInviteStatus(inviteId, "expired");
+        await groupInviteRepository.updateMemberInviteStatus(inviteId, "expired");
         json(response, 400, { error: "Esse convite expirou." });
         return true;
       }
       if (action === "decline") {
-        groupInviteRepository.updateMemberInviteStatus(inviteId, "declined");
+        await groupInviteRepository.updateMemberInviteStatus(inviteId, "declined");
         json(response, 200, { ok: true, status: "declined" });
         return true;
       }
       try {
-        const result = groupInviteRepository.acceptMemberInvite(inviteId, user.id);
+        const result = await groupInviteRepository.acceptMemberInvite(inviteId, user.id);
         if (result.kind === "banned") {
           json(response, 403, { error: "Você está banido deste grupo." });
           return true;
@@ -51,7 +51,7 @@ export function createMemberInviteRoutes({ json, requireUser, groupInviteReposit
     if (redeemMatch && request.method === "POST") {
       const user = requireUser(request, response);
       if (!user) return true;
-      const result = groupInviteRepository.redeemGroupInvite(redeemMatch[1], user.id);
+      const result = await groupInviteRepository.redeemGroupInvite(redeemMatch[1], user.id);
       if (result.kind === "banned") {
         json(response, 403, { error: "Você está banido deste grupo." });
         return true;

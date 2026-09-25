@@ -21,7 +21,8 @@ export function createUserSettingsRoutes({
     if (requestUrl.pathname === "/api/auth/profile" && request.method === "PATCH") {
       const user = requireUser(request, response);
       if (!user) return true;
-      readJson(request, 8 * 1024 * 1024).then((body) => {
+      try {
+        const body = await readJson(request, 8 * 1024 * 1024);
         const displayName = String(body.displayName || "").trim().slice(0, 48);
         if (displayName.length < 2) return json(response, 400, { error: "Informe um nome de exibição válido." });
         const avatarWasProvided = Object.prototype.hasOwnProperty.call(body, "avatarData");
@@ -29,24 +30,27 @@ export function createUserSettingsRoutes({
         if (avatarData && !validAvatar(avatarData)) {
           return json(response, 400, { error: "A foto deve ser PNG, JPG, WEBP ou GIF com até 5 MB." });
         }
-        userProfileRepository.updateProfile(user.id, { displayName, avatarData });
-        return json(response, 200, { user: userWithLinkedAccounts(currentUser(request)) });
-      }).catch((error) => json(response, 400, { error: error.message === "body-too-large" ? "A foto é muito grande. Use um arquivo de até 5 MB." : "Não foi possível atualizar o perfil." }));
+        await userProfileRepository.updateProfile(user.id, { displayName, avatarData });
+        return json(response, 200, { user: await userWithLinkedAccounts(await currentUser(request)) });
+      } catch (error) {
+        json(response, 400, { error: error.message === "body-too-large" ? "A foto é muito grande. Use um arquivo de até 5 MB." : "Não foi possível atualizar o perfil." });
+      }
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/channel" && request.method === "GET") {
       const user = requireUser(request, response);
       if (!user) return true;
-      json(response, 200, { channel: channelProfileForUser(user.id) });
+      json(response, 200, { channel: await channelProfileForUser(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/channel" && request.method === "PATCH") {
       const user = requireUser(request, response);
       if (!user) return true;
-      readJson(request, 8 * 1024 * 1024).then((body) => {
-        const current = channelProfileForUser(user.id);
+      try {
+        const body = await readJson(request, 8 * 1024 * 1024);
+        const current = await channelProfileForUser(user.id);
         const displayName = String(body.displayName || "").trim().slice(0, 48);
         if (displayName.length < 2) return json(response, 400, { error: "Informe um nome válido para o canal." });
         const avatarWasProvided = Object.prototype.hasOwnProperty.call(body, "avatarData");
@@ -55,23 +59,26 @@ export function createUserSettingsRoutes({
           return json(response, 400, { error: "A foto do canal deve ser PNG, JPG, WEBP ou GIF com até 5 MB." });
         }
         const games = Array.isArray(body.games) ? parseChannelGames(body.games) : (current?.games || []);
-        return json(response, 200, { channel: channelProfileRepository.saveChannelProfile(user.id, { displayName, avatarData, games, updatedAt: new Date().toISOString() }) });
-      }).catch((error) => json(response, 400, { error: error.message === "body-too-large" ? "A foto é muito grande. Use um arquivo de até 5 MB." : "Não foi possível atualizar o canal." }));
+        return json(response, 200, { channel: await channelProfileRepository.saveChannelProfile(user.id, { displayName, avatarData, games, updatedAt: new Date().toISOString() }) });
+      } catch (error) {
+        json(response, 400, { error: error.message === "body-too-large" ? "A foto é muito grande. Use um arquivo de até 5 MB." : "Não foi possível atualizar o canal." });
+      }
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/preferences" && request.method === "GET") {
       const user = requireUser(request, response);
       if (!user) return true;
-      json(response, 200, { preferences: userPreferenceRepository.getPreferences(user.id) });
+      json(response, 200, { preferences: await userPreferenceRepository.getPreferences(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/preferences" && request.method === "PATCH") {
       const user = requireUser(request, response);
       if (!user) return true;
-      readJson(request).then((body) => {
-        const existing = userPreferenceRepository.getStoredPreferences(user.id);
+      try {
+        const body = await readJson(request);
+        const existing = await userPreferenceRepository.getStoredPreferences(user.id);
         const theme = Object.prototype.hasOwnProperty.call(body, "theme")
           ? (["dark", "light"].includes(body.theme) ? body.theme : "dark")
           : (existing?.theme || "dark");
@@ -105,27 +112,30 @@ export function createUserSettingsRoutes({
         const preferredOutputDeviceId = Object.prototype.hasOwnProperty.call(body, "preferredOutputDeviceId")
           ? normalizePreferenceDeviceId(body.preferredOutputDeviceId)
           : normalizePreferenceDeviceId(existing?.preferredOutputDeviceId);
-        userPreferenceRepository.savePreferences(user.id, { theme, defaultQuality, defaultAudio, buttonColor, inputBackgroundColor, backgroundColor, pushToTalkKey, muteShortcut, liveNotificationScope, voiceMicrophoneVolume, voiceOutputVolume, preferredInputDeviceId, preferredOutputDeviceId }, new Date().toISOString());
-        return json(response, 200, { preferences: userPreferenceRepository.getPreferences(user.id) });
-      }).catch(() => json(response, 400, { error: "Não foi possível salvar suas preferências." }));
+        await userPreferenceRepository.savePreferences(user.id, { theme, defaultQuality, defaultAudio, buttonColor, inputBackgroundColor, backgroundColor, pushToTalkKey, muteShortcut, liveNotificationScope, voiceMicrophoneVolume, voiceOutputVolume, preferredInputDeviceId, preferredOutputDeviceId }, new Date().toISOString());
+        return json(response, 200, { preferences: await userPreferenceRepository.getPreferences(user.id) });
+      } catch {
+        json(response, 400, { error: "Não foi possível salvar suas preferências." });
+      }
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "GET") {
       const user = requireUser(request, response);
       if (!user) return true;
-      json(response, 200, { preferences: userPreferenceRepository.listVoicePreferences(user.id) });
+      json(response, 200, { preferences: await userPreferenceRepository.listVoicePreferences(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "PATCH") {
       const user = requireUser(request, response);
       if (!user) return true;
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const targetUserId = String(body.targetUserId || "").trim().slice(0, 128);
         if (!targetUserId || targetUserId === user.id) return json(response, 400, { error: "Informe um usuário de voz válido." });
-        if (!userProfileRepository.existsById(targetUserId)) return json(response, 404, { error: "Usuário de voz não encontrado." });
-        const current = userPreferenceRepository.getVoicePreference(user.id, targetUserId);
+        if (!await userProfileRepository.existsById(targetUserId)) return json(response, 404, { error: "Usuário de voz não encontrado." });
+        const current = await userPreferenceRepository.getVoicePreference(user.id, targetUserId);
         const volume = Object.prototype.hasOwnProperty.call(body, "volume")
           ? normalizePreferenceVolume(body.volume)
           : normalizePreferenceVolume(current?.volume);
@@ -133,16 +143,18 @@ export function createUserSettingsRoutes({
           ? Boolean(body.locallyMuted)
           : Boolean(current?.locallyMuted);
         const updatedAt = new Date().toISOString();
-        userPreferenceRepository.saveVoicePreference(user.id, targetUserId, volume, locallyMuted, updatedAt);
+        await userPreferenceRepository.saveVoicePreference(user.id, targetUserId, volume, locallyMuted, updatedAt);
         return json(response, 200, { preference: { targetUserId, volume, locallyMuted, updatedAt } });
-      }).catch(() => json(response, 400, { error: "Não foi possível salvar a preferência de áudio do usuário." }));
+      } catch {
+        json(response, 400, { error: "Não foi possível salvar a preferência de áudio do usuário." });
+      }
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "DELETE") {
       const user = requireUser(request, response);
       if (!user) return true;
-      userPreferenceRepository.deleteVoicePreferences(user.id);
+      await userPreferenceRepository.deleteVoicePreferences(user.id);
       json(response, 200, { preferences: [] });
       return true;
     }
