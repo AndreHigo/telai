@@ -20,5 +20,5 @@ Códigos padronizados: `bad_request`, `unauthorized`, `forbidden`, `not_found`,
 `service_unavailable` e `http_error` para status não mapeado.
 
 Metadados existentes, como `retryAfter` e códigos específicos de SMTP, são
-preservados. O envelope versionado `/api/v1` continua sendo uma etapa futura;
-esta camada apenas torna o contrato atual consistente e retrocompatível.
+preservados. O namespace versionado inicial `/api/v1` reutiliza esse mesmo
+envelope e mantém os códigos iguais aos da rota legada correspondente.

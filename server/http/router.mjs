@@ -1,3 +1,6 @@
+import { isVersionedApiPath, normalizeApiRequestUrl } from "./api-versioning.mjs";
+import { json } from "./body.mjs";
+
 export function createHttpRouter({
   fs,
   path,
@@ -24,9 +27,20 @@ export function createHttpRouter({
   handleStaticRoutes,
 }) {
   return async function handleHttpRoutes(request, response, requestUrl) {
-    if (await handleAdminRoutes(request, response, requestUrl)) return true;
+    const routedUrl = normalizeApiRequestUrl(requestUrl);
+    const versionedApiRoot = isVersionedApiPath(requestUrl.pathname) && routedUrl.pathname === "/api";
+    if (versionedApiRoot) {
+      if (!["GET", "HEAD"].includes(request.method)) {
+        json(response, 405, { error: "Método não permitido." });
+      } else {
+        json(response, 200, { version: "v1", status: "available" });
+      }
+      return true;
+    }
 
-    if ((requestUrl.pathname === "/admin" || requestUrl.pathname === "/admin/") && ["GET", "HEAD"].includes(request.method)) {
+    if (await handleAdminRoutes(request, response, routedUrl)) return true;
+
+    if ((routedUrl.pathname === "/admin" || routedUrl.pathname === "/admin/") && ["GET", "HEAD"].includes(request.method)) {
       if (!requireSiteAdmin(request, response)) return true;
       const adminPath = path.join(publicDir, "admin", "index.html");
       fs.readFile(adminPath, (error, content) => {
@@ -46,24 +60,29 @@ export function createHttpRouter({
       return true;
     }
 
-    if (await handleObservabilityRoutes(request, response, requestUrl)) return true;
-    if (await handleOAuthRoutes(request, response, requestUrl)) return true;
-    if (await handleAuthRoutes(request, response, requestUrl)) return true;
-    if (await handleUserSettingsRoutes(request, response, requestUrl)) return true;
-    if (await handleSocialRoutes(request, response, requestUrl)) return true;
-    if (await handleGroupDiscoveryRoutes(request, response, requestUrl)) return true;
-    if (await handleGroupRuntimeRoutes(request, response, requestUrl)) return true;
-    if (await handleGroupManagementRoutes(request, response, requestUrl)) return true;
-    if (await handleGroupRoleRoutes(request, response, requestUrl)) return true;
-    if (await handleGroupRoomRoutes(request, response, requestUrl)) return true;
-    if (await handleGroupContentRoutes(request, response, requestUrl)) return true;
-    if (await handleGroupInviteRoutes(request, response, requestUrl)) return true;
-    if (await handleDirectRoutes(request, response, requestUrl)) return true;
-    if (await handleNotificationRoutes(request, response, requestUrl)) return true;
-    if (await handleMemberInviteRoutes(request, response, requestUrl)) return true;
-    if (await handleStreamRoutes(request, response, requestUrl)) return true;
-    if (await handleMediaRoutes(request, response, requestUrl)) return true;
-    if (await handleStaticRoutes(request, response, requestUrl)) return true;
+    if (await handleObservabilityRoutes(request, response, routedUrl)) return true;
+    if (await handleOAuthRoutes(request, response, routedUrl)) return true;
+    if (await handleAuthRoutes(request, response, routedUrl)) return true;
+    if (await handleUserSettingsRoutes(request, response, routedUrl)) return true;
+    if (await handleSocialRoutes(request, response, routedUrl)) return true;
+    if (await handleGroupDiscoveryRoutes(request, response, routedUrl)) return true;
+    if (await handleGroupRuntimeRoutes(request, response, routedUrl)) return true;
+    if (await handleGroupManagementRoutes(request, response, routedUrl)) return true;
+    if (await handleGroupRoleRoutes(request, response, routedUrl)) return true;
+    if (await handleGroupRoomRoutes(request, response, routedUrl)) return true;
+    if (await handleGroupContentRoutes(request, response, routedUrl)) return true;
+    if (await handleGroupInviteRoutes(request, response, routedUrl)) return true;
+    if (await handleDirectRoutes(request, response, routedUrl)) return true;
+    if (await handleNotificationRoutes(request, response, routedUrl)) return true;
+    if (await handleMemberInviteRoutes(request, response, routedUrl)) return true;
+    if (await handleStreamRoutes(request, response, routedUrl)) return true;
+    if (isVersionedApiPath(requestUrl.pathname)) {
+      json(response, 404, { error: "Rota API não encontrada." });
+      return true;
+    }
+
+    if (await handleMediaRoutes(request, response, routedUrl)) return true;
+    if (await handleStaticRoutes(request, response, routedUrl)) return true;
 
     return false;
   };

@@ -172,7 +172,7 @@ enviada ao GitHub nem publicada em produção.
 
 ### Fase 2 — Contratos e tempo real
 
-- [ ] Definir `/api/v1` e envelope de erros consistente.
+- [x] Definir `/api/v1` como namespace compatível inicial e envelope de erros consistente.
 - [ ] Gerar OpenAPI e cliente TypeScript interno.
 - [ ] Criar Gateway de eventos separado da sinalização WebRTC.
 - [x] Adicionar heartbeat nativo ao WebSocket para detectar conexões mortas.

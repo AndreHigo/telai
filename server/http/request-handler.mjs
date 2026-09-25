@@ -1,3 +1,5 @@
+import { normalizeApiPathname } from "./api-versioning.mjs";
+
 export function createHttpRequestHandler({
   randomUUID,
   metricRoute,
@@ -69,7 +71,7 @@ export function createHttpRequestHandler({
     response.setHeader("Permissions-Policy", "camera=(self), microphone=(self), display-capture=(self)");
     response.setHeader("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' http: https: ws: wss:");
     const requestUrl = new URL(request.url, `http://${request.headers.host}`);
-    if (!enforceApiRateLimit(request, response, requestUrl.pathname)) return;
+    if (!enforceApiRateLimit(request, response, normalizeApiPathname(requestUrl.pathname))) return;
     if (await handleHttpRoutes(request, response, requestUrl)) return;
   };
 }

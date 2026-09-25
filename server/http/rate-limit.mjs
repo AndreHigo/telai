@@ -100,7 +100,7 @@ export function createHttpRateLimit({
 
   function apiRateLimitPolicy(request, pathname) {
     if (pathname === "/healthz" || pathname === "/metrics") return null;
-    const isApi = pathname.startsWith("/api/") || ["/ice-config", "/runtime-config"].includes(pathname);
+    const isApi = pathname === "/api" || pathname.startsWith("/api/") || ["/ice-config", "/runtime-config"].includes(pathname);
     if (!isApi) return null;
     // A telemetria tem um limite próprio e não deve consumir o orçamento de
     // operações do usuário, especialmente quando a interface registra uma

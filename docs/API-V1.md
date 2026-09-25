@@ -1,0 +1,17 @@
+# API v1
+
+O Telai agora oferece `/api/v1` como namespace versionado inicial, sem
+duplicar os handlers existentes e sem alterar as rotas legadas em `/api`.
+
+Nesta primeira etapa, `/api/v1/<rota>` é um alias compatível de
+`/api/<rota>`. Autenticação, autorização, validação, limites de requisição e
+mensagens de erro permanecem os mesmos nos dois namespaces. Os limites usam a
+mesma chave normalizada, portanto alternar entre `/api` e `/api/v1` não cria
+uma forma de contornar rate limit.
+
+`GET /api/v1` retorna a disponibilidade da versão. Rotas inexistentes usam o
+envelope JSON de erro com `code: "not_found"`.
+
+O namespace ainda não representa uma promessa de compatibilidade eterna para
+cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
+incompatíveis devem ser introduzidas em outra versão e documentadas aqui.

@@ -93,6 +93,15 @@ async function main() {
     assert.equal(protectedGroups.body.code, "unauthorized");
     assert.equal((await api(null, "/api/auth/session")).response.status, 200);
     assert.equal((await api(null, "/api/auth/session")).body.user, null);
+    const versionedGroups = await api(null, "/api/v1/groups");
+    assert.equal(versionedGroups.response.status, 401);
+    assert.equal(versionedGroups.body.code, "unauthorized");
+    const version = await request("/api/v1");
+    assert.equal(version.response.status, 200);
+    assert.deepEqual(version.body, { version: "v1", status: "available" });
+    const missingVersionedRoute = await request("/api/v1/route-that-does-not-exist");
+    assert.equal(missingVersionedRoute.response.status, 404);
+    assert.equal(missingVersionedRoute.body.code, "not_found");
   });
   await check("amizades, seguir canais e mensagem sem amizade", async () => {
     assert.equal((await api(member, "/api/social")).response.status, 200);

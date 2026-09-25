@@ -62,7 +62,10 @@ async function main() {
   try {
     await waitForHealth();
     const apiResponses = [];
-    for (let index = 0; index < 31; index += 1) apiResponses.push(await fetch(`${baseUrl}/api/auth/session`));
+    for (let index = 0; index < 31; index += 1) {
+      const path = index === 30 || index % 2 === 0 ? "/api/v1/auth/session" : "/api/auth/session";
+      apiResponses.push(await fetch(`${baseUrl}${path}`));
+    }
     assert.equal(apiResponses.at(-1).status, 429);
     assert.ok(apiResponses.at(-1).headers.get("retry-after"));
     assert.equal(apiResponses.at(-1).headers.get("x-ratelimit-limit"), "30");
@@ -77,7 +80,7 @@ async function main() {
     const blocked = await login();
     assert.equal(blocked.status, 429);
     assert.ok(blocked.headers.get("retry-after"));
-    console.log(JSON.stringify({ ok: true, checks: ["api-per-route", "independent-write-buckets", "login-failure-lockout"] }));
+    console.log(JSON.stringify({ ok: true, checks: ["api-per-route", "versioned-api-shared-bucket", "independent-write-buckets", "login-failure-lockout"] }));
   } finally {
     await stopServer();
     for (const suffix of ["", "-shm", "-wal"]) fs.rmSync(`${databasePath}${suffix}`, { force: true });
