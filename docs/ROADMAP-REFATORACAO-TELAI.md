@@ -211,6 +211,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair administração de cargos, ordenação e permissões de canal para `frontend/src/features/groups/administration-controller.js` em chunk lazy.
   - [ ] Separar a tela de configurações por domínio e reduzir o markup restante do shell.
     - [x] Extrair navegação, cabeçalho, subnavegação interna e formulário de perfil do canal para `frontend/src/features/settings`.
+    - [x] Centralizar o estado de navegação, breakpoints e painéis móveis em `frontend/src/features/shell/navigation-state.js`, preservando as bindings visuais do shell.
     - [x] Extrair cartões de perfil, preferências, contas conectadas e administração de grupo.
     - [x] Extrair a tela de configurações para `frontend/src/features/settings/SettingsPage.svelte`, preservando bindings, ações e identidade visual, com carregamento sob demanda.
     - [x] Extrair carregamento e persistência de perfil, canal, preferências gerais e preferências de voz para controlador em chunk separado, mantendo mídia e identidade visual no shell.

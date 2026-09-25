@@ -22,6 +22,7 @@
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
+  import { createNavigationStateStore } from "./features/shell/navigation-state.js";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
@@ -129,12 +130,15 @@
   let user = null;
   let groups = [];
   let streams = [];
-  let view = "home";
-  let groupsWorkspaceOpen = false;
-  let groupPickerQuery = "";
-  let showGlobalSidebar = false;
-  let globalSidebarCollapsed = false;
-  let compactViewport = false;
+  const navigationState = createNavigationStateStore();
+  let view = navigationState.getState().view;
+  let groupsWorkspaceOpen = navigationState.getState().groupsWorkspaceOpen;
+  let groupPickerQuery = navigationState.getState().groupPickerQuery;
+  let showGlobalSidebar = navigationState.getState().showGlobalSidebar;
+  let globalSidebarCollapsed = navigationState.getState().globalSidebarCollapsed;
+  let compactViewport = navigationState.getState().compactViewport;
+  let showMobileChannels = navigationState.getState().showMobileChannels;
+  let showMobileMembers = navigationState.getState().showMobileMembers;
   let isViewer = false;
   let viewerParentFullscreen = false;
   let viewerRoomId = "";
@@ -150,7 +154,7 @@
   let liveNotificationScope = "related";
   let liveNotificationScopes = ["related"];
   let selectedStreams = new Set();
-  let multistreamOpen = false;
+  let multistreamOpen = navigationState.getState().multistreamOpen;
   let theme = "dark";
   let notice = "";
   let maintenanceNotice = null;
@@ -323,12 +327,30 @@
   let profileSettingsExtrasLoad = null;
   let VoiceSettingsPanel = null;
   let voiceSettingsPanelLoad = null;
+  function setNavigationState(next) {
+    navigationState.setState(next);
+  }
+
+  const unsubscribeNavigationState = navigationState.subscribe((next) => {
+    view = next.view;
+    groupsWorkspaceOpen = next.groupsWorkspaceOpen;
+    groupPickerQuery = next.groupPickerQuery;
+    showGlobalSidebar = next.showGlobalSidebar;
+    globalSidebarCollapsed = next.globalSidebarCollapsed;
+    compactViewport = next.compactViewport;
+    multistreamOpen = next.multistreamOpen;
+    showMobileChannels = next.showMobileChannels;
+    showMobileMembers = next.showMobileMembers;
+  });
+
   const viewportController = createViewportController({
     getCompactViewport: () => compactViewport,
     matchMedia: (query) => window.matchMedia(query),
     setState: (next) => {
-      if ("compactViewport" in next) compactViewport = next.compactViewport;
-      if ("showGlobalSidebar" in next) showGlobalSidebar = next.showGlobalSidebar;
+      const navigationPatch = {};
+      if ("compactViewport" in next) navigationPatch.compactViewport = next.compactViewport;
+      if ("showGlobalSidebar" in next) navigationPatch.showGlobalSidebar = next.showGlobalSidebar;
+      if (Object.keys(navigationPatch).length) setNavigationState(navigationPatch);
     },
   });
 
@@ -700,8 +722,6 @@
   let showAboutInAccountMenu = false;
   let groupContextMenu = null;
   let roomContextMenu = null;
-  let showMobileChannels = false;
-  let showMobileMembers = false;
   let groupNavigationCollapsed = false;
   let groupName = "";
   let showRoomDialog = false;
@@ -1080,7 +1100,7 @@
     }),
     setState: (next) => {
       const setters = {
-        showGlobalSidebar: (value) => { showGlobalSidebar = value; },
+        showGlobalSidebar: (value) => setNavigationState({ showGlobalSidebar: value }),
         settingsTab: (value) => { settingsTab = value; },
         settingsSection: (value) => { settingsSection = value; },
         settingsReturnView: (value) => { settingsReturnView = value; },
@@ -1104,7 +1124,7 @@
         selectedInputDeviceLabel: (value) => { selectedInputDeviceLabel = value; },
         selectedOutputDeviceId: (value) => { selectedOutputDeviceId = value; },
         voiceDevicesError: (value) => { voiceDevicesError = value; },
-        view: (value) => { view = value; },
+        view: (value) => setNavigationState({ view: value }),
       };
       for (const [key, value] of Object.entries(next)) setters[key]?.(value);
     },
@@ -1232,7 +1252,7 @@
           if ("directConversationsRefreshInFlight" in next) directConversationsRefreshInFlight = next.directConversationsRefreshInFlight;
           if ("directMessageDraft" in next) directMessageDraft = next.directMessageDraft;
           if ("directMessages" in next) directMessages = next.directMessages;
-          if ("view" in next) view = next.view;
+          if ("view" in next) setNavigationState({ view: next.view });
         },
         loadNotifications,
         closeVoiceContextMenu: () => closeVoiceContextMenu(),
@@ -1287,7 +1307,7 @@
           if ("selectedGroupId" in next) selectedGroupId = next.selectedGroupId;
           if ("selectedRoomId" in next) selectedRoomId = next.selectedRoomId;
           if ("showGroupPicker" in next) showGroupPicker = next.showGroupPicker;
-          if ("showMobileChannels" in next) showMobileChannels = next.showMobileChannels;
+          if ("showMobileChannels" in next) setNavigationState({ showMobileChannels: next.showMobileChannels });
           if ("mentionSuggestions" in next) mentionSuggestions = next.mentionSuggestions;
           if ("mentionStartIndex" in next) mentionStartIndex = next.mentionStartIndex;
           if ("watchingGroupLiveStreamId" in next) watchingGroupLiveStreamId = next.watchingGroupLiveStreamId;
@@ -1664,11 +1684,11 @@
           if ("isViewer" in next) isViewer = next.isViewer;
           if ("liveNotificationScope" in next) liveNotificationScope = next.liveNotificationScope;
           if ("liveNotificationScopes" in next) liveNotificationScopes = next.liveNotificationScopes;
-          if ("multistreamOpen" in next) multistreamOpen = next.multistreamOpen;
+          if ("multistreamOpen" in next) setNavigationState({ multistreamOpen: next.multistreamOpen });
           if ("selectedStreams" in next) selectedStreams = next.selectedStreams;
           if ("streams" in next) streams = next.streams;
           if ("streamsRefreshInFlight" in next) streamsRefreshInFlight = next.streamsRefreshInFlight;
-          if ("view" in next) view = next.view;
+          if ("view" in next) setNavigationState({ view: next.view });
           if ("viewerRoomId" in next) viewerRoomId = next.viewerRoomId;
           if ("viewerStream" in next) viewerStream = next.viewerStream;
           if ("viewerStreamPath" in next) viewerStreamPath = next.viewerStreamPath;
@@ -1695,14 +1715,16 @@
       navigationControllerPromise = import("./features/shell/navigation-controller.js").then(({ createNavigationController }) => createNavigationController({
         getState: () => ({ compactViewport, globalSidebarCollapsed, groupPickerQuery, groupsWorkspaceOpen, multistreamOpen, showGlobalSidebar, showMobileChannels, showMobileMembers, view }),
         setState: (next) => {
-          if ("globalSidebarCollapsed" in next) globalSidebarCollapsed = next.globalSidebarCollapsed;
-          if ("groupPickerQuery" in next) groupPickerQuery = next.groupPickerQuery;
-          if ("groupsWorkspaceOpen" in next) groupsWorkspaceOpen = next.groupsWorkspaceOpen;
-          if ("multistreamOpen" in next) multistreamOpen = next.multistreamOpen;
-          if ("showGlobalSidebar" in next) showGlobalSidebar = next.showGlobalSidebar;
-          if ("showMobileChannels" in next) showMobileChannels = next.showMobileChannels;
-          if ("showMobileMembers" in next) showMobileMembers = next.showMobileMembers;
-          if ("view" in next) view = next.view;
+          const navigationPatch = {};
+          if ("globalSidebarCollapsed" in next) navigationPatch.globalSidebarCollapsed = next.globalSidebarCollapsed;
+          if ("groupPickerQuery" in next) navigationPatch.groupPickerQuery = next.groupPickerQuery;
+          if ("groupsWorkspaceOpen" in next) navigationPatch.groupsWorkspaceOpen = next.groupsWorkspaceOpen;
+          if ("multistreamOpen" in next) navigationPatch.multistreamOpen = next.multistreamOpen;
+          if ("showGlobalSidebar" in next) navigationPatch.showGlobalSidebar = next.showGlobalSidebar;
+          if ("showMobileChannels" in next) navigationPatch.showMobileChannels = next.showMobileChannels;
+          if ("showMobileMembers" in next) navigationPatch.showMobileMembers = next.showMobileMembers;
+          if ("view" in next) navigationPatch.view = next.view;
+          if (Object.keys(navigationPatch).length) setNavigationState(navigationPatch);
         },
         loadGroups,
         loadStreams,
@@ -2049,7 +2071,7 @@
   }
 
   async function openNotifications() {
-    view = "notifications";
+    setNavigationState({ view: "notifications" });
     await loadNotifications();
   }
 
@@ -2062,7 +2084,7 @@
     if (["friend_request", "friend_accepted"].includes(notification?.type)) {
       await markNotificationRead(notification);
       await loadSocial();
-      view = "friends";
+      setNavigationState({ view: "friends" });
       return;
     }
     if (!notification?.groupId) return;
@@ -2618,7 +2640,7 @@
       groupOverview = null;
       selectedGroupId = null;
       selectedRoomId = null;
-      view = "home";
+      setNavigationState({ view: "home" });
       replaceBrowserPath("/login", { preserveQuery: false });
       notice = "Você saiu da sua conta.";
     } catch (error) {
@@ -2948,7 +2970,7 @@
       selectedGroupId = groups[0]?.id || null;
       showDeleteGroupDialog = false;
       if (selectedGroupId) await loadGroup(selectedGroupId);
-      else view = "home";
+      else setNavigationState({ view: "home" });
       notice = `${deletedGroupName} foi excluído.`;
     } catch (error) {
       deleteGroupError = error.message || "Não foi possível excluir o grupo agora.";
@@ -4509,7 +4531,7 @@
 
   function requestBroadcastStart(sourceType = "screen") {
     if (broadcastState === "live") {
-      view = "broadcast";
+      setNavigationState({ view: "broadcast" });
       notice = "Você já está transmitindo. Use “Voltar à live” ou encerre a transmissão antes de iniciar outra.";
       return;
     }
@@ -4533,7 +4555,7 @@
     pendingBroadcastContext = null;
     broadcastSourceType = pendingBroadcastSourceType;
     broadcastState = "idle";
-    view = "broadcast";
+    setNavigationState({ view: "broadcast" });
     notice = "Escolha o áudio, a câmera e o microfone. Depois clique em iniciar a transmissão.";
   }
 
@@ -4584,7 +4606,7 @@
     pendingBroadcastSourceType = "screen";
     broadcastSourceType = "screen";
     broadcastState = "idle";
-    view = "broadcast";
+    setNavigationState({ view: "broadcast" });
     notice = `Escolha a fonte de vídeo para ${publicBroadcastSourceLabel(publicBroadcastSourceKind).toLocaleLowerCase()}.`;
     await beginBroadcast({ sourceType: "screen", visibility: "public", title });
   }
@@ -4660,7 +4682,7 @@
       selectedGroupId = groups[0]?.id || null;
       showLeaveGroupDialog = false;
       if (selectedGroupId) await loadGroup(selectedGroupId);
-      else view = "home";
+      else setNavigationState({ view: "home" });
       notice = `Você saiu de ${leavingGroupName}.`;
     } catch (error) {
       leaveGroupError = error.message || "Não foi possível sair do grupo agora.";
@@ -5036,7 +5058,7 @@
     pendingBroadcastContext = nextContext;
     broadcastSourceType = sourceType;
     broadcastState = "idle";
-    view = "broadcast";
+    setNavigationState({ view: "broadcast" });
     notice = "Escolha uma tela, janela ou aplicativo para iniciar a transmissão.";
     void tick().then(() => beginBroadcast({ sourceType, ...nextContext }));
   }
@@ -5074,7 +5096,7 @@
     broadcastAudioSourceName = "";
     broadcastMicrophoneStream = null;
     broadcastState = "starting";
-    view = "broadcast";
+    setNavigationState({ view: "broadcast" });
     try {
       if (!window.isSecureContext && !["localhost", "127.0.0.1"].includes(window.location.hostname)) throw new Error("A captura de tela exige HTTPS ou localhost.");
       const profile = qualityProfiles[selectedQuality];
@@ -5335,7 +5357,7 @@
   }
 
   async function returnToBroadcast() {
-    view = "broadcast";
+    setNavigationState({ view: "broadcast" });
     if (hasLiveBroadcastCapture()) {
       broadcastState = "live";
       await attachBroadcastPreview();
@@ -5363,7 +5385,7 @@
     viewerStreamPath = "";
     viewerStream = null;
     window.history.pushState({}, "", "/");
-    view = broadcastState === "live" ? "broadcast" : "home";
+    setNavigationState({ view: broadcastState === "live" ? "broadcast" : "home" });
     if (broadcastState === "live") await attachBroadcastPreview();
   }
 
@@ -5373,7 +5395,7 @@
     viewerStreamPath = "";
     viewerStream = null;
     window.history.pushState({}, "", "/");
-    view = nextView;
+    setNavigationState({ view: nextView });
     if (nextView === "live") await loadStreams().catch(() => {});
     if (nextView === "notifications") await loadNotifications().catch(() => {});
     if (nextView === "direct") await loadDirectConversations().catch(() => {});
@@ -5571,6 +5593,7 @@
   });
   clientPollingController.start();
   onDestroy(() => {
+    unsubscribeNavigationState();
     clearBroadcastCaptureRecoveryTimer();
     clearVoiceSpeakingPublishTimer();
     stopVoiceTest();
@@ -5677,7 +5700,7 @@
       {desktopUpdate}
       {desktopUpdateLabel}
       onToggleGlobalNavigation={toggleGlobalNavigation}
-      onNavigateHome={() => view = "home"}
+      onNavigateHome={() => setNavigationState({ view: "home" })}
       onReturnToBroadcast={returnToBroadcast}
       onStopBroadcast={stopBroadcast}
       onRequestBroadcastStart={requestBroadcastStart}
@@ -5697,7 +5720,7 @@
         {globalSidebarCollapsed}
         {view}
         {notificationUnreadCount}
-        onClose={() => showGlobalSidebar = false}
+        onClose={() => setNavigationState({ showGlobalSidebar: false })}
         onSelectView={selectView}
         onOpenSettings={() => void openAccountDestination("settings")}
       />
@@ -5878,7 +5901,7 @@
           onLoadGroup={loadGroup}
           onOpenGroupContextMenu={openGroupContextMenu}
           onCreateGroup={() => { showGroupDialog = true; }}
-          onToggleNavigation={() => { groupNavigationCollapsed = !groupNavigationCollapsed; showMobileChannels = false; }}
+          onToggleNavigation={() => { groupNavigationCollapsed = !groupNavigationCollapsed; setNavigationState({ showMobileChannels: false }); }}
           onSearchGroups={openGroupSearchDialog}
           onOpenSettings={() => openSettings("group", "groups")}
         />
@@ -5921,7 +5944,7 @@
           onOpenVoiceSettings={openVoiceSettings}
           onLeaveVoiceRoom={leaveVoiceRoom}
         />
-        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} onSearchMessages={openGroupMessageSearch} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onOpenThread={openGroupThread} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
+        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => setNavigationState({ showMobileChannels: !showMobileChannels, showMobileMembers: false })} onToggleMembers={() => setNavigationState({ showMobileMembers: !showMobileMembers, showMobileChannels: false })} onCreateChannel={() => { showRoomDialog = true; }} onSearchMessages={openGroupMessageSearch} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} currentUserId={user?.id} {editingMessageId} bind:editingMessageDraft {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onOpenThread={openGroupThread} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
         <GroupMemberRail
           {user}
           {memberRoleGroups}
@@ -5945,7 +5968,7 @@
           {settingsError}
           onSelectSection={selectSettingsSection}
           onLoadGroupAdministration={loadGroupAdministration}
-          onBack={() => { view = settingsReturnView; }}
+          onBack={() => setNavigationState({ view: settingsReturnView })}
           onSelectTab={(tab) => settingsTab = tab}
           bind:channelDisplayName
           {channelAvatarData}

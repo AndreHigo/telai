@@ -18,6 +18,7 @@
     "test:auth-controller": "node qa/test-auth-controller.mjs",
     "test:auth-guards": "node qa/test-auth-guards.mjs",
     "test:navigation": "node qa/test-navigation-controller.mjs",
+    "test:navigation-state": "node qa/test-navigation-state.mjs",
     "test:viewport-controller": "node qa/test-viewport-controller.mjs",
     "test:route-controller": "node qa/test-route-controller.mjs",
     "test:client-polling": "node qa/test-client-polling.mjs",
