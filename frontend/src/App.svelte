@@ -38,6 +38,7 @@
   } from "./services/media/voice-input.js";
   import { createVoiceCaptureService } from "./services/media/voice-capture.js";
   import { createVoiceTrackSyncService } from "./services/media/voice-track-sync.js";
+  import { createVoiceQualityController } from "./features/voice/quality-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
   import {
@@ -265,10 +266,6 @@
   let voicePeerAudioHealth = new Map();
   let voicePeerHealthTimer = null;
   let voicePeerHealthInFlight = false;
-  let voiceQualityTimer = null;
-  let voiceQualityInFlight = false;
-  let voiceQualitySnapshots = new Map();
-  let rtcQualityModuleLoad = null;
   let voicePeerRelayRecoveryAttempted = new Set();
   let voicePendingCandidates = new Map();
   let voiceSignalQueues = new Map();
@@ -604,6 +601,11 @@
     sendVoiceSignal: (message) => sendVoice(message),
     reportDiagnostic: (kind, error, context) => reportClientError(kind, error, context),
     bindLocalTrack: (track) => bindVoiceLocalTrack(track),
+  });
+  const voiceQualityController = createVoiceQualityController({
+    getPeerConnections: () => voicePeerConnections,
+    reportClientError,
+    pollIntervalMs: VOICE_QUALITY_POLL_MS,
   });
   let voiceDevicesBusy = false;
   let voiceDevicesError = "";
@@ -3030,9 +3032,7 @@
   function stopVoicePeerHealthTimer() {
     if (voicePeerHealthTimer) window.clearInterval(voicePeerHealthTimer);
     voicePeerHealthTimer = null;
-    if (voiceQualityTimer) window.clearInterval(voiceQualityTimer);
-    voiceQualityTimer = null;
-    voiceQualitySnapshots = new Map();
+    voiceQualityController.stop();
   }
 
   function closeGroupThread() {
@@ -3048,34 +3048,7 @@
 
   function ensureVoicePeerHealthTimer() {
     if (!voicePeerHealthTimer) voicePeerHealthTimer = window.setInterval(checkVoicePeerAudioHealth, VOICE_PEER_HEALTH_POLL_MS);
-    if (!voiceQualityTimer) voiceQualityTimer = window.setInterval(pollVoiceRtcQuality, VOICE_QUALITY_POLL_MS);
-  }
-
-  async function pollVoiceRtcQuality() {
-    if (voiceQualityInFlight || !voicePeerConnections.size) return;
-    voiceQualityInFlight = true;
-    try {
-      rtcQualityModuleLoad ||= import("./services/media/rtc-quality.js");
-      const { summarizeRtcQuality } = await rtcQualityModuleLoad;
-      const samples = [];
-      for (const [participantId, peer] of voicePeerConnections) {
-        if (peer.connectionState === "closed" || typeof peer.getStats !== "function") continue;
-        const result = summarizeRtcQuality(await peer.getStats(), voiceQualitySnapshots);
-        voiceQualitySnapshots = result.snapshots;
-        if (!result.sample.mediaStreams) continue;
-        samples.push({ participantId, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, ...result.sample });
-      }
-      if (samples.length) {
-        reportClientError("voice_rtc_quality", new Error("Amostra de qualidade RTC."), {
-          peerCount: voicePeerConnections.size,
-          samples,
-        });
-      }
-    } catch (error) {
-      reportClientError("voice_rtc_quality_error", error, { voicePeers: voicePeerConnections.size });
-    } finally {
-      voiceQualityInFlight = false;
-    }
+    voiceQualityController.start();
   }
 
   async function checkVoicePeerAudioHealth() {
@@ -6039,7 +6012,7 @@
     clearInterval(maintenanceCountdownTimer);
     groupEventGateway?.close();
     clearInterval(voiceActivityTimer);
-    if (voiceQualityTimer) window.clearInterval(voiceQualityTimer);
+    voiceQualityController.stop();
     window.removeEventListener("click", closeVoiceContextMenu);
     window.removeEventListener("click", closeRoomContextMenu);
     window.removeEventListener("popstate", handleBrowserPopState);
