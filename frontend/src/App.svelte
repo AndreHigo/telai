@@ -7,6 +7,7 @@
   import FollowingPage from "./features/social/FollowingPage.svelte";
   import DirectMessagesPage from "./features/direct/DirectMessagesPage.svelte";
   import BroadcastPage from "./features/broadcast/BroadcastPage.svelte";
+  import HomePage from "./features/home/HomePage.svelte";
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
@@ -7194,11 +7195,16 @@
         />
       {/if}
       {#if view === "home"}
-        <div class="home-view">
-        <section class="home-feed-intro"><div class="home-feed-intro-copy"><h1>Descubra o que está acontecendo agora<span>.</span></h1><p class="muted">Entre em uma comunidade, acompanhe uma live ou comece sua própria transmissão.</p></div><div class="home-feed-actions"><button class="primary rounded-xl px-5 py-3 text-sm font-extrabold" type="button" on:click={requestBroadcastStart}><span>Começar uma live</span><span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("arrowRight")} size={17} strokeWidth={1.8} /></span></button><button class="outline rounded-xl px-5 py-3 text-sm font-extrabold" type="button" on:click={() => { showGroupDialog = true; }}><span>Criar grupo</span><span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("add")} size={17} strokeWidth={1.8} /></span></button></div></section>
-        <section class="home-feed-section" aria-labelledby="home-live-title"><div class="home-feed-heading"><div><h2 id="home-live-title">Ao vivo agora</h2></div><button class="home-feed-link" type="button" on:click={() => selectView("live")}>Ver todas <span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("arrowRight")} size={15} strokeWidth={1.8} /></span></button></div>{#if homeLiveStreams.length}<div class="home-live-grid">{#each homeLiveStreams as stream, index}<!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role --><article class="home-live-card" on:click={() => openStreamViewer(stream)} role="button" tabindex="0" aria-label={`Abrir transmissão de ${stream.channelName || "canal"}`} on:keydown={(event) => { if (!["Enter", " "].includes(event.key)) return; event.preventDefault(); openStreamViewer(stream); }}><div class="home-live-thumbnail" style={`--home-thumb-index:${index}`} aria-hidden="true">{#if stream.thumbnailUrl}<img src={stream.thumbnailUrl} alt="" />{:else}<span class="home-thumbnail-orb"></span><span class="home-thumbnail-grid"></span><strong>{stream.channelGames?.[0] || "AO VIVO"}</strong>{/if}<div class="home-live-badges"><span>AO VIVO</span><b><HugeiconsIcon icon={iconFor("user")} size={13} strokeWidth={1.8} /> {stream.viewerCount == null ? "—" : stream.viewerCount === 0 ? "Assistir agora" : `${stream.viewerCount} ${stream.viewerCount === 1 ? "pessoa" : "pessoas"} assistindo`}</b></div></div><div class="home-live-card-copy"><span class="stream-channel-avatar">{#if stream.channelAvatarData}<img src={stream.channelAvatarData} alt="" />{:else}{stream.channelName?.slice(0, 1) || "M"}{/if}</span><div><strong>{stream.channelName}</strong><small>{stream.title || "Transmissão ao vivo"}</small></div></div></article>{/each}</div>{:else}<div class="home-feed-empty"><span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("radio")} size={24} strokeWidth={1.8} /></span><div><strong>Nenhuma live pública neste momento</strong><p class="muted">Quando alguém iniciar uma transmissão, ela aparecerá aqui.</p></div></div>{/if}</section>
-        <section class="home-feed-section" aria-labelledby="home-communities-title"><div class="home-feed-heading"><div><h2 id="home-communities-title">Comunidades para você</h2></div><button class="home-feed-link" type="button" on:click={() => selectView("groups")}>Abrir grupos <span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("arrowRight")} size={15} strokeWidth={1.8} /></span></button></div>{#if homeCommunityGroups.length}<div class="home-community-grid">{#each homeCommunityGroups as group}<button class="home-community-card" type="button" on:click={() => { selectedGroupId = group.id; loadGroup(group.id); setGroupsView(); }}><span class="community-avatar">{group.name.slice(0, 2).toUpperCase()}</span><span class="home-community-copy"><strong>{group.name}</strong><small>{group.memberCount || 0} membros</small></span><span class="home-community-join">Entrar <b><HugeiconsIcon icon={iconFor("arrowRight")} size={15} strokeWidth={1.8} /></b></span></button>{/each}</div>{:else}<div class="home-feed-empty"><span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("communities")} size={24} strokeWidth={1.8} /></span><div><strong>Crie sua primeira comunidade</strong><p class="muted">Reúna seus amigos em um espaço só de vocês.</p></div></div>{/if}</section>
-        </div>
+        <HomePage
+          {homeLiveStreams}
+          {homeCommunityGroups}
+          onRequestBroadcastStart={requestBroadcastStart}
+          onCreateGroup={() => { showGroupDialog = true; }}
+          onOpenLive={() => selectView("live")}
+          onOpenGroups={() => selectView("groups")}
+          onOpenStream={openStreamViewer}
+          onOpenGroup={(group) => { selectedGroupId = group.id; loadGroup(group.id); setGroupsView(); }}
+        />
       {:else if view === "notifications"}
         <NotificationsPage
           {notificationUnreadCount}
