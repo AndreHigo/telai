@@ -34,6 +34,7 @@
     "test:voice-peer-recovery-controller": "node qa/test-voice-peer-recovery-controller.mjs",
     "test:sqlite-legacy-compatibility": "node qa/test-sqlite-legacy-compatibility.mjs",
     "test:security": "node qa/e2e-rate-limit.cjs",
+    "test:settings-navigation-controller": "node qa/test-settings-navigation-controller.mjs",
     "test:notifications": "electron --no-sandbox qa/e2e-notifications.cjs",
     "test:web-audit": "electron --no-sandbox qa/e2e-web-audit.cjs",
     "test:media": "electron --no-sandbox qa/e2e-media.cjs",

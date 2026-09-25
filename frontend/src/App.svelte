@@ -29,6 +29,7 @@
   import LinkedAccountsSettings from "./features/settings/LinkedAccountsSettings.svelte";
   import GroupAdministrationSettings from "./features/settings/GroupAdministrationSettings.svelte";
   import NotificationPreferencesSettings from "./features/settings/NotificationPreferencesSettings.svelte";
+  import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
@@ -920,6 +921,56 @@
   }
 
   const api = createApiClient({ reportError: reportClientError });
+  const settingsNavigationController = createSettingsNavigationController({
+    api,
+    getState: () => ({
+      view,
+      user,
+      selectedGroup,
+      selectedGroupId,
+      selectedInputDeviceId,
+      selectedInputDeviceLabel,
+      selectedOutputDeviceId,
+    }),
+    setState: (next) => {
+      const setters = {
+        showGlobalSidebar: (value) => { showGlobalSidebar = value; },
+        settingsTab: (value) => { settingsTab = value; },
+        settingsSection: (value) => { settingsSection = value; },
+        settingsReturnView: (value) => { settingsReturnView = value; },
+        settingsError: (value) => { settingsError = value; },
+        settingsDisplayName: (value) => { settingsDisplayName = value; },
+        settingsAvatarData: (value) => { settingsAvatarData = value; },
+        avatarError: (value) => { avatarError = value; },
+        channelDisplayName: (value) => { channelDisplayName = value; },
+        channelAvatarData: (value) => { channelAvatarData = value; },
+        channelGames: (value) => { channelGames = value; },
+        channelError: (value) => { channelError = value; },
+        groupSettingsName: (value) => { groupSettingsName = value; },
+        groupRoles: (value) => { groupRoles = value; },
+        groupInvites: (value) => { groupInvites = value; },
+        groupInviteLink: (value) => { groupInviteLink = value; },
+        groupAdminError: (value) => { groupAdminError = value; },
+        draggedRoleId: (value) => { draggedRoleId = value; },
+        dragOverRoleId: (value) => { dragOverRoleId = value; },
+        roleOrderSaving: (value) => { roleOrderSaving = value; },
+        selectedInputDeviceId: (value) => { selectedInputDeviceId = value; },
+        selectedInputDeviceLabel: (value) => { selectedInputDeviceLabel = value; },
+        selectedOutputDeviceId: (value) => { selectedOutputDeviceId = value; },
+        voiceDevicesError: (value) => { voiceDevicesError = value; },
+        view: (value) => { view = value; },
+      };
+      for (const [key, value] of Object.entries(next)) setters[key]?.(value);
+    },
+    readStoredVoiceDeviceId,
+    readStoredVoiceDeviceLabel,
+    loadGroupAdministration,
+    loadAudioDevices,
+    tick,
+    getSettingsPageElement: () => settingsPageElement,
+  });
+  async function openSettings(...args) { return settingsNavigationController.openSettings(...args); }
+  function selectSettingsSection(...args) { return settingsNavigationController.selectSettingsSection(...args); }
   const authController = createAuthController({
     api,
     getState: () => ({ authMode, loginUsername, loginPassword, registerDisplayName, registerUsername, registerPassword, registerLegalAccepted }),
@@ -1954,47 +2005,6 @@
   function randomRoom() {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  }
-
-  async function openSettings(tab = "user", returnView = view) {
-    // Settings owns the full content area. Close the compact global navigation
-    // first so its scrim cannot remain above the settings category navigation.
-    showGlobalSidebar = false;
-    settingsTab = tab;
-    settingsSection = tab === "group" ? "group" : "profile";
-    settingsReturnView = returnView;
-    settingsError = "";
-    settingsDisplayName = user?.displayName || "";
-    settingsAvatarData = user?.avatarData || "";
-    avatarError = "";
-    channelDisplayName = user?.displayName || "";
-    channelAvatarData = "";
-    channelGames = [];
-    channelError = "";
-    groupSettingsName = selectedGroup?.name || "";
-    groupRoles = [];
-    groupInvites = [];
-    groupInviteLink = "";
-    groupAdminError = "";
-    draggedRoleId = "";
-    dragOverRoleId = "";
-    roleOrderSaving = false;
-    selectedInputDeviceId ||= readStoredVoiceDeviceId("mirante-voice-input");
-    selectedInputDeviceLabel ||= readStoredVoiceDeviceLabel("mirante-voice-input-label");
-    selectedOutputDeviceId ||= readStoredVoiceDeviceId("mirante-voice-output");
-    voiceDevicesError = "";
-    view = "settings";
-    try {
-      const result = await api("/api/auth/channel");
-      channelDisplayName = result.channel?.displayName || user?.displayName || "";
-      channelAvatarData = result.channel?.avatarData || "";
-      channelGames = result.channel?.games || [];
-    } catch (error) { channelError = error.message; }
-    if (tab === "group" && selectedGroupId) await loadGroupAdministration();
-    // A enumeração de áudio não deve bloquear a abertura das configurações.
-    void loadAudioDevices(false).catch((error) => {
-      voiceDevicesError = error.message || "Não foi possível carregar os dispositivos de áudio.";
-    });
   }
 
   async function loadAudioDevices(requestPermission = false) {
@@ -4656,12 +4666,6 @@
   function privateLiveForParticipant(participant, roomId) {
     if (!participant?.userId || !roomId) return null;
     return groupLiveStreams.find((stream) => stream.visibility === "private" && stream.voiceRoomId === roomId && stream.createdBy === participant.userId) || null;
-  }
-
-  function selectSettingsSection(section, tab = "user") {
-    settingsSection = section;
-    settingsTab = tab;
-    void tick().then(() => settingsPageElement?.scrollTo({ top: 0, left: 0, behavior: "auto" }));
   }
 
   function relayMimeForStream(stream) {
