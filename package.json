@@ -32,6 +32,7 @@
     "db:test:postgres-import": "node qa/test-postgres-import.mjs",
     "db:test:postgres-migration": "node qa/validate-postgres-migration.mjs",
     "db:test:postgres-repositories": "node qa/test-postgres-repositories.mjs",
+    "db:test:postgres-maintenance": "node qa/test-postgres-maintenance.cjs",
     "dist": "npm run build:frontend && electron-builder --win nsis"
   },
   "dependencies": {

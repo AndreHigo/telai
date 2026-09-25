@@ -21,14 +21,15 @@ export function createAdminRoutes({
 }) {
   return async function handleAdminRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/api/maintenance" && request.method === "GET") {
-      json(response, 200, { notice: activeMaintenanceNotice() });
+      json(response, 200, { notice: await activeMaintenanceNotice() });
       return true;
     }
 
     if (requestUrl.pathname === "/api/admin/maintenance" && request.method === "POST") {
       const operator = requireMaintenanceOperator(request, response);
       if (!operator) return true;
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const delaySeconds = Number(body.delaySeconds ?? 60);
         const durationSeconds = Number(body.durationSeconds ?? 600);
         if (!Number.isInteger(delaySeconds) || delaySeconds < 10 || delaySeconds > 3600) {
@@ -41,16 +42,18 @@ export function createAdminRoutes({
         const now = Date.now();
         const startsAt = new Date(now + delaySeconds * 1000).toISOString();
         const expiresAt = new Date(now + (delaySeconds + durationSeconds) * 1000).toISOString();
-        maintenanceRepository.schedule({ message, startsAt, expiresAt, createdBy: operator.user?.id || null, createdAt: new Date(now).toISOString() }, new Date(now).toISOString());
-        return json(response, 201, { notice: activeMaintenanceNotice() });
-      }).catch(() => json(response, 400, { error: "Não foi possível programar a manutenção." }));
+        await maintenanceRepository.schedule({ message, startsAt, expiresAt, createdBy: operator.user?.id || null, createdAt: new Date(now).toISOString() }, new Date(now).toISOString());
+        json(response, 201, { notice: await activeMaintenanceNotice() });
+      } catch {
+        json(response, 400, { error: "Não foi possível programar a manutenção." });
+      }
       return true;
     }
 
     if (requestUrl.pathname === "/api/admin/maintenance" && request.method === "DELETE") {
       const operator = requireMaintenanceOperator(request, response);
       if (!operator) return true;
-      maintenanceRepository.clear(new Date().toISOString());
+      await maintenanceRepository.clear(new Date().toISOString());
       json(response, 200, { ok: true });
       return true;
     }

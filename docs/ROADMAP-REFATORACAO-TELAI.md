@@ -210,6 +210,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Criar migration baseline e importador offline SQLite → PostgreSQL.
 - [x] Subir PostgreSQL local em Docker e aplicar/validar a migration baseline sem cutover.
 - [x] Impedir que `TELAI_DATABASE_DRIVER=postgres` seja aceito silenciosamente pelo runtime SQLite antes do cutover validado.
+- [x] Validar o primeiro domínio PostgreSQL opt-in (manutenção administrativa) com agendamento, leitura e limpeza contra o container local.
 - [ ] Executar migration, importar dados e ativar PostgreSQL após validação real.
 - [ ] Adicionar Redis/event bus somente quando houver mais de uma instância ou necessidade de filas.
 

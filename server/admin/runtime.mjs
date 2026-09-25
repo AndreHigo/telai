@@ -56,8 +56,8 @@ export function createAdminRuntime({
     return { type: "account", user };
   }
 
-  function activeMaintenanceNotice() {
-    const row = maintenanceRepository.active(new Date().toISOString());
+  async function activeMaintenanceNotice() {
+    const row = await maintenanceRepository.active(new Date().toISOString());
     if (!row) return null;
     return {
       ...row,

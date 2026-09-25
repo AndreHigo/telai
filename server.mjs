@@ -46,7 +46,8 @@ import { createStreamRepository } from "./server/repositories/streams.mjs";
 import { createGroupSettingsRepository } from "./server/repositories/group-settings.mjs";
 import { createUserProfileRepository } from "./server/repositories/user-profile.mjs";
 import { createSiteAdminRepository } from "./server/repositories/site-admin.mjs";
-import { createMaintenanceRepository } from "./server/repositories/maintenance.mjs";
+import { createMaintenanceRepository, createPostgresMaintenanceRepository } from "./server/repositories/maintenance.mjs";
+import { createPostgresPool } from "./server/repositories/postgres.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { createHttpRateLimit } from "./server/http/rate-limit.mjs";
 import { createHttpRequestHandler } from "./server/http/request-handler.mjs";
@@ -102,7 +103,8 @@ const {
   logLevel,
   logPath,
 } = createRuntimeConfig({ rootDir: __dirname, packageVersion: packageMetadata.version });
-const databaseDriver = createDatabaseConfig().driver;
+const databaseConfig = createDatabaseConfig();
+const databaseDriver = databaseConfig.driver;
 if (databaseDriver !== "sqlite") {
   throw new Error("PostgreSQL ainda não está ligado ao runtime HTTP do Telai. Mantenha TELAI_DATABASE_DRIVER=sqlite até concluir o cutover validado.");
 }
@@ -409,6 +411,7 @@ setInterval(() => {
 }, loginRateWindowMs).unref();
 
 const database = openSqliteDatabase(databasePath, SQLITE_SCHEMA);
+let maintenanceDatabasePool = null;
 
 ensureCompatibilityColumns(database);
 ensureCompatibilityIndexes(database);
@@ -717,7 +720,12 @@ const handleUserSettingsRoutes = createUserSettingsRoutes({
   maxAvatarUploadLength,
 });
 const siteAdminRepository = createSiteAdminRepository(database);
-const maintenanceRepository = createMaintenanceRepository(database);
+const maintenanceRepository = databaseConfig.maintenanceDriver === "postgres"
+  ? (() => {
+    maintenanceDatabasePool = createPostgresPool(databaseConfig);
+    return createPostgresMaintenanceRepository(maintenanceDatabasePool);
+  })()
+  : createMaintenanceRepository(database);
 const {
   activeMaintenanceNotice,
   requireMaintenanceOperator,
@@ -1099,6 +1107,8 @@ export function getEventGatewayForTests() {
 
 export function closeDatabaseForTests() {
   if (database?.open) database.close();
+  if (maintenanceDatabasePool) return maintenanceDatabasePool.end();
+  return undefined;
 }
 
 export function startServer({ host = defaultHost, port = defaultPort } = {}) {
