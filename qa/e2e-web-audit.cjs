@@ -291,14 +291,14 @@ async function main() {
       body: JSON.stringify({ roomName: `qa-viewer-${Date.now()}`.slice(0, 40), title: "QA Viewer Offline" }),
     });
     await authenticatedWindow.loadURL(`${baseUrl}${viewerStream.body.stream.publicPath}`);
-    await waitFor("visualizador de transmissão", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".viewer-page"))));
+    await waitFor("visualizador de transmissão", () => evaluate(authenticatedWindow, () => Boolean(document.querySelector(".viewer-page") && document.querySelector(".viewer-audience-count-heading"))));
     for (const [width, height] of [[1440, 900], [1024, 768], [900, 650], [640, 800]]) layouts.push(await inspectLayout(authenticatedWindow, "Assistir transmissão", width, height));
 
     desktopViewerWindow = new BrowserWindow({ show: false, width: 1440, height: 900, webPreferences: { preload: path.join(rootDir, "electron", "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     desktopViewerWindow.webContents.on("console-message", (_event, level, message) => { if (level >= 2) consoleErrors.push(message); });
     desktopViewerWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => failedRequests.push({ errorCode, errorDescription, validatedURL }));
     await desktopViewerWindow.loadURL(`${baseUrl}${viewerStream.body.stream.publicPath}`);
-    await waitFor("visualizador Electron", () => evaluate(desktopViewerWindow, () => Boolean(document.querySelector(".viewer-page") && document.querySelector(".mirante-shell.desktop-app"))));
+    await waitFor("visualizador Electron", () => evaluate(desktopViewerWindow, () => Boolean(document.querySelector(".viewer-page") && document.querySelector(".mirante-shell.desktop-app") && document.querySelector(".viewer-audience-count-heading"))));
     for (const [width, height] of [[1440, 900], [1024, 768], [900, 650]]) layouts.push(await inspectLayout(desktopViewerWindow, "Assistir transmissão · Electron", width, height));
 
     assert.ok(await evaluate(authenticatedWindow, () => Boolean(document.querySelector(".viewer-audience-count-heading"))), "contador de espectadores não apareceu no cabeçalho do visualizador");
