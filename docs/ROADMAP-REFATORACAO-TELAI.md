@@ -162,6 +162,9 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair sincronização, `replaceTrack` e renegociação do áudio local para `frontend/src/services/media`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
   - [ ] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
+    - [x] Extrair operações de mensagens, anexos, edição, exclusão e busca para `frontend/src/features/groups/message-controller.js` em chunk lazy.
+    - [x] Extrair descoberta de grupos, convites e solicitações de entrada para `frontend/src/features/groups/membership-controller.js` em chunk lazy.
+    - [x] Extrair administração de cargos, ordenação e permissões de canal para `frontend/src/features/groups/administration-controller.js` em chunk lazy.
   - [ ] Separar a tela de configurações por domínio e reduzir o markup restante do shell.
     - [x] Extrair navegação, cabeçalho, subnavegação interna e formulário de perfil do canal para `frontend/src/features/settings`.
     - [x] Extrair cartões de perfil, preferências, contas conectadas e administração de grupo.
