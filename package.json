@@ -58,6 +58,7 @@
     "test:settings-navigation-controller": "node qa/test-settings-navigation-controller.mjs",
     "test:notifications": "electron --no-sandbox qa/e2e-notifications.cjs",
     "test:notification-service": "node qa/test-notification-service.mjs",
+    "test:notification-state": "node qa/test-notification-state.mjs",
     "test:runtime-cleanup": "node qa/test-runtime-cleanup.mjs",
     "test:runtime-limits": "node qa/test-runtime-limits.mjs",
     "test:socket-sender": "node qa/test-socket-sender.mjs",

@@ -6,6 +6,7 @@
   import { createAuthStateStore } from "./features/auth/auth-state.js";
   import NotificationsPage from "./features/notifications/NotificationsPage.svelte";
   import { createNotificationController } from "./features/notifications/controller.js";
+  import { createNotificationStateStore } from "./features/notifications/notification-state.js";
   import FriendsPage from "./features/social/FriendsPage.svelte";
   import FollowingPage from "./features/social/FollowingPage.svelte";
   import DirectMessagesPage from "./features/direct/DirectMessagesPage.svelte";
@@ -138,6 +139,7 @@
   const directState = createDirectStateStore();
   const settingsState = createSettingsStateStore();
   const authState = createAuthStateStore();
+  const notificationState = createNotificationStateStore();
   let groups = groupState.getState().groups;
   let streams = [];
   const navigationState = createNavigationStateStore();
@@ -347,6 +349,10 @@
 
   function setAuthState(next) {
     authState.setState(next);
+  }
+
+  function setNotificationState(next) {
+    notificationState.setState(next);
   }
 
   const unsubscribeNavigationState = navigationState.subscribe((next) => {
@@ -863,19 +869,32 @@
   let pendingInviteToken = "";
   let pendingGroupRouteId = "";
   let pendingRoomRouteId = "";
-  let notifications = [];
-  let notificationUnreadCount = 0;
-  let hideReadNotifications = false;
-  let notificationHideReadPreferenceUserId = "";
-  let notificationSoundInitialized = false;
-  let knownNotificationIds = new Set();
-  let notificationsLoading = false;
-  let notificationsError = "";
+  let notifications = notificationState.getState().notifications;
+  let notificationUnreadCount = notificationState.getState().notificationUnreadCount;
+  let hideReadNotifications = notificationState.getState().hideReadNotifications;
+  let notificationHideReadPreferenceUserId = notificationState.getState().notificationHideReadPreferenceUserId;
+  let notificationSoundInitialized = notificationState.getState().notificationSoundInitialized;
+  let knownNotificationIds = notificationState.getState().knownNotificationIds;
+  let notificationsLoading = notificationState.getState().notificationsLoading;
+  let notificationsError = notificationState.getState().notificationsError;
   let streamsRefreshInFlight = false;
-  let notificationsRefreshInFlight = false;
+  let notificationsRefreshInFlight = notificationState.getState().notificationsRefreshInFlight;
   let groupOverviewRefreshInFlight = groupState.getState().groupOverviewRefreshInFlight;
   let groupPresenceRefreshInFlight = groupState.getState().groupPresenceRefreshInFlight;
   let maintenanceRefreshInFlight = false;
+
+  const unsubscribeNotificationState = notificationState.subscribe((next) => {
+    notifications = next.notifications;
+    notificationUnreadCount = next.notificationUnreadCount;
+    hideReadNotifications = next.hideReadNotifications;
+    notificationHideReadPreferenceUserId = next.notificationHideReadPreferenceUserId;
+    notificationSoundInitialized = next.notificationSoundInitialized;
+    knownNotificationIds = next.knownNotificationIds;
+    notificationsLoading = next.notificationsLoading;
+    notificationsError = next.notificationsError;
+    notificationsRefreshInFlight = next.notificationsRefreshInFlight;
+  });
+
   let directConversations = directState.getState().directConversations;
   let directConversationId = directState.getState().directConversationId;
   let directConversationTarget = directState.getState().directConversationTarget;
@@ -1263,28 +1282,8 @@
   const notificationController = createNotificationController({
     api,
     getUser: () => user,
-    getState: () => ({
-      hideReadNotifications,
-      knownNotificationIds,
-      notificationHideReadPreferenceUserId,
-      notificationSoundInitialized,
-      notificationUnreadCount,
-      notifications,
-      notificationsError,
-      notificationsLoading,
-      notificationsRefreshInFlight,
-    }),
-    setState: (next) => {
-      if ("hideReadNotifications" in next) hideReadNotifications = next.hideReadNotifications;
-      if ("knownNotificationIds" in next) knownNotificationIds = next.knownNotificationIds;
-      if ("notificationHideReadPreferenceUserId" in next) notificationHideReadPreferenceUserId = next.notificationHideReadPreferenceUserId;
-      if ("notificationSoundInitialized" in next) notificationSoundInitialized = next.notificationSoundInitialized;
-      if ("notificationUnreadCount" in next) notificationUnreadCount = next.notificationUnreadCount;
-      if ("notifications" in next) notifications = next.notifications;
-      if ("notificationsError" in next) notificationsError = next.notificationsError;
-      if ("notificationsLoading" in next) notificationsLoading = next.notificationsLoading;
-      if ("notificationsRefreshInFlight" in next) notificationsRefreshInFlight = next.notificationsRefreshInFlight;
-    },
+    getState: () => notificationState.getState(),
+    setState: setNotificationState,
     playVoiceSound: (kind) => playVoiceSound(kind),
   });
   const {
@@ -1848,7 +1847,7 @@
         loadSocial,
         loadGroup,
         setNotice: (message) => { notice = message; },
-        setNotificationsError: (message) => { notificationsError = message; },
+        setNotificationsError: (message) => setNotificationState({ notificationsError: message }),
         setDirectConversationError: (message) => setDirectState({ directConversationError: message }),
         setSocialError: (message) => { socialError = message; },
       }));
@@ -5703,6 +5702,7 @@
   onDestroy(() => {
     unsubscribeNavigationState();
     unsubscribeAuthState();
+    unsubscribeNotificationState();
     unsubscribeSettingsState();
     unsubscribeGroupState();
     unsubscribeMessageState();

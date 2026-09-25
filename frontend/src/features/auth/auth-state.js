@@ -21,5 +21,5 @@ function createDefaultAuthState() {
 }
 
 export function createAuthStateStore(initial = {}) {
-  return createStateStore(DEFAULT_AUTH_STATE, initial, createDefaultAuthState);
+  return createStateStore(createDefaultAuthState(), initial, createDefaultAuthState);
 }
