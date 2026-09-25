@@ -242,6 +242,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Impedir fallback silencioso entre drivers e selecionar explicitamente o conjunto de repositórios conforme `TELAI_DATABASE_DRIVER`.
 - [x] Validar o primeiro domínio PostgreSQL opt-in (manutenção administrativa) com agendamento, leitura e limpeza contra o container local.
 - [x] Serializar a aplicação de migrations PostgreSQL com advisory lock e cobrir inicialização concorrente com fixture descartável.
+- [x] Corrigir a ordem de compatibilidade SQLite legada para que índices de colunas adicionadas depois do schema não impeçam a inicialização.
 - [x] Tornar as rotas HTTP de social e mensagens diretas explicitamente compatíveis com repositórios síncronos e assíncronos, sem alterar o comportamento SQLite.
 - [x] Tornar descoberta, gestão, salas, permissões, auditoria e convites de grupos compatíveis com repositórios síncronos e assíncronos.
 - [x] Tornar cargos, moderação, mensagens, anexos, threads, overview e presença de grupos compatíveis com repositórios síncronos e assíncronos.
