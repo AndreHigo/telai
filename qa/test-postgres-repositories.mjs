@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import postgresTestEnv from "./postgres-test-env.cjs";
 import { createDatabaseConfig } from "../server/config/database.mjs";
 import { createPostgresPool } from "../server/repositories/postgres.mjs";
 import { createPostgresSessionRepository } from "../server/repositories/sessions.mjs";
@@ -32,6 +33,7 @@ import { createPostgresUserProfileRepository } from "../server/repositories/user
 import { createPostgresSiteAdminRepository } from "../server/repositories/site-admin.mjs";
 import { createPostgresMaintenanceRepository } from "../server/repositories/maintenance.mjs";
 
+postgresTestEnv.loadPostgresTestEnv();
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
 

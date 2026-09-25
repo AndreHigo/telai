@@ -4,11 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
+import postgresTestEnv from "./postgres-test-env.cjs";
 import { createDatabaseConfig } from "../server/config/database.mjs";
 import { SQLITE_SCHEMA } from "../server/database/sqlite-schema.mjs";
 import { importSqliteToPostgres } from "../server/database/import-sqlite.mjs";
 import { createPostgresPool } from "../server/repositories/postgres.mjs";
 
+postgresTestEnv.loadPostgresTestEnv();
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before testing the import.");
 

@@ -72,6 +72,11 @@ Para validar os contratos dos repositórios contra o PostgreSQL local:
 pnpm run db:test:postgres-repositories
 ```
 
+Os comandos `db:test:postgres-*` carregam automaticamente `deploy/.env.postgres`
+quando esse arquivo local existe; variáveis já definidas no ambiente têm
+precedência. O arquivo continua fora do versionamento e nenhum segredo é
+impresso pelos testes.
+
 Para validar a importação idempotente com um fixture descartável:
 
 ```powershell

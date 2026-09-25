@@ -2,12 +2,14 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { loadPostgresTestEnv } = require("./postgres-test-env.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const port = Number(process.env.POSTGRES_MAINTENANCE_QA_PORT || 8817);
 const baseUrl = `http://127.0.0.1:${port}`;
 const databasePath = path.join(os.tmpdir(), `telai-postgres-maintenance-${process.pid}.sqlite`);
 const maintenanceToken = `qa-maintenance-${process.pid}`;
+loadPostgresTestEnv();
 const postgresUrl = process.env.DATABASE_URL;
 
 if (!postgresUrl) throw new Error("DATABASE_URL is required");
