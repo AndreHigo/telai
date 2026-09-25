@@ -74,6 +74,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair o repositório de acesso e permissões de grupos.
 - [x] Extrair o repositório de conversas diretas.
 - [x] Extrair o acesso persistente às sessões de autenticação.
+- [x] Preparar pool, Compose local e plano de migração para PostgreSQL.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
@@ -110,7 +111,8 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Webhooks de entrada.
 - [ ] Tokens de aplicação e bots.
 - [ ] Comandos, componentes e modais.
-- [ ] Migrar para PostgreSQL somente quando a carga, concorrência ou operação justificar.
+- [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.
+- [ ] Migrar schema, repositórios e dados de SQLite para PostgreSQL.
 - [ ] Adicionar Redis/event bus somente quando houver mais de uma instância ou necessidade de filas.
 
 ## Critérios de conclusão
