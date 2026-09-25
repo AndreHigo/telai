@@ -17,6 +17,7 @@
     "test:events": "node qa/e2e-events.cjs",
     "test:events-ui": "electron --no-sandbox qa/e2e-events-ui.cjs",
     "test:voice-activity": "node qa/test-voice-activity.cjs",
+    "test:rtc-quality": "node qa/test-rtc-quality.mjs",
     "test:security": "node qa/e2e-rate-limit.cjs",
     "test:notifications": "electron --no-sandbox qa/e2e-notifications.cjs",
     "test:web-audit": "electron --no-sandbox qa/e2e-web-audit.cjs",

@@ -305,6 +305,10 @@
   let voicePeerAudioHealth = new Map();
   let voicePeerHealthTimer = null;
   let voicePeerHealthInFlight = false;
+  let voiceQualityTimer = null;
+  let voiceQualityInFlight = false;
+  let voiceQualitySnapshots = new Map();
+  let rtcQualityModuleLoad = null;
   let voicePeerRelayRecoveryAttempted = new Set();
   let voicePendingCandidates = new Map();
   let voiceSignalQueues = new Map();
@@ -394,6 +398,7 @@
   const VOICE_PEER_CONNECTION_TIMEOUT_MS = 8_000;
   const VOICE_PEER_AUDIO_TRACK_TIMEOUT_MS = 6_000;
   const VOICE_PEER_HEALTH_POLL_MS = 2_000;
+  const VOICE_QUALITY_POLL_MS = 10_000;
   const VOICE_REMOTE_PLAYBACK_RETRY_MS = 1_000;
   const soundPreferenceDefaults = { enabled: true, volume: 0.55, enter: true, leave: true, mute: true, unmute: true, message: true, notification: true };
   function readSoundPreferences() {
@@ -2856,10 +2861,41 @@
   function stopVoicePeerHealthTimer() {
     if (voicePeerHealthTimer) window.clearInterval(voicePeerHealthTimer);
     voicePeerHealthTimer = null;
+    if (voiceQualityTimer) window.clearInterval(voiceQualityTimer);
+    voiceQualityTimer = null;
+    voiceQualitySnapshots = new Map();
   }
 
   function ensureVoicePeerHealthTimer() {
     if (!voicePeerHealthTimer) voicePeerHealthTimer = window.setInterval(checkVoicePeerAudioHealth, VOICE_PEER_HEALTH_POLL_MS);
+    if (!voiceQualityTimer) voiceQualityTimer = window.setInterval(pollVoiceRtcQuality, VOICE_QUALITY_POLL_MS);
+  }
+
+  async function pollVoiceRtcQuality() {
+    if (voiceQualityInFlight || !voicePeerConnections.size) return;
+    voiceQualityInFlight = true;
+    try {
+      rtcQualityModuleLoad ||= import("./services/media/rtc-quality.js");
+      const { summarizeRtcQuality } = await rtcQualityModuleLoad;
+      const samples = [];
+      for (const [participantId, peer] of voicePeerConnections) {
+        if (peer.connectionState === "closed" || typeof peer.getStats !== "function") continue;
+        const result = summarizeRtcQuality(await peer.getStats(), voiceQualitySnapshots);
+        voiceQualitySnapshots = result.snapshots;
+        if (!result.sample.mediaStreams) continue;
+        samples.push({ participantId, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, ...result.sample });
+      }
+      if (samples.length) {
+        reportClientError("voice_rtc_quality", new Error("Amostra de qualidade RTC."), {
+          peerCount: voicePeerConnections.size,
+          samples,
+        });
+      }
+    } catch (error) {
+      reportClientError("voice_rtc_quality_error", error, { voicePeers: voicePeerConnections.size });
+    } finally {
+      voiceQualityInFlight = false;
+    }
   }
 
   async function checkVoicePeerAudioHealth() {
@@ -6854,6 +6890,7 @@
     clearInterval(maintenanceCountdownTimer);
     groupEventGateway?.close();
     clearInterval(voiceActivityTimer);
+    if (voiceQualityTimer) window.clearInterval(voiceQualityTimer);
     window.removeEventListener("click", closeVoiceContextMenu);
     window.removeEventListener("click", closeRoomContextMenu);
     window.removeEventListener("popstate", handleBrowserPopState);

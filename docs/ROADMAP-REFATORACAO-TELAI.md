@@ -205,6 +205,7 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Avaliar codecs, bitrate adaptativo, simulcast/SVC e TURN adequados à VPS, preservando a interface atual.
 - [ ] Substituir o P2P por uma arquitetura de mídia escalável somente após benchmark de custo, latência, CPU e qualidade.
 - [ ] Adicionar métricas de jitter, perda, RTT, bitrate e reconexão.
+  - [x] Extrair sumarização leve de `RTCStatsReport` e enviar amostras de qualidade de voz sob demanda, sem aumentar o bundle inicial.
 - [ ] Preservar captura de tela, janela, câmera, áudio de jogos e Electron.
 
 ### Fase 5 — Plataforma e escala sob demanda
