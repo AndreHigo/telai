@@ -10,6 +10,7 @@ import { installWebsocketHeartbeat } from "./server/gateway/heartbeat.mjs";
 import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
 import { createGroupAccessRepository } from "./server/repositories/groups.mjs";
 import { createNotificationRepository } from "./server/repositories/notifications.mjs";
+import { createChannelProfileRepository } from "./server/repositories/channel-profiles.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { createSessionRepository } from "./server/repositories/sessions.mjs";
 import { json, readJson } from "./server/http/body.mjs";
@@ -750,6 +751,7 @@ const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupActio
 const { directConversationForUser, directConversationPayload } = createDirectConversationRepository(database, { compactUserSummary });
 const sessionRepository = createSessionRepository(database, { hashSessionToken });
 const { createNotification } = createNotificationRepository(database);
+const { channelProfileForUser } = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
 
 function pruneExpiredRuntimeState() {
   const now = Date.now();
@@ -1283,13 +1285,6 @@ function syncNotificationsForUser(userId) {
       createdAt: request.updatedAt,
     });
   }
-}
-
-function channelProfileForUser(userId) {
-  const row = database.prepare("SELECT channel_profiles.user_id AS userId, channel_profiles.display_name AS displayName, channel_profiles.avatar_data AS avatarData, channel_profiles.games FROM channel_profiles WHERE channel_profiles.user_id = ?").get(userId);
-  if (row) return { userId: row.userId, displayName: row.displayName, avatarData: compactAvatarData(row.avatarData), games: parseChannelGames(row.games) };
-  const user = database.prepare("SELECT id AS userId, display_name AS displayName, avatar_data AS avatarData FROM users WHERE id = ?").get(userId);
-  return user ? { userId: user.userId, displayName: user.displayName, avatarData: compactAvatarData(user.avatarData), games: [] } : null;
 }
 
 function mergeUsers(targetId, sourceId) {

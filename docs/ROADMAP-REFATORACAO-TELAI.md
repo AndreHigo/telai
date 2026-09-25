@@ -75,6 +75,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair o repositório de conversas diretas.
 - [x] Extrair o acesso persistente às sessões de autenticação.
 - [x] Extrair a escrita persistente de notificações.
+- [x] Extrair o repositório de perfil de canal.
 - [ ] Separar o sincronizador de notificações e suas consultas de domínio.
 - [x] Preparar pool, Compose local e plano de migração para PostgreSQL.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
