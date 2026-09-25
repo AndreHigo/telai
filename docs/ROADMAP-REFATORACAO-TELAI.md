@@ -83,6 +83,7 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
+- [x] Extrair configuração de ícones e navegação global do `App.svelte`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
 
 ### Fase 2 — Contratos e tempo real
