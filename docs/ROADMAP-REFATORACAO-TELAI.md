@@ -171,6 +171,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair leitura persistente, deduplicação de requests e contagem de não lidas para `frontend/src/features/groups/room-read-controller.js`.
     - [x] Extrair o ciclo de vida do gateway de eventos de grupos e o carregamento do handler para `frontend/src/features/groups/event-runtime.js`.
     - [x] Extrair o carregamento lazy e os wrappers da feature de threads para `frontend/src/features/groups/thread-runtime.js`.
+    - [x] Extrair o painel de cargos e permissões da administração de grupos para `frontend/src/features/settings/GroupRolePermissionsPanel.svelte`, preservando classes e bindings.
     - [x] Extrair notas de atualização e seu estado de leitura para `frontend/src/features/shell/release-notes-controller.js` em chunk lazy.
     - [x] Extrair atualização, inicialização com o sistema, aceleração gráfica e seletores de captura Electron para `frontend/src/features/shell/desktop-controller.js` em chunk lazy.
     - [x] Extrair transporte WebSocket, pares WebRTC, ICE, renegociação e chat do host para `frontend/src/features/broadcast/transport-controller.js` em chunk lazy.
