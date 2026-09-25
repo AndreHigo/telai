@@ -108,6 +108,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair convites de membro e resgate de convites para `server/http/member-invite-routes.mjs`.
 - [x] Extrair manutenção e API administrativa para `server/http/admin-routes.mjs`, mantendo a página `/admin` no servidor principal.
 - [x] Extrair sessão, consentimento, cadastro, login, logout e operações de conta para `server/http/auth-routes.mjs`, mantendo OAuth no gateway.
+- [x] Extrair métricas locais e diagnósticos de cliente para `server/http/observability-routes.mjs`.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
