@@ -1,12 +1,23 @@
-export function createApplicationCommandController({ api, setNotice }) {
+export function createApplicationCommandController({ api, getState, setState, setNotice }) {
   let loadSequence = 0;
 
   async function loadForGroup(groupId) {
     const sequence = ++loadSequence;
-    if (!groupId) return [];
-    const result = await api(`/api/groups/${encodeURIComponent(groupId)}/applications/commands`);
-    if (sequence !== loadSequence) return null;
-    return result.applications || [];
+    const normalizedGroupId = groupId || null;
+    setState({ groupId: normalizedGroupId, commands: [], loading: Boolean(normalizedGroupId), error: "" });
+    if (!normalizedGroupId) return [];
+    try {
+      const result = await api(`/api/groups/${encodeURIComponent(normalizedGroupId)}/applications/commands`);
+      if (sequence !== loadSequence || getState().groupId !== normalizedGroupId) return null;
+      const commands = result.applications || [];
+      setState({ commands, loading: false });
+      return commands;
+    } catch (error) {
+      if (sequence !== loadSequence || getState().groupId !== normalizedGroupId) return null;
+      setState({ commands: [], loading: false, error: error?.message || "Não foi possível carregar os comandos dos bots." });
+      setNotice?.(error?.message || "Não foi possível carregar os comandos dos bots.");
+      return null;
+    }
   }
 
   async function invoke({ groupId, roomId, applicationId, commandName, options }) {

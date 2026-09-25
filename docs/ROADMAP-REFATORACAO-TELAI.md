@@ -185,6 +185,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair abertura e navegação da tela de configurações para `frontend/src/features/settings/navigation-controller.js`, preservando bindings e carregamentos existentes.
     - [x] Extrair o pós-carregamento, seleção de salas e inscrição em eventos para `frontend/src/features/groups/controller.js`.
     - [x] Centralizar grupos, overview, sala selecionada e flags de carregamento em `frontend/src/features/groups/group-state.js`, preservando os contratos do shell.
+    - [x] Extrair catálogo, carregamento e execução de comandos de aplicações para `frontend/src/features/groups/application-command-state.js` e `application-command-controller.js`, preservando o compositor visual.
     - [x] Centralizar rascunhos, edição, menções, busca e threads em `frontend/src/features/groups/message-state.js`, preservando os bindings do workspace textual.
     - [x] Centralizar conversas diretas, histórico, rascunho e flags de envio em `frontend/src/features/direct/direct-state.js`, preservando a tela e o contrato do controlador.
     - [x] Centralizar navegação, formulários de perfil/canal e flags de configuração em `frontend/src/features/settings/settings-state.js`, preservando a tela e os bindings visuais.

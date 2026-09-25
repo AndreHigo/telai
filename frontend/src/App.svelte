@@ -37,6 +37,7 @@
   import { createGroupStateStore } from "./features/groups/group-state.js";
   import { createMessageStateStore } from "./features/groups/message-state.js";
   import { createApplicationCommandController } from "./features/groups/application-command-controller.js";
+  import { createApplicationCommandStateStore } from "./features/groups/application-command-state.js";
   import { createGroupThreadRuntime } from "./features/groups/thread-runtime.js";
   import {
     createSelectedVoiceAudioConstraints,
@@ -138,6 +139,7 @@
   let user = null;
   const groupState = createGroupStateStore();
   const messageState = createMessageStateStore();
+  const applicationCommandState = createApplicationCommandStateStore();
   const directState = createDirectStateStore();
   const settingsState = createSettingsStateStore();
   const authState = createAuthStateStore();
@@ -160,8 +162,8 @@
   let viewerStreamPath = "";
   let viewerStream = null;
   let selectedGroupId = groupState.getState().selectedGroupId;
-  let groupApplicationCommands = [];
-  let groupApplicationCommandsGroupId = "";
+  let groupApplicationCommands = applicationCommandState.getState().commands;
+  let groupApplicationCommandsGroupId = applicationCommandState.getState().groupId;
   let groupOverview = groupState.getState().groupOverview;
   let knownGroupMessageIds = groupState.getState().knownGroupMessageIds;
   let selectedRoomId = groupState.getState().selectedRoomId;
@@ -967,6 +969,11 @@
     groupPresenceRefreshInFlight = next.groupPresenceRefreshInFlight;
   });
 
+  const unsubscribeApplicationCommandState = applicationCommandState.subscribe((next) => {
+    groupApplicationCommands = next.commands;
+    groupApplicationCommandsGroupId = next.groupId;
+  });
+
   function setMessageState(next) {
     messageState.setState(next);
   }
@@ -1111,8 +1118,6 @@
   $: visualStyle = `--mirante-button-color:${buttonColor};--mirante-input-background:${inputBackgroundColor};--mirante-background:${backgroundColor};`;
   $: roomMessages = (groupOverview?.messages || []).filter((message) => !selectedRoom || !message.roomId || message.roomId === selectedRoom.id);
   $: if (selectedGroupId !== groupApplicationCommandsGroupId) {
-    groupApplicationCommandsGroupId = selectedGroupId || "";
-    groupApplicationCommands = [];
     void loadGroupApplicationCommands(selectedGroupId);
   }
   $: if (notice) {
@@ -1121,7 +1126,12 @@
   }
 
   const api = createApiClient({ reportError: reportClientError });
-  const applicationCommandController = createApplicationCommandController({ api, setNotice: (message) => { notice = message; } });
+  const applicationCommandController = createApplicationCommandController({
+    api,
+    getState: () => applicationCommandState.getState(),
+    setState: (next) => applicationCommandState.setState(next),
+    setNotice: (message) => { notice = message; },
+  });
   const voiceSoundController = createVoiceSoundController({
     getState: () => ({ soundPreferences, voiceDeafened, voiceOutputVolume }),
     setState: (next) => {
@@ -1474,19 +1484,7 @@
   async function selectRoom(...args) { return (await getGroupController()).selectRoom(...args); }
 
   async function loadGroupApplicationCommands(groupId) {
-    if (!groupId) {
-      groupApplicationCommands = [];
-      return;
-    }
-    try {
-      const applications = await applicationCommandController.loadForGroup(groupId);
-      if (groupApplicationCommandsGroupId !== groupId || applications === null) return;
-      groupApplicationCommands = applications;
-    } catch (error) {
-      if (groupApplicationCommandsGroupId !== groupId) return;
-      groupApplicationCommands = [];
-      notice = error?.message || "Não foi possível carregar os comandos dos bots.";
-    }
+    await applicationCommandController.loadForGroup(groupId);
   }
 
   async function startApplicationInteraction({ applicationId, commandName, options }) {
@@ -5769,6 +5767,7 @@
     unsubscribeSocialState();
     unsubscribeSettingsState();
     unsubscribeGroupState();
+    unsubscribeApplicationCommandState();
     unsubscribeMessageState();
     unsubscribeDirectState();
     clearBroadcastCaptureRecoveryTimer();
