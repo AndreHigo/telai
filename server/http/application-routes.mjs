@@ -294,10 +294,27 @@ export function createApplicationRoutes({
           json(response, 409, { error: "A interação não está disponível para resposta." });
           return true;
         }
+        let persistedMessage = null;
+        if (interaction.response?.type === "message") {
+          persistedMessage = await groupMessageRepository.createMessage({
+            groupId: interaction.groupId,
+            roomId: interaction.roomId,
+            applicationInteractionId: interaction.id,
+            userId: identity.botUserId,
+            body: interaction.response.content || "",
+            displayName: identity.botDisplayName,
+            username: identity.botUsername,
+          });
+          persistedMessage.attachments = [];
+          persistedMessage.components = Array.isArray(interaction.response.components) ? interaction.response.components : [];
+          persistedMessage.interactionId = interaction.id;
+          persistedMessage.botInteraction = true;
+        }
         await applicationRepository.touchToken(identity.tokenId);
         await publishGroupEvent(interaction.groupId, {
           type: "application-interaction-response",
           interaction,
+          message: persistedMessage,
           bot: { id: identity.botUserId, username: identity.botUsername, displayName: identity.botDisplayName },
         });
         json(response, 200, { interaction });

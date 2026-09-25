@@ -291,6 +291,7 @@ export const SQLITE_SCHEMA = `
     room_id TEXT REFERENCES group_rooms(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     parent_message_id TEXT REFERENCES group_messages(id) ON DELETE CASCADE,
+    application_interaction_id TEXT REFERENCES application_interactions(id) ON DELETE SET NULL,
     body TEXT NOT NULL,
     created_at TEXT NOT NULL,
     edited_at TEXT,
@@ -298,6 +299,7 @@ export const SQLITE_SCHEMA = `
     author_username TEXT
   );
   CREATE INDEX IF NOT EXISTS group_messages_recent_idx ON group_messages(group_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS group_messages_application_interaction_idx ON group_messages(application_interaction_id);
   CREATE TABLE IF NOT EXISTS group_room_reads (
     group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

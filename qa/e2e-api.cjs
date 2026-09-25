@@ -422,6 +422,11 @@ async function main() {
     });
     assert.equal(botInteractionResponse.response.status, 200, JSON.stringify(botInteractionResponse.body));
     assert.equal(botInteractionResponse.body.interaction.response.content, "pong");
+    const interactionOverview = await api(owner, `/api/groups/${groupId}/overview`);
+    const persistedInteractionMessage = interactionOverview.body.messages.find((message) => message.interactionId === pendingInteraction.id);
+    assert.ok(persistedInteractionMessage);
+    assert.equal(persistedInteractionMessage.botInteraction, true);
+    assert.deepEqual(persistedInteractionMessage.components.map((component) => component.customId), ["confirm", "feedback"]);
     const componentInteraction = await api(owner, `/api/interactions/${pendingInteraction.id}/components`, "POST", { customId: "confirm" });
     assert.equal(componentInteraction.response.status, 202, JSON.stringify(componentInteraction.body));
     assert.equal(componentInteraction.body.interaction.kind, "component");

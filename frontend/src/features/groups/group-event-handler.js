@@ -65,7 +65,7 @@ export function createGroupEventHandler({
     if (message.type === "application-interaction-response" && message.interaction?.response?.type === "message" && overview) {
       const interaction = message.interaction;
       const response = interaction.response;
-      const incoming = {
+      const incoming = message.message || {
         id: `interaction-${interaction.id}`,
         groupId: message.groupId,
         roomId: interaction.roomId || null,

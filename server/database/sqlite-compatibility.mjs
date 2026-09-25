@@ -5,6 +5,7 @@ import { ensureColumn } from "../repositories/sqlite.mjs";
 export function ensureCompatibilityColumns(database) {
   ensureColumn(database, "group_messages", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE CASCADE");
   ensureColumn(database, "group_messages", "parent_message_id", "TEXT REFERENCES group_messages(id) ON DELETE CASCADE");
+  ensureColumn(database, "group_messages", "application_interaction_id", "TEXT REFERENCES application_interactions(id) ON DELETE SET NULL");
   ensureColumn(database, "group_messages", "edited_at", "TEXT");
   ensureColumn(database, "group_messages", "author_display_name", "TEXT");
   ensureColumn(database, "group_messages", "author_username", "TEXT");
@@ -138,6 +139,7 @@ export function ensureCompatibilityIndexes(database) {
     CREATE INDEX IF NOT EXISTS stream_chat_messages_stream_idx ON stream_chat_messages(stream_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS group_messages_room_idx ON group_messages(group_id, room_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS group_messages_thread_idx ON group_messages(parent_message_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS group_messages_application_interaction_idx ON group_messages(application_interaction_id);
     CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_messages(sender_id, created_at DESC);
   `);
 }
