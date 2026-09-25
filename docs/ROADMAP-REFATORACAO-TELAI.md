@@ -121,6 +121,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair configuração ICE, healthcheck e runtime config para `server/http/media-routes.mjs`, mantendo WebRTC/WebSocket no gateway.
 - [x] Extrair resolução, listagem, abertura, encerramento e follows de streams para `server/http/stream-routes.mjs`, mantendo salas runtime e WebRTC no gateway.
 - [x] Extrair presença, autorização, validade runtime e caminhos públicos de streams para `server/domain/streams/runtime.mjs`.
+- [x] Extrair autorização de host/viewer para `server/domain/streams/runtime.mjs`, mantendo as regras de visibilidade e grupo.
 - [x] Extrair exclusão de grupos, overview e presença para `server/http/group-runtime-routes.mjs`, mantendo o runtime de voz no gateway.
 - [x] Extrair início, callback e vínculo OAuth para `server/http/oauth-routes.mjs`, mantendo a sessão local e os provedores existentes.
 - [x] Extrair páginas SEO, legais, download, updates e fallback de arquivos para `server/http/static-routes.mjs`.
@@ -131,6 +132,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair criação de salas, participantes, autorização, saída e substituição de sessões para `server/domain/voice/runtime.mjs`.
 - [x] Extrair validação de SDP/ICE e rate limits de sinalização, fala e mensagens de controle para `server/gateway/policy.mjs`.
 - [x] Extrair entrada, relay, sinalização, qualidade, chat e encerramento de transmissões para `server/gateway/broadcast-message-handler.mjs`.
+- [x] Extrair o dispatcher de mensagens WebSocket para `server/gateway/message-dispatcher.mjs`.
 - [x] Extrair runtime de salas, reconexão do host, relay e presença para `server/gateway/broadcast-runtime.mjs`.
 - [x] Extrair a configuração ICE/STUN/TURN para `server/media/ice-configuration.mjs`, mantendo credenciais TURN temporárias.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.

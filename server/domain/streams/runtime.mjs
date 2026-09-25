@@ -7,6 +7,7 @@ export function createStreamRuntime({
   hostReconnectGraceMs,
   isGroupMember,
   slugFor,
+  requireLogin,
 }) {
   function presenceKey(groupId, userId) {
     return `${groupId}:${userId}`;
@@ -25,6 +26,24 @@ export function createStreamRuntime({
     const createdBy = stream.created_by ?? stream.createdBy;
     const groupId = stream.group_id ?? stream.groupId;
     return stream.visibility === "public" || (userId && createdBy === userId) || (userId && groupId && isGroupMember(userId, groupId));
+  }
+
+  async function authorizeRoomJoin(roomId, socket, role) {
+    if (!requireLogin) return { ok: true };
+    const stream = streamRepository.findActiveForRoom(roomId);
+    if (!stream) return { ok: false, message: "Esta transmissão não existe ou já foi encerrada." };
+    if (!runtimeStreamIsLive(stream)) return { ok: false, message: "Esta transmissão foi encerrada. Abra uma nova live para continuar." };
+    if (role === "viewer" && socket.user && stream.createdBy === socket.user.id) {
+      return { ok: false, message: "Você já está transmitindo esta live pelo painel do Telai." };
+    }
+    // Links públicos podem ser assistidos sem conta. A autenticação continua
+    // obrigatória para abrir lives e para acessar qualquer canal privado.
+    if (role === "viewer" && stream.visibility === "public") return { ok: true };
+    if (!socket.user) return { ok: false, message: "Entre com sua conta para acessar esta transmissão." };
+    if (role === "host" && stream.createdBy === socket.user.id) return { ok: true };
+    return canAccessStream(socket.user.id, stream)
+      ? { ok: true }
+      : { ok: false, message: "Você não tem acesso a esta transmissão privada." };
   }
 
   function streamForRoom(roomId) {
@@ -68,6 +87,7 @@ export function createStreamRuntime({
   }
 
   return {
+    authorizeRoomJoin,
     canAccessStream,
     decorateRuntimeStream,
     endStreamByRoom,

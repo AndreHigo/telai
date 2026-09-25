@@ -7,6 +7,7 @@ import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./maile
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { createWebsocketGateway } from "./server/gateway/websocket.mjs";
 import { createGatewayPolicy } from "./server/gateway/policy.mjs";
+import { createGatewayMessageDispatcher } from "./server/gateway/message-dispatcher.mjs";
 import { createBinaryMessageHandler } from "./server/gateway/binary-message.mjs";
 import { createVoiceMessageHandler } from "./server/gateway/voice-message-handler.mjs";
 import { createBroadcastMessageHandler } from "./server/gateway/broadcast-message-handler.mjs";
@@ -798,6 +799,7 @@ const {
   endStreamByRoom,
   isPresent,
   loadStreamChat,
+  authorizeRoomJoin,
   runtimeStreamIsLive,
   streamForRoom,
   streamPublicPath,
@@ -811,6 +813,7 @@ const {
   hostReconnectGraceMs,
   isGroupMember,
   slugFor,
+  requireLogin,
 });
 const notificationSyncService = createNotificationSyncService(database, {
   getNotificationScope: (userId) => userPreferenceRepository.getPreferences(userId).liveNotificationScope,
@@ -1277,47 +1280,6 @@ function publicOriginForRequest(request) {
   return host ? `${protocol}://${host}` : "";
 }
 
-async function authorizeRoomJoin(roomId, socket, role) {
-  if (!requireLogin) return { ok: true };
-  const stream = streamRepository.findActiveForRoom(roomId);
-  if (!stream) return { ok: false, message: "Esta transmissão não existe ou já foi encerrada." };
-  if (!runtimeStreamIsLive(stream)) return { ok: false, message: "Esta transmissão foi encerrada. Abra uma nova live para continuar." };
-  if (role === "viewer" && socket.user && stream.createdBy === socket.user.id) {
-    return { ok: false, message: "Você já está transmitindo esta live pelo painel do Telai." };
-  }
-  // Links públicos podem ser assistidos sem conta. A autenticação continua
-  // obrigatória para abrir lives e para acessar qualquer canal privado.
-  if (role === "viewer" && stream.visibility === "public") return { ok: true };
-  if (!socket.user) return { ok: false, message: "Entre com sua conta para acessar esta transmissão." };
-  if (role === "host" && stream.createdBy === socket.user.id) return { ok: true };
-  return canAccessStream(socket.user.id, stream)
-    ? { ok: true }
-    : { ok: false, message: "Você não tem acesso a esta transmissão privada." };
-}
-
-async function handleMessage(socket, message) {
-  const messageType = String(message?.type || "unknown");
-  if (!["signal", "voice-signal", "relay-chunk"].includes(messageType)) {
-    debugLog("ws_message", { clientId: socket.clientId, type: messageType, roomId: socket.roomId, voiceRoomId: socket.voiceRoomId });
-  }
-  if (messageType === "signal" || messageType === "voice-signal") {
-    if (!allowRtcSignal(socket)) {
-      warnLog("ws_signal_rate_limited", { clientId: socket.clientId, type: messageType, roomId: socket.roomId, voiceRoomId: socket.voiceRoomId });
-      // Um bloqueio de sinalização não pode derrubar a sala de voz inteira.
-      // O frontend trata este tipo como recuperável e renegocia apenas o par
-      // afetado; o erro genérico era interpretado como saída da sala.
-      return send(socket, {
-        type: messageType === "voice-signal" ? "voice-signal-error" : "error",
-        ...(messageType === "voice-signal" ? { target: String(message.target || "").slice(0, 64) } : {}),
-        message: "Sinalização temporariamente limitada. Tentando recuperar o áudio.",
-      });
-    }
-  }
-  if (handleVoiceMessage(socket, message)) return;
-
-  if (await handleBroadcastMessage(socket, message)) return;
-}
-
 async function handleHttpRequest(request, response) {
   const requestStartedAt = process.hrtime.bigint();
   const requestId = randomUUID();
@@ -1464,6 +1426,14 @@ const handleVoiceMessage = createVoiceMessageHandler({
   allowVoiceSpeakingUpdate,
   reportVoiceSpeakingRateLimited,
   normalizeRtcSignalPayload,
+});
+const handleMessage = createGatewayMessageDispatcher({
+  debugLog,
+  allowRtcSignal,
+  warnLog,
+  send,
+  handleVoiceMessage,
+  handleBroadcastMessage,
 });
 
 const handleBinaryMessage = createBinaryMessageHandler({
