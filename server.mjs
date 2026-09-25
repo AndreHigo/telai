@@ -25,6 +25,7 @@ import { createGroupInviteRepository } from "./server/repositories/group-invites
 import { createGroupJoinRequestRepository } from "./server/repositories/group-join-requests.mjs";
 import { createGroupRoleRepository } from "./server/repositories/group-roles.mjs";
 import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs";
+import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -797,6 +798,7 @@ const groupJoinRequestRepository = createGroupJoinRequestRepository(database, {
 });
 const groupRoleRepository = createGroupRoleRepository(database, { createId: randomUUID });
 const groupRoomRepository = createGroupRoomRepository(database, { createId: randomUUID });
+const groupPermissionRepository = createGroupPermissionRepository(database);
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2941,14 +2943,7 @@ async function handleHttpRequest(request, response) {
     groupSetupRepository.ensureDefaultGroupRoles(groupId, group.ownerId);
     const roles = groupRoleRepository.listRoles(groupId);
     const invites = groupInviteRepository.listGroupInvites(groupId);
-    const joinRequests = group.ownerId === user.id ? database.prepare(`
-      SELECT group_join_requests.id, group_join_requests.status, group_join_requests.created_at AS createdAt,
-        group_join_requests.updated_at AS updatedAt, users.id AS userId, users.display_name AS displayName,
-        users.username, users.avatar_data AS avatarData
-      FROM group_join_requests JOIN users ON users.id = group_join_requests.user_id
-      WHERE group_join_requests.group_id = ? AND group_join_requests.status = 'pending'
-      ORDER BY group_join_requests.created_at ASC
-    `).all(groupId).map(compactUserSummary) : [];
+    const joinRequests = group.ownerId === user.id ? groupJoinRequestRepository.listPending(groupId) : [];
     return json(response, 200, { group, roles, invites, joinRequests });
   }
   const groupRoleCreateMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/roles$/);
@@ -2956,7 +2951,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = groupRoleCreateMatch[1];
-    const owner = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const owner = groupPermissionRepository.member(groupId, user.id);
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode criar cargos." });
     readJson(request).then((body) => {
       const name = String(body.name || "").trim().slice(0, 32);
@@ -3224,26 +3219,22 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = groupPermissionsMatch[1];
-    const owner = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const owner = groupPermissionRepository.member(groupId, user.id);
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode alterar permissões." });
     readJson(request).then((body) => {
       const memberId = String(body.userId || "");
-      const member = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, memberId);
+      const member = groupPermissionRepository.member(groupId, memberId);
       if (!member) return json(response, 404, { error: "Membro não encontrado neste grupo." });
       if (member.role === "owner") return json(response, 400, { error: "As permissões do dono são sempre completas." });
       const canChat = body.canChat === false ? 0 : 1;
       const canStream = body.canStream === false ? 0 : 1;
       const canInvite = body.canInvite === false ? 0 : 1;
-      ensureGroupPermissionRow(groupId, memberId);
-      const currentPermissions = database.prepare("SELECT can_view_voice_members AS canViewVoiceMembers FROM group_member_permissions WHERE group_id = ? AND user_id = ?").get(groupId, memberId);
+      groupPermissionRepository.ensure(groupId, memberId);
+      const currentPermissions = groupPermissionRepository.current(groupId, memberId);
       const canViewVoiceMembers = body.canViewVoiceMembers === undefined
         ? (currentPermissions?.canViewVoiceMembers ?? 1)
         : body.canViewVoiceMembers === false ? 0 : 1;
-      database.prepare(`
-        UPDATE group_member_permissions SET can_chat = ?, can_stream = ?, can_invite = ?, can_view_voice_members = ?, updated_at = ?
-        WHERE group_id = ? AND user_id = ?
-      `).run(canChat, canStream, canInvite, canViewVoiceMembers, new Date().toISOString(), groupId, memberId);
-      return json(response, 200, { permissions: { userId: memberId, canChat: Boolean(canChat), canStream: Boolean(canStream), canInvite: Boolean(canInvite), canViewVoiceMembers: Boolean(canViewVoiceMembers) } });
+      return json(response, 200, { permissions: groupPermissionRepository.update({ groupId, userId: memberId, canChat, canStream, canInvite, canViewVoiceMembers }) });
     }).catch(() => json(response, 400, { error: "Não foi possível atualizar as permissões." }));
     return;
   }
