@@ -1684,6 +1684,18 @@
   async function stopBroadcastAudioMix(...args) { return (await getBroadcastAudioMixerController()).stop(...args); }
   async function mixBroadcastAudio(...args) { return (await getBroadcastAudioMixerController()).mix(...args); }
 
+  let broadcastTrackControllerPromise = null;
+  function getBroadcastTrackController() {
+    if (!broadcastTrackControllerPromise) {
+      broadcastTrackControllerPromise = import("./features/broadcast/track-controller.js").then(({ createBroadcastTrackController }) => createBroadcastTrackController({
+        getState: () => ({ mediaMode, peerConnections }),
+        negotiateBroadcastPeer,
+      }));
+    }
+    return broadcastTrackControllerPromise;
+  }
+  async function replaceBroadcastTracks(...args) { return (await getBroadcastTrackController()).replaceBroadcastTracks(...args); }
+
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
     return list.scrollHeight - list.scrollTop - list.clientHeight <= 96;
@@ -5050,45 +5062,6 @@
       leaveGroupError = error.message || "Não foi possível sair do grupo agora.";
     } finally {
       leaveGroupBusy = false;
-    }
-  }
-
-  async function replaceBroadcastTracks(nextStream) {
-    const nextTracks = {
-      video: nextStream?.getVideoTracks()[0] || null,
-      audio: nextStream?.getAudioTracks()[0] || null,
-    };
-    const operations = [];
-    let audioTrackAdded = false;
-    for (const peer of peerConnections.values()) {
-      for (const [kind, track] of Object.entries(nextTracks)) {
-        const senders = peer.getSenders().filter((candidate) => candidate.track?.kind === kind);
-        const reservedSender = kind === "audio"
-          ? peer.getTransceivers?.().find((transceiver) => transceiver.sender?.track?.kind === kind || transceiver.receiver?.track?.kind === kind)?.sender
-          : null;
-        const [sender, ...duplicates] = senders.length ? senders : (reservedSender ? [reservedSender] : []);
-        if (sender) operations.push(sender.replaceTrack(track));
-        else if (track) {
-          peer.addTrack(track, nextStream);
-          if (kind === "audio") audioTrackAdded = true;
-        }
-        for (const duplicate of duplicates) operations.push(duplicate.replaceTrack(null));
-      }
-    }
-    await Promise.all(operations);
-    if (nextTracks.audio && mediaMode === "p2p") {
-      // Quando a live começou sem áudio, o m-line reservado precisa receber
-      // uma oferta atualizada para o viewer começar a entregar a nova faixa.
-      // Também cobre navegadores que não propagam replaceTrack(null -> live)
-      // sem renegociação explícita.
-      audioTrackAdded = true;
-    }
-    if (audioTrackAdded) {
-      await Promise.all([...peerConnections.keys()].map(async (viewerId) => {
-        const peer = peerConnections.get(viewerId);
-        if (!peer || ["closed", "failed"].includes(peer.connectionState) || peer.signalingState !== "stable") return;
-        await negotiateBroadcastPeer(viewerId);
-      }));
     }
   }
 
