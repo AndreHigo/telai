@@ -162,6 +162,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair navegação, cabeçalho, subnavegação interna e formulário de perfil do canal para `frontend/src/features/settings`.
     - [x] Extrair cartões de perfil, preferências, contas conectadas e administração de grupo.
     - [x] Extrair cartão de notificações.
+    - [x] Extrair carregamento, leitura e preferência de notificações para `frontend/src/features/notifications/controller.js`.
     - [ ] Extrair cartão de voz com code-splitting para não aumentar o bundle inicial.
 
 ### Fase 2 — Contratos e tempo real

@@ -3,6 +3,7 @@
   import Viewer from "./Viewer.svelte";
   import AuthPage from "./features/auth/AuthPage.svelte";
   import NotificationsPage from "./features/notifications/NotificationsPage.svelte";
+  import { createNotificationController } from "./features/notifications/controller.js";
   import FriendsPage from "./features/social/FriendsPage.svelte";
   import FollowingPage from "./features/social/FollowingPage.svelte";
   import DirectMessagesPage from "./features/direct/DirectMessagesPage.svelte";
@@ -756,6 +757,40 @@
   };
 
   const api = createApiClient({ reportError: reportClientError });
+  const notificationController = createNotificationController({
+    api,
+    getUser: () => user,
+    getState: () => ({
+      hideReadNotifications,
+      knownNotificationIds,
+      notificationHideReadPreferenceUserId,
+      notificationSoundInitialized,
+      notificationUnreadCount,
+      notifications,
+      notificationsError,
+      notificationsLoading,
+      notificationsRefreshInFlight,
+    }),
+    setState: (next) => {
+      if ("hideReadNotifications" in next) hideReadNotifications = next.hideReadNotifications;
+      if ("knownNotificationIds" in next) knownNotificationIds = next.knownNotificationIds;
+      if ("notificationHideReadPreferenceUserId" in next) notificationHideReadPreferenceUserId = next.notificationHideReadPreferenceUserId;
+      if ("notificationSoundInitialized" in next) notificationSoundInitialized = next.notificationSoundInitialized;
+      if ("notificationUnreadCount" in next) notificationUnreadCount = next.notificationUnreadCount;
+      if ("notifications" in next) notifications = next.notifications;
+      if ("notificationsError" in next) notificationsError = next.notificationsError;
+      if ("notificationsLoading" in next) notificationsLoading = next.notificationsLoading;
+      if ("notificationsRefreshInFlight" in next) notificationsRefreshInFlight = next.notificationsRefreshInFlight;
+    },
+    playVoiceSound: (kind) => playVoiceSound(kind),
+  });
+  const {
+    loadNotifications,
+    markAllNotificationsRead,
+    markNotificationRead,
+    setHideReadNotifications,
+    syncNotificationHideReadPreference,
+  } = notificationController;
 
   async function loadGroups() {
     const result = await api("/api/groups");
@@ -972,82 +1007,6 @@
       await Promise.all([loadGroups(), loadStreams(), loadPreferences(), loadVoiceUserPreferences(), loadNotifications(), loadDirectConversations(), loadSocial()]);
     } catch (error) {
       notice = error.message;
-    }
-  }
-
-  async function loadNotifications({ silent = false } = {}) {
-    if (notificationsRefreshInFlight) return;
-    notificationsRefreshInFlight = true;
-    if (!silent) notificationsLoading = true;
-    notificationsError = "";
-    syncNotificationHideReadPreference();
-    try {
-      const result = await api("/api/notifications");
-      const allNotifications = result.notifications || [];
-      const unreadNotifications = allNotifications.filter((notification) => notification.unread);
-      if (notificationSoundInitialized && unreadNotifications.some((notification) => notification.id && !knownNotificationIds.has(notification.id))) {
-        playVoiceSound("notification");
-      }
-      knownNotificationIds = new Set(unreadNotifications.map((notification) => notification.id).filter(Boolean));
-      notificationSoundInitialized = true;
-      notifications = allNotifications;
-      notificationUnreadCount = Number(result.unreadCount || 0);
-    } catch (error) {
-      notificationsError = error.message;
-    } finally {
-      notificationsRefreshInFlight = false;
-      if (!silent) notificationsLoading = false;
-    }
-  }
-
-  function syncNotificationHideReadPreference() {
-    const userId = user?.id == null ? "" : String(user.id);
-    if (!userId) {
-      notificationHideReadPreferenceUserId = "";
-      hideReadNotifications = false;
-      return;
-    }
-    if (notificationHideReadPreferenceUserId === userId) return;
-    notificationHideReadPreferenceUserId = userId;
-    try { hideReadNotifications = localStorage.getItem(`mirante-hide-read-notifications:${userId}`) === "true"; }
-    catch { hideReadNotifications = false; }
-  }
-
-  function setHideReadNotifications(hidden) {
-    hideReadNotifications = Boolean(hidden);
-    const userId = user?.id == null ? "" : String(user.id);
-    if (!userId) return;
-    notificationHideReadPreferenceUserId = userId;
-    try { localStorage.setItem(`mirante-hide-read-notifications:${userId}`, String(hideReadNotifications)); } catch {}
-  }
-
-  async function markNotificationRead(notification) {
-    const notificationId = notification?.id;
-    const current = notifications.find((item) => item.id === notificationId);
-    if (!notificationId || !current?.unread) return;
-    const readAt = new Date().toISOString();
-    notifications = notifications.map((item) => item.id === notificationId ? { ...item, readAt, unread: false } : item);
-    notificationUnreadCount = Math.max(0, notificationUnreadCount - 1);
-    notificationsError = "";
-    try {
-      await api(`/api/notifications/${encodeURIComponent(notificationId)}`, { method: "PATCH" });
-    } catch (error) {
-      notifications = notifications.map((item) => item.id === notificationId ? { ...item, readAt: current.readAt || null, unread: true } : item);
-      notificationUnreadCount += 1;
-      notificationsError = error.message;
-    }
-  }
-
-  async function markAllNotificationsRead() {
-    if (!notificationUnreadCount && !notifications.some((notification) => notification.unread)) return;
-    try {
-      await api("/api/notifications/read-all", { method: "POST" });
-      const readAt = new Date().toISOString();
-      notifications = notifications.map((notification) => ({ ...notification, readAt: notification.readAt || readAt, unread: false }));
-      notificationUnreadCount = 0;
-      notificationsError = "";
-    } catch (error) {
-      notificationsError = error.message;
     }
   }
 
