@@ -11,6 +11,7 @@ import { createDirectConversationRepository } from "./server/repositories/direct
 import { createGroupAccessRepository } from "./server/repositories/groups.mjs";
 import { createNotificationRepository } from "./server/repositories/notifications.mjs";
 import { createChannelProfileRepository } from "./server/repositories/channel-profiles.mjs";
+import { createUserPreferenceRepository } from "./server/repositories/user-preferences.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { createSessionRepository } from "./server/repositories/sessions.mjs";
 import { json, readJson } from "./server/http/body.mjs";
@@ -752,6 +753,7 @@ const { directConversationForUser, directConversationPayload } = createDirectCon
 const sessionRepository = createSessionRepository(database, { hashSessionToken });
 const { createNotification } = createNotificationRepository(database);
 const { channelProfileForUser } = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
+const userPreferenceRepository = createUserPreferenceRepository(database, { normalizePreferenceVolume });
 
 function pruneExpiredRuntimeState() {
   const now = Date.now();
@@ -1116,25 +1118,6 @@ function deleteUserAccount(userId) {
   disconnectUserSockets(userId);
 }
 
-function userPreferences(userId) {
-  const preferences = database.prepare("SELECT theme, default_quality AS defaultQuality, default_audio AS defaultAudio, button_color AS buttonColor, input_background_color AS inputBackgroundColor, background_color AS backgroundColor, push_to_talk_key AS pushToTalkKey, mute_shortcut AS muteShortcut, live_notification_scope AS liveNotificationScope, voice_microphone_volume AS voiceMicrophoneVolume, voice_output_volume AS voiceOutputVolume, preferred_input_device_id AS preferredInputDeviceId, preferred_output_device_id AS preferredOutputDeviceId FROM user_preferences WHERE user_id = ?").get(userId);
-  return {
-    theme: preferences?.theme || "dark",
-    defaultQuality: preferences?.defaultQuality || "balanced",
-    defaultAudio: preferences?.defaultAudio || "source",
-    buttonColor: preferences?.buttonColor || null,
-    inputBackgroundColor: preferences?.inputBackgroundColor || null,
-    backgroundColor: preferences?.backgroundColor || null,
-    pushToTalkKey: preferences?.pushToTalkKey || null,
-    muteShortcut: preferences?.muteShortcut || null,
-    liveNotificationScope: preferences?.liveNotificationScope === "all" ? "all" : "related",
-    voiceMicrophoneVolume: normalizePreferenceVolume(preferences?.voiceMicrophoneVolume),
-    voiceOutputVolume: normalizePreferenceVolume(preferences?.voiceOutputVolume),
-    preferredInputDeviceId: preferences?.preferredInputDeviceId || null,
-    preferredOutputDeviceId: preferences?.preferredOutputDeviceId || null,
-  };
-}
-
 function liveNotificationContext(stream, canRevealPrivate = true) {
   if (!stream || (stream.visibility === "private" && !canRevealPrivate)) return null;
   const initiatorName = String(stream.channelName || stream.channelUsername || "Alguém").trim();
@@ -1180,7 +1163,7 @@ function liveNotificationPresentation(notification, userId) {
 }
 
 function syncNotificationsForUser(userId) {
-  const notificationScope = userPreferences(userId).liveNotificationScope;
+  const notificationScope = userPreferenceRepository.getPreferences(userId).liveNotificationScope;
   const liveStreams = notificationScope === "all"
     ? database.prepare(`
         SELECT streams.id, streams.room_name AS roomName, streams.group_id AS groupId, streams.created_by AS createdBy,
@@ -2991,21 +2974,13 @@ async function handleHttpRequest(request, response) {
   if (requestUrl.pathname === "/api/auth/preferences" && request.method === "GET") {
     const user = requireUser(request, response);
     if (!user) return;
-    return json(response, 200, { preferences: userPreferences(user.id) });
+    return json(response, 200, { preferences: userPreferenceRepository.getPreferences(user.id) });
   }
   if (requestUrl.pathname === "/api/auth/preferences" && request.method === "PATCH") {
     const user = requireUser(request, response);
     if (!user) return;
     readJson(request).then((body) => {
-      const existing = database.prepare(`
-        SELECT theme, default_quality AS defaultQuality, default_audio AS defaultAudio,
-          button_color AS buttonColor, input_background_color AS inputBackgroundColor,
-          background_color AS backgroundColor, push_to_talk_key AS pushToTalkKey,
-          mute_shortcut AS muteShortcut, live_notification_scope AS liveNotificationScope,
-          voice_microphone_volume AS voiceMicrophoneVolume, voice_output_volume AS voiceOutputVolume,
-          preferred_input_device_id AS preferredInputDeviceId, preferred_output_device_id AS preferredOutputDeviceId
-        FROM user_preferences WHERE user_id = ?
-      `).get(user.id);
+      const existing = userPreferenceRepository.getStoredPreferences(user.id);
       const theme = Object.prototype.hasOwnProperty.call(body, "theme")
         ? (["dark", "light"].includes(body.theme) ? body.theme : "dark")
         : (existing?.theme || "dark");
@@ -3039,24 +3014,15 @@ async function handleHttpRequest(request, response) {
       const preferredOutputDeviceId = Object.prototype.hasOwnProperty.call(body, "preferredOutputDeviceId")
         ? normalizePreferenceDeviceId(body.preferredOutputDeviceId)
         : normalizePreferenceDeviceId(existing?.preferredOutputDeviceId);
-      database.prepare(`
-        INSERT INTO user_preferences (user_id, theme, default_quality, default_audio, button_color, input_background_color, background_color, push_to_talk_key, mute_shortcut, live_notification_scope, voice_microphone_volume, voice_output_volume, preferred_input_device_id, preferred_output_device_id, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET theme = excluded.theme, default_quality = excluded.default_quality, default_audio = excluded.default_audio, button_color = excluded.button_color, input_background_color = excluded.input_background_color, background_color = excluded.background_color, push_to_talk_key = excluded.push_to_talk_key, mute_shortcut = excluded.mute_shortcut, live_notification_scope = excluded.live_notification_scope, voice_microphone_volume = excluded.voice_microphone_volume, voice_output_volume = excluded.voice_output_volume, preferred_input_device_id = excluded.preferred_input_device_id, preferred_output_device_id = excluded.preferred_output_device_id, updated_at = excluded.updated_at
-      `).run(user.id, theme, defaultQuality, defaultAudio, buttonColor, inputBackgroundColor, backgroundColor, pushToTalkKey, muteShortcut, liveNotificationScope, voiceMicrophoneVolume, voiceOutputVolume, preferredInputDeviceId, preferredOutputDeviceId, new Date().toISOString());
-      return json(response, 200, { preferences: userPreferences(user.id) });
+      userPreferenceRepository.savePreferences(user.id, { theme, defaultQuality, defaultAudio, buttonColor, inputBackgroundColor, backgroundColor, pushToTalkKey, muteShortcut, liveNotificationScope, voiceMicrophoneVolume, voiceOutputVolume, preferredInputDeviceId, preferredOutputDeviceId }, new Date().toISOString());
+      return json(response, 200, { preferences: userPreferenceRepository.getPreferences(user.id) });
     }).catch(() => json(response, 400, { error: "Não foi possível salvar suas preferências." }));
     return;
   }
   if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "GET") {
     const user = requireUser(request, response);
     if (!user) return;
-    const preferences = database.prepare(`
-      SELECT target_user_id AS targetUserId, volume, locally_muted AS locallyMuted, updated_at AS updatedAt
-      FROM user_voice_preferences
-      WHERE user_id = ?
-      ORDER BY updated_at
-    `).all(user.id).map((item) => ({ ...item, locallyMuted: Boolean(item.locallyMuted) }));
+    const preferences = userPreferenceRepository.listVoicePreferences(user.id);
     return json(response, 200, { preferences });
   }
   if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "PATCH") {
@@ -3066,7 +3032,7 @@ async function handleHttpRequest(request, response) {
       const targetUserId = String(body.targetUserId || "").trim().slice(0, 128);
       if (!targetUserId || targetUserId === user.id) return json(response, 400, { error: "Informe um usuário de voz válido." });
       if (!database.prepare("SELECT id FROM users WHERE id = ?").get(targetUserId)) return json(response, 404, { error: "Usuário de voz não encontrado." });
-      const current = database.prepare("SELECT volume, locally_muted AS locallyMuted FROM user_voice_preferences WHERE user_id = ? AND target_user_id = ?").get(user.id, targetUserId);
+      const current = userPreferenceRepository.getVoicePreference(user.id, targetUserId);
       const volume = Object.prototype.hasOwnProperty.call(body, "volume")
         ? normalizePreferenceVolume(body.volume)
         : normalizePreferenceVolume(current?.volume);
@@ -3074,11 +3040,7 @@ async function handleHttpRequest(request, response) {
         ? Boolean(body.locallyMuted)
         : Boolean(current?.locallyMuted);
       const updatedAt = new Date().toISOString();
-      database.prepare(`
-        INSERT INTO user_voice_preferences (user_id, target_user_id, volume, locally_muted, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(user_id, target_user_id) DO UPDATE SET volume = excluded.volume, locally_muted = excluded.locally_muted, updated_at = excluded.updated_at
-      `).run(user.id, targetUserId, volume, locallyMuted ? 1 : 0, updatedAt);
+      userPreferenceRepository.saveVoicePreference(user.id, targetUserId, volume, locallyMuted, updatedAt);
       return json(response, 200, { preference: { targetUserId, volume, locallyMuted, updatedAt } });
     }).catch(() => json(response, 400, { error: "Não foi possível salvar a preferência de áudio do usuário." }));
     return;
@@ -3086,7 +3048,7 @@ async function handleHttpRequest(request, response) {
   if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "DELETE") {
     const user = requireUser(request, response);
     if (!user) return;
-    database.prepare("DELETE FROM user_voice_preferences WHERE user_id = ?").run(user.id);
+    userPreferenceRepository.deleteVoicePreferences(user.id);
     return json(response, 200, { preferences: [] });
   }
   if (requestUrl.pathname === "/api/users/search" && request.method === "GET") {
