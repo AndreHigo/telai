@@ -27,8 +27,8 @@ export function createStreamRoutes({
         json(response, 400, { error: "Endereço de transmissão inválido." });
         return true;
       }
-      const user = currentUser(request);
-      const activeStreams = streamRepository.listActiveStreams().filter(runtimeStreamIsLive);
+      const user = await currentUser(request);
+      const activeStreams = (await streamRepository.listActiveStreams()).filter(runtimeStreamIsLive);
       const channelPart = parts.length === 1 ? parts[0] : parts[1];
       const scopedStreams = activeStreams.filter((item) => parts.length === 1
         ? item.visibility === "public"
@@ -38,14 +38,14 @@ export function createStreamRoutes({
       const stream = displayNameStreams.length === 1 ? displayNameStreams[0] : exactUsernameStream;
       if (stream) {
         // Do not reveal that a private stream exists to users outside its group.
-        if (!canAccessStream(user?.id, stream)) {
+        if (!await canAccessStream(user?.id, stream)) {
           json(response, 404, { error: "Canal não encontrado." });
           return true;
         }
         json(response, 200, { stream: { ...stream, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) } });
         return true;
       }
-      const users = channelProfileRepository.listDirectory();
+      const users = await channelProfileRepository.listDirectory();
       const displayNameMatches = users.filter((item) => slugFor(item.channelName) === channelPart);
       const exactUsername = users.find((item) => slugFor(item.username) === channelPart);
       const channel = displayNameMatches.length === 1 ? displayNameMatches[0] : exactUsername;
@@ -57,12 +57,12 @@ export function createStreamRoutes({
         json(response, 200, { stream: { channelName: channel.channelName, channelUsername: channel.username, channelAvatarData: compactAvatarData(channel.channelAvatarData), channelGames: channel.channelGames, visibility: "public", publicPath: `/${slugFor(channel.channelName || channel.username)}`, offline: true } });
         return true;
       }
-      const group = groupSettingsRepository.listDirectoryGroups().find((item) => slugFor(item.slug) === parts[0]);
+      const group = (await groupSettingsRepository.listDirectoryGroups()).find((item) => slugFor(item.slug) === parts[0]);
       if (!group) {
         json(response, 404, { error: "Grupo não encontrado." });
         return true;
       }
-      if (!user || !isGroupMember(user.id, group.id)) {
+      if (!user || !await isGroupMember(user.id, group.id)) {
         json(response, 404, { error: "Canal não encontrado." });
         return true;
       }
@@ -71,18 +71,18 @@ export function createStreamRoutes({
     }
 
     if (requestUrl.pathname === "/api/streams" && request.method === "GET") {
-      const user = currentUser(request);
+      const user = await currentUser(request);
       const followingOnly = requestUrl.searchParams.get("following") === "1";
       if (!user && followingOnly) {
         json(response, 401, { error: "Entre para ver os canais que você segue." });
         return true;
       }
       if (!user) {
-        const streams = streamRepository.listPublicStreams().filter(runtimeStreamIsLive);
+        const streams = (await streamRepository.listPublicStreams()).filter(runtimeStreamIsLive);
         json(response, 200, { streams: streams.map((stream) => decorateRuntimeStream({ ...stream, following: false, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) })) });
         return true;
       }
-      const streams = streamRepository.listPublicStreams({ userId: user.id, followingOnly }).filter(runtimeStreamIsLive);
+      const streams = (await streamRepository.listPublicStreams({ userId: user.id, followingOnly })).filter(runtimeStreamIsLive);
       json(response, 200, { streams: streams.map((stream) => decorateRuntimeStream({ ...stream, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) })) });
       return true;
     }
@@ -90,29 +90,31 @@ export function createStreamRoutes({
     if (requestUrl.pathname === "/api/streams" && request.method === "POST") {
       const user = requireUser(request, response);
       if (!user) return true;
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const roomName = String(body.roomName || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40);
         const visibility = body.visibility === "private" ? "private" : "public";
         const groupId = visibility === "private" ? String(body.groupId || "") : null;
         const roomId = visibility === "private" ? String(body.roomId || "") : null;
         const voiceRoomId = visibility === "private" ? String(body.voiceRoomId || "") : null;
         if (roomName.length < 6) return json(response, 400, { error: "Sala inválida." });
-        if (visibility === "private" && (!groupId || !isGroupMember(user.id, groupId))) return json(response, 403, { error: "Escolha um grupo do qual você participa." });
-        if (visibility === "private" && !canGroupAction(user.id, groupId, "canStream")) return json(response, 403, { error: "Você não tem permissão para abrir lives neste grupo." });
+        if (visibility === "private" && (!groupId || !await isGroupMember(user.id, groupId))) return json(response, 403, { error: "Escolha um grupo do qual você participa." });
+        if (visibility === "private" && !await canGroupAction(user.id, groupId, "canStream")) return json(response, 403, { error: "Você não tem permissão para abrir lives neste grupo." });
         if (visibility === "private" && roomId) {
-          const room = groupRoomRepository.findRoom(groupId, roomId);
+          const room = await groupRoomRepository.findRoom(groupId, roomId);
           if (!room || room.kind !== "live") return json(response, 400, { error: "Escolha uma sala de transmissão válida." });
         }
         if (visibility === "private" && voiceRoomId) {
-          const voiceRoom = groupRoomRepository.findRoom(groupId, voiceRoomId);
+          const voiceRoom = await groupRoomRepository.findRoom(groupId, voiceRoomId);
           if (!voiceRoom || voiceRoom.kind !== "voice") return json(response, 400, { error: "Escolha uma sala de voz válida." });
         }
         // Friendly links are based on the broadcaster name (and, for private
         // streams, the group). The repository keeps the check and insert atomic.
         try {
-          const groupSlug = groupId ? groupSettingsRepository.findGroup(groupId)?.slug || "" : "";
-          const channel = channelProfileForUser(user.id) || { displayName: user.displayName, avatarData: user.avatarData, games: [] };
-          const result = streamRepository.createStream({
+          const group = groupId ? await groupSettingsRepository.findGroup(groupId) : null;
+          const groupSlug = group?.slug || "";
+          const channel = await channelProfileForUser(user.id) || { displayName: user.displayName, avatarData: user.avatarData, games: [] };
+          const result = await streamRepository.createStream({
             roomName, visibility, groupId, roomId: roomId || null, voiceRoomId: voiceRoomId || null,
             title: String(body.title || `Transmissão de ${channel.displayName}`).trim().slice(0, 120),
             channelName: channel.displayName, channelAvatarData: compactAvatarData(channel.avatarData), channelGames: channel.games,
@@ -127,24 +129,24 @@ export function createStreamRoutes({
           }
           const stream = result.stream;
           if (stream.visibility === "public") {
-            const followers = streamRepository.followerIds(user.id).map((followerId) => ({ followerId }));
+            const followers = (await streamRepository.followerIds(user.id)).map((followerId) => ({ followerId }));
             const createdAt = new Date().toISOString();
-            for (const follower of followers) {
-              createNotification({
+            await Promise.all(followers.map((follower) => createNotification({
                 userId: follower.followerId,
                 type: "channel_live",
                 entityId: stream.id,
                 title: `${stream.channelName} está ao vivo`,
                 body: `${stream.channelName} começou uma transmissão pública.`,
                 createdAt,
-              });
-            }
+              })));
           }
           return json(response, 201, { stream: { ...stream, publicPath: streamPublicPath(stream) } });
         } catch (error) {
           return json(response, 409, { error: "Não foi possível abrir este canal." });
         }
-      }).catch(() => json(response, 400, { error: "Não foi possível abrir o canal." }));
+      } catch {
+        json(response, 400, { error: "Não foi possível abrir o canal." });
+      }
       return true;
     }
 
@@ -152,7 +154,7 @@ export function createStreamRoutes({
     if (streamActionMatch && ["POST", "DELETE"].includes(request.method)) {
       const user = requireUser(request, response);
       if (!user) return true;
-      const stream = streamRepository.findById(streamActionMatch[1]);
+      const stream = await streamRepository.findById(streamActionMatch[1]);
       if (!stream) {
         json(response, 404, { error: "Canal não encontrado." });
         return true;
@@ -167,7 +169,7 @@ export function createStreamRoutes({
           json(response, 200, { ok: true, alreadyEnded: true });
           return true;
         }
-        streamRepository.endById(stream.id);
+        await streamRepository.endById(stream.id);
         closeBroadcastRoom(stream.roomName);
         json(response, 200, { ok: true });
         return true;
@@ -177,11 +179,11 @@ export function createStreamRoutes({
         return true;
       }
       if (request.method === "POST") {
-        streamRepository.follow(user.id, stream.createdBy, true);
+        await streamRepository.follow(user.id, stream.createdBy, true);
         json(response, 200, { ok: true, following: true });
         return true;
       }
-      streamRepository.follow(user.id, stream.createdBy, false);
+      await streamRepository.follow(user.id, stream.createdBy, false);
       json(response, 200, { ok: true, following: false });
       return true;
     }
