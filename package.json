@@ -43,6 +43,7 @@
     "test:group-state": "node qa/test-group-state.mjs",
     "test:message-state": "node qa/test-message-state.mjs",
     "test:direct-state": "node qa/test-direct-state.mjs",
+    "test:settings-state": "node qa/test-settings-state.mjs",
     "test:state-store": "node qa/test-state-store.mjs",
     "test:group-room-read-controller": "node qa/test-group-room-read-controller.mjs",
     "test:group-event-runtime": "node qa/test-group-event-runtime.mjs",

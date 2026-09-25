@@ -29,6 +29,7 @@
   import LegalConsentGate from "./LegalConsentGate.svelte";
   import { createApiClient } from "./services/api.js";
   import { createDirectStateStore } from "./features/direct/direct-state.js";
+  import { createSettingsStateStore } from "./features/settings/settings-state.js";
   import { createGroupRoomReadController } from "./features/groups/room-read-controller.js";
   import { createGroupStateStore } from "./features/groups/group-state.js";
   import { createMessageStateStore } from "./features/groups/message-state.js";
@@ -134,6 +135,7 @@
   const groupState = createGroupStateStore();
   const messageState = createMessageStateStore();
   const directState = createDirectStateStore();
+  const settingsState = createSettingsStateStore();
   let groups = groupState.getState().groups;
   let streams = [];
   const navigationState = createNavigationStateStore();
@@ -335,6 +337,10 @@
   let voiceSettingsPanelLoad = null;
   function setNavigationState(next) {
     navigationState.setState(next);
+  }
+
+  function setSettingsState(next) {
+    settingsState.setState(next);
   }
 
   const unsubscribeNavigationState = navigationState.subscribe((next) => {
@@ -736,23 +742,40 @@
   let roomMaxParticipants = 8;
   let roomDialogMode = "create";
   let editingRoomId = "";
-  let settingsTab = "user";
-  let settingsSection = "profile";
+  let settingsTab = settingsState.getState().settingsTab;
+  let settingsSection = settingsState.getState().settingsSection;
   let settingsPageElement;
-  let settingsReturnView = "home";
-  let settingsBusy = false;
-  let settingsError = "";
-  let preferencesResetConfirm = false;
-  let preferencesResetBusy = false;
-  let settingsDisplayName = "";
-  let settingsAvatarData = "";
-  let avatarError = "";
+  let settingsReturnView = settingsState.getState().settingsReturnView;
+  let settingsBusy = settingsState.getState().settingsBusy;
+  let settingsError = settingsState.getState().settingsError;
+  let preferencesResetConfirm = settingsState.getState().preferencesResetConfirm;
+  let preferencesResetBusy = settingsState.getState().preferencesResetBusy;
+  let settingsDisplayName = settingsState.getState().settingsDisplayName;
+  let settingsAvatarData = settingsState.getState().settingsAvatarData;
+  let avatarError = settingsState.getState().avatarError;
   let avatarFileInput;
-  let channelDisplayName = "";
-  let channelAvatarData = "";
-  let channelGames = [];
-  let channelError = "";
+  let channelDisplayName = settingsState.getState().channelDisplayName;
+  let channelAvatarData = settingsState.getState().channelAvatarData;
+  let channelGames = settingsState.getState().channelGames;
+  let channelError = settingsState.getState().channelError;
   let channelAvatarFileInput;
+
+  const unsubscribeSettingsState = settingsState.subscribe((next) => {
+    settingsTab = next.settingsTab;
+    settingsSection = next.settingsSection;
+    settingsReturnView = next.settingsReturnView;
+    settingsBusy = next.settingsBusy;
+    settingsError = next.settingsError;
+    preferencesResetConfirm = next.preferencesResetConfirm;
+    preferencesResetBusy = next.preferencesResetBusy;
+    settingsDisplayName = next.settingsDisplayName;
+    settingsAvatarData = next.settingsAvatarData;
+    avatarError = next.avatarError;
+    channelDisplayName = next.channelDisplayName;
+    channelAvatarData = next.channelAvatarData;
+    channelGames = next.channelGames;
+    channelError = next.channelError;
+  });
   let groupSettingsName = "";
   let groupRoles = [];
   let selectedRoleId = "";
@@ -1167,17 +1190,17 @@
     setState: (next) => {
       const setters = {
         showGlobalSidebar: (value) => setNavigationState({ showGlobalSidebar: value }),
-        settingsTab: (value) => { settingsTab = value; },
-        settingsSection: (value) => { settingsSection = value; },
-        settingsReturnView: (value) => { settingsReturnView = value; },
-        settingsError: (value) => { settingsError = value; },
-        settingsDisplayName: (value) => { settingsDisplayName = value; },
-        settingsAvatarData: (value) => { settingsAvatarData = value; },
-        avatarError: (value) => { avatarError = value; },
-        channelDisplayName: (value) => { channelDisplayName = value; },
-        channelAvatarData: (value) => { channelAvatarData = value; },
-        channelGames: (value) => { channelGames = value; },
-        channelError: (value) => { channelError = value; },
+        settingsTab: (value) => setSettingsState({ settingsTab: value }),
+        settingsSection: (value) => setSettingsState({ settingsSection: value }),
+        settingsReturnView: (value) => setSettingsState({ settingsReturnView: value }),
+        settingsError: (value) => setSettingsState({ settingsError: value }),
+        settingsDisplayName: (value) => setSettingsState({ settingsDisplayName: value }),
+        settingsAvatarData: (value) => setSettingsState({ settingsAvatarData: value }),
+        avatarError: (value) => setSettingsState({ avatarError: value }),
+        channelDisplayName: (value) => setSettingsState({ channelDisplayName: value }),
+        channelAvatarData: (value) => setSettingsState({ channelAvatarData: value }),
+        channelGames: (value) => setSettingsState({ channelGames: value }),
+        channelError: (value) => setSettingsState({ channelError: value }),
         groupSettingsName: (value) => { groupSettingsName = value; },
         groupRoles: (value) => { groupRoles = value; },
         groupInvites: (value) => { groupInvites = value; },
@@ -1600,6 +1623,7 @@
         soundPreferenceDefaults,
         reportClientError,
         getState: () => ({
+          ...settingsState.getState(),
           theme,
           selectedQuality,
           audioMode,
@@ -1658,16 +1682,16 @@
             buttonColor: (value) => { buttonColor = value; },
             inputBackgroundColor: (value) => { inputBackgroundColor = value; },
             backgroundColor: (value) => { backgroundColor = value; },
-            channelDisplayName: (value) => { channelDisplayName = value; },
-            channelAvatarData: (value) => { channelAvatarData = value; },
-            channelGames: (value) => { channelGames = value; },
-            settingsDisplayName: (value) => { settingsDisplayName = value; },
-            settingsAvatarData: (value) => { settingsAvatarData = value; },
-            settingsBusy: (value) => { settingsBusy = value; },
-            settingsError: (value) => { settingsError = value; },
-            channelError: (value) => { channelError = value; },
-            preferencesResetBusy: (value) => { preferencesResetBusy = value; },
-            preferencesResetConfirm: (value) => { preferencesResetConfirm = value; },
+            channelDisplayName: (value) => setSettingsState({ channelDisplayName: value }),
+            channelAvatarData: (value) => setSettingsState({ channelAvatarData: value }),
+            channelGames: (value) => setSettingsState({ channelGames: value }),
+            settingsDisplayName: (value) => setSettingsState({ settingsDisplayName: value }),
+            settingsAvatarData: (value) => setSettingsState({ settingsAvatarData: value }),
+            settingsBusy: (value) => setSettingsState({ settingsBusy: value }),
+            settingsError: (value) => setSettingsState({ settingsError: value }),
+            channelError: (value) => setSettingsState({ channelError: value }),
+            preferencesResetBusy: (value) => setSettingsState({ preferencesResetBusy: value }),
+            preferencesResetConfirm: (value) => setSettingsState({ preferencesResetConfirm: value }),
             user: (value) => { user = value; },
             notice: (value) => { notice = value; },
             voiceVolumes: (value) => { voiceVolumes = value; },
@@ -2650,61 +2674,63 @@
   function handleAvatarChange(event) {
     const file = event.currentTarget.files?.[0];
     if (!file) return;
-    avatarError = "";
+    setSettingsState({ avatarError: "" });
     if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type)) {
-      avatarError = "Escolha uma imagem PNG, JPG, WEBP ou GIF.";
+      setSettingsState({ avatarError: "Escolha uma imagem PNG, JPG, WEBP ou GIF." });
       event.currentTarget.value = "";
       return;
     }
     if (file.size > maxAvatarFileBytes) {
-      avatarError = "A foto precisa ter no máximo 5 MB.";
+      setSettingsState({ avatarError: "A foto precisa ter no máximo 5 MB." });
       event.currentTarget.value = "";
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => { settingsAvatarData = String(reader.result || ""); };
-    reader.onerror = () => { avatarError = "Não foi possível ler essa foto."; };
+    reader.onload = () => { setSettingsState({ settingsAvatarData: String(reader.result || "") }); };
+    reader.onerror = () => { setSettingsState({ avatarError: "Não foi possível ler essa foto." }); };
     reader.readAsDataURL(file);
   }
 
   function clearAvatar() {
-    settingsAvatarData = "";
-    avatarError = "";
+    setSettingsState({ settingsAvatarData: "", avatarError: "" });
     if (avatarFileInput) avatarFileInput.value = "";
   }
 
   function handleChannelAvatarChange(event) {
     const file = event.currentTarget.files?.[0];
     if (!file) return;
-    channelError = "";
+    setSettingsState({ channelError: "" });
     if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type)) {
-      channelError = "Escolha uma imagem PNG, JPG, WEBP ou GIF para o canal.";
+      setSettingsState({ channelError: "Escolha uma imagem PNG, JPG, WEBP ou GIF para o canal." });
       event.currentTarget.value = "";
       return;
     }
     if (file.size > maxAvatarFileBytes) {
-      channelError = "A foto do canal precisa ter no máximo 5 MB.";
+      setSettingsState({ channelError: "A foto do canal precisa ter no máximo 5 MB." });
       event.currentTarget.value = "";
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => { channelAvatarData = String(reader.result || ""); };
-    reader.onerror = () => { channelError = "Não foi possível ler essa foto do canal."; };
+    reader.onload = () => { setSettingsState({ channelAvatarData: String(reader.result || "") }); };
+    reader.onerror = () => { setSettingsState({ channelError: "Não foi possível ler essa foto do canal." }); };
     reader.readAsDataURL(file);
   }
 
   function clearChannelAvatar() {
-    channelAvatarData = "";
-    channelError = "";
+    setSettingsState({ channelAvatarData: "", channelError: "" });
     if (channelAvatarFileInput) channelAvatarFileInput.value = "";
   }
 
   function toggleChannelGame(game) {
-    channelGames = channelGames.includes(game) ? channelGames.filter((item) => item !== game) : [...channelGames, game].slice(0, 8);
+    setSettingsState({
+      channelGames: channelGames.includes(game)
+        ? channelGames.filter((item) => item !== game)
+        : [...channelGames, game].slice(0, 8),
+    });
   }
 
   async function logout() {
-    settingsError = "";
+    setSettingsState({ settingsError: "" });
     try {
       if (voiceState === "connected") leaveVoiceRoom();
       if (broadcastState === "live" || broadcastState === "starting") await stopBroadcast("logout");
@@ -2722,8 +2748,7 @@
 
   async function saveGroupSettings() {
     if (!selectedGroupId || groupSettingsName.trim().length < 2) return;
-    settingsBusy = true;
-    settingsError = "";
+    setSettingsState({ settingsBusy: true, settingsError: "" });
     try {
       const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}`, { method: "PATCH", body: JSON.stringify({ name: groupSettingsName.trim() }) });
       setGroupState({
@@ -2731,8 +2756,8 @@
         groupOverview: groupOverview ? { ...groupOverview, group: { ...groupOverview.group, ...result.group } } : groupOverview,
       });
       notice = "Configurações do grupo salvas.";
-    } catch (error) { settingsError = error.message; }
-    finally { settingsBusy = false; }
+    } catch (error) { setSettingsState({ settingsError: error.message }); }
+    finally { setSettingsState({ settingsBusy: false }); }
   }
 
   async function createGroupRole() {
@@ -3631,7 +3656,7 @@
     showUserMenu = false;
     await openSettings("user");
     if (destination === "channel") {
-      settingsSection = "channel";
+      setSettingsState({ settingsSection: "channel" });
       return;
     }
     if (destination === "preferences") {
@@ -4266,7 +4291,7 @@
 
   function startPushToTalkCapture() {
     pushToTalkCapturing = true;
-    settingsError = "Pressione uma tecla agora. Esc cancela.";
+    setSettingsState({ settingsError: "Pressione uma tecla agora. Esc cancela." });
   }
 
   async function syncDesktopPushToTalkKey() {
@@ -4277,7 +4302,7 @@
     try {
       const result = await window.miranteDesktop.setPushToTalkKey(pushToTalkEnabled ? pushToTalkKey : "");
       desktopPushToTalkGlobal = Boolean(result?.ok && result?.global);
-      if (!result?.ok && pushToTalkKey) settingsError = result.message || "Não foi possível registrar essa tecla global.";
+      if (!result?.ok && pushToTalkKey) setSettingsState({ settingsError: result.message || "Não foi possível registrar essa tecla global." });
     } catch {
       desktopPushToTalkGlobal = false;
     }
@@ -4291,7 +4316,7 @@
     try {
       const result = await window.miranteDesktop.setMuteShortcut(muteShortcut);
       desktopMuteShortcutGlobal = Boolean(result?.ok && result?.global);
-      if (!result?.ok && muteShortcut) settingsError = result.message || "Não foi possível registrar o atalho de mudo.";
+      if (!result?.ok && muteShortcut) setSettingsState({ settingsError: result.message || "Não foi possível registrar o atalho de mudo." });
     } catch {
       desktopMuteShortcutGlobal = false;
     }
@@ -4317,7 +4342,7 @@
     pushToTalkKey = "";
     localStorage.removeItem("mirante-push-to-talk");
     void syncDesktopPushToTalkKey();
-    settingsError = "Tecla de push-to-talk removida. Clique em Salvar preferências.";
+    setSettingsState({ settingsError: "Tecla de push-to-talk removida. Clique em Salvar preferências." });
   }
 
   function togglePushToTalk(event) {
@@ -4340,7 +4365,7 @@
 
   function startMuteShortcutCapture() {
     muteShortcutCapturing = true;
-    settingsError = "Pressione uma tecla ou botão do mouse agora. Esc cancela.";
+    setSettingsState({ settingsError: "Pressione uma tecla ou botão do mouse agora. Esc cancela." });
   }
 
   function clearMuteShortcut() {
@@ -4348,7 +4373,7 @@
     muteShortcut = "";
     localStorage.removeItem("mirante-mute-shortcut");
     void syncDesktopMuteShortcut();
-    settingsError = "Atalho de mudo removido. Clique em Salvar preferências.";
+    setSettingsState({ settingsError: "Atalho de mudo removido. Clique em Salvar preferências." });
   }
 
   function isEditableElement(element) {
@@ -4366,16 +4391,16 @@
       if (event.code === "Escape") {
         event.preventDefault();
         pushToTalkCapturing = false;
-        settingsError = "Escolha de tecla cancelada.";
+      setSettingsState({ settingsError: "Escolha de tecla cancelada." });
       } else if (isReservedSystemShortcut(event)) {
-        settingsError = "Alt, Windows e Tab ficam reservados para o sistema. Escolha outra tecla.";
+      setSettingsState({ settingsError: "Alt, Windows e Tab ficam reservados para o sistema. Escolha outra tecla." });
       } else if (event.code) {
         event.preventDefault();
         pushToTalkKey = event.code;
         pushToTalkCapturing = false;
         localStorage.setItem("mirante-push-to-talk", pushToTalkKey);
         void syncDesktopPushToTalkKey();
-        settingsError = `Tecla ${pushToTalkLabel(pushToTalkKey)} definida. Clique em Salvar preferências.`;
+        setSettingsState({ settingsError: `Tecla ${pushToTalkLabel(pushToTalkKey)} definida. Clique em Salvar preferências.` });
       }
       return;
     }
@@ -4390,16 +4415,16 @@
       if (event.code === "Escape") {
         event.preventDefault();
         muteShortcutCapturing = false;
-        settingsError = "Escolha de atalho cancelada.";
+      setSettingsState({ settingsError: "Escolha de atalho cancelada." });
       } else if (isReservedSystemShortcut(event)) {
-        settingsError = "Alt, Windows e Tab ficam reservados para o sistema. Escolha outra tecla ou um botão lateral do mouse.";
+      setSettingsState({ settingsError: "Alt, Windows e Tab ficam reservados para o sistema. Escolha outra tecla ou um botão lateral do mouse." });
       } else if (event.code) {
         event.preventDefault();
         muteShortcut = event.code;
         muteShortcutCapturing = false;
         localStorage.setItem("mirante-mute-shortcut", muteShortcut);
         void syncDesktopMuteShortcut();
-        settingsError = `Atalho ${shortcutLabel(muteShortcut)} definido. Clique em Salvar preferências.`;
+        setSettingsState({ settingsError: `Atalho ${shortcutLabel(muteShortcut)} definido. Clique em Salvar preferências.` });
       }
       return;
     }
@@ -4412,7 +4437,7 @@
   function handleMuteShortcutMouseDown(event) {
     if (muteShortcutCapturing) {
       if (event.button < 3) {
-        settingsError = "Para evitar cliques acidentais, use um botão lateral do mouse (4 ou 5).";
+      setSettingsState({ settingsError: "Para evitar cliques acidentais, use um botão lateral do mouse (4 ou 5)." });
         return;
       }
       event.preventDefault();
@@ -4421,7 +4446,7 @@
       muteShortcutCapturing = false;
       localStorage.setItem("mirante-mute-shortcut", muteShortcut);
       void syncDesktopMuteShortcut();
-      settingsError = `Atalho ${shortcutLabel(muteShortcut)} definido. Clique em Salvar preferências.`;
+      setSettingsState({ settingsError: `Atalho ${shortcutLabel(muteShortcut)} definido. Clique em Salvar preferências.` });
       return;
     }
     if (!muteShortcut?.startsWith("mouse:") || isEditableElement(event.target) || Number(muteShortcut.slice(6)) !== event.button) return;
@@ -4465,7 +4490,7 @@
 
   function openVoiceSettings() {
     void openSettings("user", "groups").then(() => loadAudioDevices(true));
-    settingsSection = "voice";
+    setSettingsState({ settingsSection: "voice" });
   }
 
   function watchSelectedRoomLive(streamId = selectedRoomLiveStream?.id) {
@@ -5661,6 +5686,7 @@
   clientPollingController.start();
   onDestroy(() => {
     unsubscribeNavigationState();
+    unsubscribeSettingsState();
     unsubscribeGroupState();
     unsubscribeMessageState();
     unsubscribeDirectState();
@@ -6040,8 +6066,9 @@
           onSelectSection={selectSettingsSection}
           onLoadGroupAdministration={loadGroupAdministration}
           onBack={() => setNavigationState({ view: settingsReturnView })}
-          onSelectTab={(tab) => settingsTab = tab}
-          bind:channelDisplayName
+          onSelectTab={(tab) => setSettingsState({ settingsTab: tab })}
+          channelDisplayName={channelDisplayName}
+          on:channelDisplayName={(event) => setSettingsState({ channelDisplayName: event.detail })}
           {channelAvatarData}
           {gameOptions}
           {channelGames}
@@ -6051,7 +6078,8 @@
           onClearChannelAvatar={clearChannelAvatar}
           onToggleChannelGame={toggleChannelGame}
           {settingsAvatarData}
-          bind:settingsDisplayName
+          settingsDisplayName={settingsDisplayName}
+          on:settingsDisplayName={(event) => setSettingsState({ settingsDisplayName: event.detail })}
           {avatarError}
           bind:theme
           bind:selectedQuality
@@ -6077,7 +6105,7 @@
           {hardwareAccelerationMode}
           {hardwareAccelerationBusy}
           {hardwareAccelerationError}
-          onTogglePreferencesResetConfirm={() => preferencesResetConfirm = !preferencesResetConfirm}
+          onTogglePreferencesResetConfirm={() => setSettingsState({ preferencesResetConfirm: !preferencesResetConfirm })}
           onResetPreferences={resetPreferencesToDefaults}
           onToggleLaunchAtLogin={toggleLaunchAtLogin}
           onSetHardwareAcceleration={setHardwareAcceleration}

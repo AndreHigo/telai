@@ -1,4 +1,5 @@
 <script>
+  import { createEventDispatcher } from "svelte";
   import SettingsCategoryNav from "./SettingsCategoryNav.svelte";
   import SettingsHeading from "./SettingsHeading.svelte";
   import ChannelProfileSettings from "./ChannelProfileSettings.svelte";
@@ -11,6 +12,8 @@
   import GroupAccessSettingsPanel from "./GroupAccessSettingsPanel.svelte";
   import NotificationPreferencesSettings from "./NotificationPreferencesSettings.svelte";
   import AccountPrivacy from "../../AccountPrivacy.svelte";
+
+  const dispatch = createEventDispatcher();
 
   export let settingsPageElement;
   export let settingsSection = "profile";
@@ -188,7 +191,11 @@
   <SettingsHeading onBack={onBack} />
   {#if settingsSection === "channel"}
     <ChannelProfileSettings
-      bind:channelDisplayName
+      {channelDisplayName}
+      on:channelDisplayName={(event) => {
+        channelDisplayName = event.detail;
+        dispatch("channelDisplayName", event.detail);
+      }}
       {channelAvatarData}
       {gameOptions}
       {channelGames}
@@ -204,7 +211,20 @@
     <SettingsInternalNav {settingsTab} {selectedGroupId} onSelectTab={onSelectTab} />
     <div class="settings-content">
       {#if settingsTab === "user"}
-        <AccountProfileSettings {settingsBusy} {user} {settingsAvatarData} bind:settingsDisplayName {avatarError} onSave={onSaveProfile} onAvatarChange={onAvatarChange} onClearAvatar={onClearAvatar} />
+        <AccountProfileSettings
+          {settingsBusy}
+          {user}
+          {settingsAvatarData}
+          {settingsDisplayName}
+          on:settingsDisplayName={(event) => {
+            settingsDisplayName = event.detail;
+            dispatch("settingsDisplayName", event.detail);
+          }}
+          {avatarError}
+          onSave={onSaveProfile}
+          onAvatarChange={onAvatarChange}
+          onClearAvatar={onClearAvatar}
+        />
         <PreferencesSettings {settingsBusy} bind:theme bind:selectedQuality bind:audioMode bind:buttonColor bind:inputBackgroundColor bind:backgroundColor onSave={onSavePreferences} />
         <LinkedAccountsSettings {user} {providers} />
       {:else}

@@ -184,6 +184,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Centralizar grupos, overview, sala selecionada e flags de carregamento em `frontend/src/features/groups/group-state.js`, preservando os contratos do shell.
     - [x] Centralizar rascunhos, edição, menções, busca e threads em `frontend/src/features/groups/message-state.js`, preservando os bindings do workspace textual.
     - [x] Centralizar conversas diretas, histórico, rascunho e flags de envio em `frontend/src/features/direct/direct-state.js`, preservando a tela e o contrato do controlador.
+    - [x] Centralizar navegação, formulários de perfil/canal e flags de configuração em `frontend/src/features/settings/settings-state.js`, preservando a tela e os bindings visuais.
     - [x] Extrair leitura persistente, deduplicação de requests e contagem de não lidas para `frontend/src/features/groups/room-read-controller.js`.
     - [x] Extrair o ciclo de vida do gateway de eventos de grupos e o carregamento do handler para `frontend/src/features/groups/event-runtime.js`.
     - [x] Extrair o carregamento lazy e os wrappers da feature de threads para `frontend/src/features/groups/thread-runtime.js`.
