@@ -895,6 +895,119 @@
   async function loadGroups(...args) { return (await getGroupController()).loadGroups(...args); }
   async function loadGroup(...args) { return (await getGroupController()).loadGroup(...args); }
 
+  let settingsControllerPromise = null;
+  function getSettingsController() {
+    if (!settingsControllerPromise) {
+      settingsControllerPromise = import("./features/settings/controller.js").then(({ createSettingsController }) => createSettingsController({
+        api,
+        qualityProfiles,
+        visualDefaults,
+        VoicePreferenceMap,
+        normalizeAudioVolume,
+        readStoredVoiceDeviceId,
+        loadStreams,
+        syncDesktopShortcuts,
+        reapplyVoiceInputSettings,
+        resetVoiceActivityCalibration,
+        effectiveVoiceOutputVolume,
+        voicePreferenceTargetId,
+        soundPreferenceDefaults,
+        reportClientError,
+        getState: () => ({
+          theme,
+          selectedQuality,
+          audioMode,
+          selectedInputDeviceId,
+          selectedInputDeviceLabel,
+          selectedOutputDeviceId,
+          voiceMicrophoneVolume,
+          voiceOutputVolume,
+          liveNotificationScope,
+          liveNotificationScopes,
+          pushToTalkKey,
+          pushToTalkEnabled,
+          muteShortcut,
+          buttonColor,
+          inputBackgroundColor,
+          backgroundColor,
+          channelDisplayName,
+          channelAvatarData,
+          channelGames,
+          settingsDisplayName,
+          settingsAvatarData,
+          settingsBusy,
+          settingsError,
+          preferencesResetBusy,
+          preferencesResetConfirm,
+          user,
+          notice,
+          voiceVolumes,
+          voiceLocallyMutedParticipants,
+          voiceRemoteAudio,
+          voiceDeafened,
+          voiceNoiseMode,
+          voiceInputProfile,
+          voiceSensitivityAuto,
+          voiceSensitivity,
+          voiceAdvancedOpen,
+          voiceAdvancedOptions,
+          soundPreferences,
+          voiceSoundEffects,
+        }),
+        setState: (next) => {
+          const setters = {
+            theme: (value) => { theme = value; },
+            selectedQuality: (value) => { selectedQuality = value; },
+            audioMode: (value) => { audioMode = value; },
+            selectedInputDeviceId: (value) => { selectedInputDeviceId = value; },
+            selectedInputDeviceLabel: (value) => { selectedInputDeviceLabel = value; },
+            selectedOutputDeviceId: (value) => { selectedOutputDeviceId = value; },
+            voiceMicrophoneVolume: (value) => { voiceMicrophoneVolume = value; },
+            voiceOutputVolume: (value) => { voiceOutputVolume = value; },
+            liveNotificationScope: (value) => { liveNotificationScope = value; },
+            liveNotificationScopes: (value) => { liveNotificationScopes = value; },
+            pushToTalkKey: (value) => { pushToTalkKey = value; },
+            pushToTalkEnabled: (value) => { pushToTalkEnabled = value; },
+            muteShortcut: (value) => { muteShortcut = value; },
+            buttonColor: (value) => { buttonColor = value; },
+            inputBackgroundColor: (value) => { inputBackgroundColor = value; },
+            backgroundColor: (value) => { backgroundColor = value; },
+            channelDisplayName: (value) => { channelDisplayName = value; },
+            channelAvatarData: (value) => { channelAvatarData = value; },
+            channelGames: (value) => { channelGames = value; },
+            settingsDisplayName: (value) => { settingsDisplayName = value; },
+            settingsAvatarData: (value) => { settingsAvatarData = value; },
+            settingsBusy: (value) => { settingsBusy = value; },
+            settingsError: (value) => { settingsError = value; },
+            channelError: (value) => { channelError = value; },
+            preferencesResetBusy: (value) => { preferencesResetBusy = value; },
+            preferencesResetConfirm: (value) => { preferencesResetConfirm = value; },
+            user: (value) => { user = value; },
+            notice: (value) => { notice = value; },
+            voiceVolumes: (value) => { voiceVolumes = value; },
+            voiceLocallyMutedParticipants: (value) => { voiceLocallyMutedParticipants = value; },
+            voiceNoiseMode: (value) => { voiceNoiseMode = value; },
+            voiceInputProfile: (value) => { voiceInputProfile = value; },
+            voiceSensitivityAuto: (value) => { voiceSensitivityAuto = value; },
+            voiceSensitivity: (value) => { voiceSensitivity = value; },
+            voiceAdvancedOpen: (value) => { voiceAdvancedOpen = value; },
+            voiceAdvancedOptions: (value) => { voiceAdvancedOptions = value; },
+            soundPreferences: (value) => { soundPreferences = value; },
+            voiceSoundEffects: (value) => { voiceSoundEffects = value; },
+          };
+          Object.entries(next).forEach(([key, value]) => setters[key]?.(value));
+        },
+      }));
+    }
+    return settingsControllerPromise;
+  }
+  async function loadPreferences(...args) { return (await getSettingsController()).loadPreferences(...args); }
+  async function loadVoiceUserPreferences(...args) { return (await getSettingsController()).loadVoiceUserPreferences(...args); }
+  async function saveChannelProfile(...args) { return (await getSettingsController()).saveChannelProfile(...args); }
+  async function saveProfile(...args) { return (await getSettingsController()).saveProfile(...args); }
+  async function savePreferences(...args) { return (await getSettingsController()).savePreferences(...args); }
+  async function resetPreferencesToDefaults(...args) { return (await getSettingsController()).resetPreferencesToDefaults(...args); }
+
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
     return list.scrollHeight - list.scrollTop - list.clientHeight <= 96;
@@ -1249,59 +1362,6 @@
     if (!next.size) next.add("related");
     liveNotificationScopes = ["related", "all"].filter((item) => next.has(item));
     liveNotificationScope = liveNotificationScopes.includes("all") ? "all" : "related";
-  }
-
-  async function loadPreferences() {
-    const result = await api("/api/auth/preferences");
-    const preferences = result.preferences || {};
-    theme = preferences.theme === "light" ? "light" : "dark";
-    selectedQuality = qualityProfiles[preferences.defaultQuality] ? preferences.defaultQuality : "balanced";
-    audioMode = ["source", "system"].includes(preferences.defaultAudio) ? preferences.defaultAudio : "source";
-    selectedInputDeviceId = preferences.preferredInputDeviceId || readStoredVoiceDeviceId("mirante-voice-input");
-    selectedOutputDeviceId = preferences.preferredOutputDeviceId || readStoredVoiceDeviceId("mirante-voice-output");
-    try {
-      if (selectedInputDeviceId) localStorage.setItem("mirante-voice-input", selectedInputDeviceId);
-      if (selectedOutputDeviceId) localStorage.setItem("mirante-voice-output", selectedOutputDeviceId);
-    } catch {}
-    voiceMicrophoneVolume = normalizeAudioVolume(preferences.voiceMicrophoneVolume, 1);
-    voiceOutputVolume = normalizeAudioVolume(preferences.voiceOutputVolume, 1);
-    try {
-      localStorage.setItem("mirante-voice-microphone-volume", String(voiceMicrophoneVolume));
-      localStorage.setItem("mirante-voice-output-volume", String(voiceOutputVolume));
-    } catch {}
-    liveNotificationScope = ["related", "all"].includes(preferences.liveNotificationScope) ? preferences.liveNotificationScope : "related";
-    liveNotificationScopes = liveNotificationScope === "all" ? ["related", "all"] : ["related"];
-    pushToTalkKey = preferences.pushToTalkKey || "";
-    if (localStorage.getItem("mirante-push-to-talk-enabled") === null) pushToTalkEnabled = Boolean(pushToTalkKey);
-    muteShortcut = preferences.muteShortcut || "";
-    void syncDesktopShortcuts();
-    const defaults = visualDefaults[theme];
-    buttonColor = /^#[0-9a-f]{6}$/i.test(preferences.buttonColor || "") ? preferences.buttonColor : defaults.button;
-    inputBackgroundColor = /^#[0-9a-f]{6}$/i.test(preferences.inputBackgroundColor || "") ? preferences.inputBackgroundColor : defaults.input;
-    backgroundColor = /^#[0-9a-f]{6}$/i.test(preferences.backgroundColor || "") ? preferences.backgroundColor : defaults.background;
-    localStorage.setItem("mirante-theme", theme);
-  }
-
-  async function loadVoiceUserPreferences() {
-    try {
-      const result = await api("/api/auth/voice-preferences");
-      const preferences = Array.isArray(result.preferences) ? result.preferences : [];
-      voiceVolumes = new VoicePreferenceMap(preferences.map((preference) => [
-        String(preference.targetUserId),
-        normalizeAudioVolume(preference.volume),
-      ]));
-      voiceLocallyMutedParticipants = new Set(preferences
-        .filter((preference) => preference.locallyMuted)
-        .map((preference) => String(preference.targetUserId)));
-      for (const [participantId, audio] of voiceRemoteAudio) {
-        audio.volume = effectiveVoiceOutputVolume(participantId);
-        audio.muted = voiceDeafened || voiceLocallyMutedParticipants.has(voicePreferenceTargetId(participantId));
-      }
-    } catch (error) {
-      reportClientError("voice_preferences_load_failed", error);
-      voiceVolumes = new VoicePreferenceMap();
-      voiceLocallyMutedParticipants = new Set();
-    }
   }
 
   async function createGroup() {
@@ -2116,154 +2176,6 @@
 
   function toggleChannelGame(game) {
     channelGames = channelGames.includes(game) ? channelGames.filter((item) => item !== game) : [...channelGames, game].slice(0, 8);
-  }
-
-  async function saveChannelProfile() {
-    if (channelDisplayName.trim().length < 2) return;
-    settingsBusy = true;
-    channelError = "";
-    try {
-      const result = await api("/api/auth/channel", { method: "PATCH", body: JSON.stringify({ displayName: channelDisplayName.trim(), avatarData: channelAvatarData || null, games: channelGames }) });
-      channelDisplayName = result.channel.displayName;
-      channelAvatarData = result.channel.avatarData || "";
-      channelGames = result.channel.games || [];
-      notice = "Perfil do canal atualizado.";
-      await loadStreams();
-    } catch (error) { channelError = error.message; }
-    finally { settingsBusy = false; }
-  }
-
-  async function saveProfile() {
-    if (settingsDisplayName.trim().length < 2) return;
-    settingsBusy = true;
-    settingsError = "";
-    try {
-      const result = await api("/api/auth/profile", { method: "PATCH", body: JSON.stringify({ displayName: settingsDisplayName.trim(), avatarData: settingsAvatarData || null }) });
-      user = result.user;
-      notice = "Perfil atualizado.";
-    } catch (error) { settingsError = error.message; }
-    finally { settingsBusy = false; }
-  }
-
-  async function savePreferences() {
-    settingsBusy = true;
-    settingsError = "";
-    try {
-      const result = await api("/api/auth/preferences", { method: "PATCH", body: JSON.stringify({ theme, defaultQuality: selectedQuality, defaultAudio: audioMode, buttonColor, inputBackgroundColor, backgroundColor, pushToTalkKey, muteShortcut, liveNotificationScope, voiceMicrophoneVolume, voiceOutputVolume }) });
-      theme = result.preferences.theme;
-      buttonColor = result.preferences.buttonColor || buttonColor;
-      inputBackgroundColor = result.preferences.inputBackgroundColor || inputBackgroundColor;
-      backgroundColor = result.preferences.backgroundColor || backgroundColor;
-      muteShortcut = result.preferences.muteShortcut || muteShortcut;
-      voiceMicrophoneVolume = normalizeAudioVolume(result.preferences.voiceMicrophoneVolume, voiceMicrophoneVolume);
-      voiceOutputVolume = normalizeAudioVolume(result.preferences.voiceOutputVolume, voiceOutputVolume);
-      localStorage.setItem("mirante-voice-microphone-volume", String(voiceMicrophoneVolume));
-      localStorage.setItem("mirante-voice-output-volume", String(voiceOutputVolume));
-      liveNotificationScope = ["related", "all"].includes(result.preferences.liveNotificationScope) ? result.preferences.liveNotificationScope : "related";
-      liveNotificationScopes = liveNotificationScope === "all" ? ["related", "all"] : ["related"];
-      localStorage.setItem("mirante-push-to-talk", pushToTalkKey);
-      localStorage.setItem("mirante-mute-shortcut", muteShortcut);
-      await syncDesktopShortcuts();
-      localStorage.setItem("mirante-theme", theme);
-      window.miranteDesktop?.setTheme?.(theme);
-      notice = "Preferências salvas.";
-    } catch (error) { settingsError = error.message; }
-    finally { settingsBusy = false; }
-  }
-
-  async function resetPreferencesToDefaults() {
-    preferencesResetBusy = true;
-    settingsError = "";
-    try {
-      const defaults = visualDefaults.dark;
-      await api("/api/auth/voice-preferences", { method: "DELETE" });
-      await api("/api/auth/preferences", {
-        method: "PATCH",
-        body: JSON.stringify({
-          theme: "dark",
-          defaultQuality: "balanced",
-          defaultAudio: "source",
-          buttonColor: defaults.button,
-          inputBackgroundColor: defaults.input,
-          backgroundColor: defaults.background,
-          pushToTalkKey: "",
-          muteShortcut: "",
-          liveNotificationScope: "related",
-          voiceMicrophoneVolume: 1,
-          voiceOutputVolume: 1,
-        }),
-      });
-
-      const localPreferenceKeys = [
-        "mirante-theme",
-        "mirante-push-to-talk",
-        "mirante-push-to-talk-enabled",
-        "mirante-mute-shortcut",
-        "mirante-voice-input",
-        "mirante-voice-input-label",
-        "mirante-voice-output",
-        "mirante-voice-microphone-volume",
-        "mirante-voice-output-volume",
-        "mirante-voice-noise-mode",
-        "mirante-voice-profile",
-        "mirante-voice-sensitivity-auto",
-        "mirante-voice-sensitivity",
-        "mirante-voice-advanced-open",
-        "mirante-voice-advanced",
-        "mirante-sound-preferences",
-        "mirante-voice-sounds",
-      ];
-      try {
-        localPreferenceKeys.forEach((key) => localStorage.removeItem(key));
-      } catch {}
-
-      theme = "dark";
-      selectedQuality = "balanced";
-      audioMode = "source";
-      buttonColor = defaults.button;
-      inputBackgroundColor = defaults.input;
-      backgroundColor = defaults.background;
-      pushToTalkKey = "";
-      pushToTalkEnabled = false;
-      muteShortcut = "";
-      liveNotificationScope = "related";
-      liveNotificationScopes = ["related"];
-      voiceMicrophoneVolume = 1;
-      voiceOutputVolume = 1;
-      voiceVolumes = new VoicePreferenceMap();
-      voiceLocallyMutedParticipants = new Set();
-      for (const [participantId, audio] of voiceRemoteAudio) {
-        audio.volume = effectiveVoiceOutputVolume(participantId);
-        audio.muted = voiceDeafened;
-      }
-      selectedInputDeviceId = "";
-      selectedInputDeviceLabel = "";
-      selectedOutputDeviceId = "";
-      voiceNoiseMode = "native";
-      voiceInputProfile = "isolation";
-      voiceSensitivityAuto = true;
-      voiceSensitivity = 0.5;
-      voiceAdvancedOpen = false;
-      voiceAdvancedOptions = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-      soundPreferences = { ...soundPreferenceDefaults };
-      voiceSoundEffects = true;
-      try {
-        localStorage.setItem("mirante-theme", theme);
-        localStorage.setItem("mirante-voice-microphone-volume", "1");
-        localStorage.setItem("mirante-voice-output-volume", "1");
-      } catch {}
-      window.miranteDesktop?.setTheme?.(theme);
-      await syncDesktopShortcuts();
-      await reapplyVoiceInputSettings();
-      for (const [participantId, audio] of voiceRemoteAudio) audio.volume = effectiveVoiceOutputVolume(participantId);
-      resetVoiceActivityCalibration();
-      preferencesResetConfirm = false;
-      notice = "Preferências restauradas para os padrões.";
-    } catch (error) {
-      settingsError = error.message;
-    } finally {
-      preferencesResetBusy = false;
-    }
   }
 
   async function logout() {
@@ -7023,7 +6935,7 @@
       {:else if view === "notifications"}
         <NotificationsPage
           {notificationUnreadCount}
-          bind:hideReadNotifications
+          {hideReadNotifications}
           {readNotificationCount}
           {notificationsError}
           {unreadDirectNotification}
@@ -7031,6 +6943,7 @@
           {visibleNotifications}
           {notifications}
           {inviteActionId}
+          onHideReadChange={setHideReadNotifications}
           onMarkAllRead={markAllNotificationsRead}
           onOpenDirectNotification={openDirectNotification}
           onMarkNotificationRead={markNotificationRead}

@@ -11,6 +11,7 @@
   export let visibleNotifications = [];
   export let notifications = [];
   export let inviteActionId = "";
+  export let onHideReadChange = () => {};
   export let onMarkAllRead = () => {};
   export let onOpenDirectNotification = () => {};
   export let onMarkNotificationRead = () => {};
@@ -24,7 +25,7 @@
   <header class="notifications-heading">
     <div><p class="eyebrow">central de avisos</p><h1 id="notifications-title" class="mt-2 text-4xl font-black tracking-[-.05em] text-white">Notificações</h1><p class="muted mt-2 max-w-xl text-sm leading-6">Convites, solicitações de entrada e atualizações dos seus grupos ficam reunidos aqui.</p></div>
     <div class="notifications-heading-actions">
-      <label class="notification-hide-read"><input type="checkbox" bind:checked={hideReadNotifications} /><span>Ocultar lidas</span>{#if readNotificationCount}<small>{readNotificationCount}</small>{/if}</label>
+      <label class="notification-hide-read"><input type="checkbox" checked={hideReadNotifications} on:change={(event) => onHideReadChange(event.currentTarget.checked)} /><span>Ocultar lidas</span>{#if readNotificationCount}<small>{readNotificationCount}</small>{/if}</label>
       <button class="outline rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={onMarkAllRead} disabled={!notificationUnreadCount}>Marcar como lidas</button>
       <button class="outline rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={onNavigateHome}>Voltar</button>
     </div>
@@ -60,7 +61,7 @@
       {/each}
     </div>
   {:else if notifications.length && hideReadNotifications}
-    <div class="notifications-empty notifications-filter-empty"><span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("check")} size={24} strokeWidth={1.8} /></span><h2>Notificações lidas ocultas</h2><p>Elas continuam salvas. Você pode mostrá-las novamente quando quiser.</p><button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={() => hideReadNotifications = false}>Mostrar notificações lidas</button></div>
+    <div class="notifications-empty notifications-filter-empty"><span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("check")} size={24} strokeWidth={1.8} /></span><h2>Notificações lidas ocultas</h2><p>Elas continuam salvas. Você pode mostrá-las novamente quando quiser.</p><button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={() => onHideReadChange(false)}>Mostrar notificações lidas</button></div>
   {:else}
     <div class="notifications-empty"><span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("notification")} size={24} strokeWidth={1.8} /></span><h2>Nenhuma notificação por enquanto</h2><p>Quando houver convites ou atualizações dos seus grupos, elas aparecerão aqui.</p></div>
   {/if}
