@@ -196,6 +196,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair captura de tela/janela, câmera, microfone, limites de resolução e fallback legado para `frontend/src/features/broadcast/capture-controller.js` em chunk lazy.
     - [x] Extrair mixagem de áudio da transmissão e liberação das trilhas compostas para `frontend/src/features/broadcast/audio-mixer-controller.js` em chunk lazy, preservando o fast path de trilha única.
     - [x] Extrair `replaceTrack`, remoção de duplicatas e renegociação de áudio dos peers para `frontend/src/features/broadcast/track-controller.js` em chunk lazy.
+    - [x] Extrair os diálogos de configuração, revisão, visibilidade e seleção de fontes de transmissão para `frontend/src/features/broadcast/BroadcastDialogs.svelte`, carregados apenas quando necessários e mantendo o estado de captura no shell.
     - [x] Extrair carregamento, visualização pública, seleção e multistream para `frontend/src/features/live/controller.js` em chunk lazy, preservando rotas e layout.
     - [x] Extrair a tela “Ao vivo agora” para `frontend/src/features/live/LivePage.svelte`, preservando classes, ações, seleção e multistream.
     - [x] Extrair a central de multistream para `frontend/src/features/live/MultistreamPage.svelte`, com carregamento sob demanda e contratos de seleção preservados.
