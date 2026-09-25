@@ -15,6 +15,9 @@ const state = {
   pendingGroupOverviewRequests: new Map(),
   watchingGroupLiveStreamId: "",
   broadcastState: "idle",
+  showMobileChannels: true,
+  mentionSuggestions: ["old"],
+  mentionStartIndex: 4,
 };
 const calls = [];
 const controller = createGroupController({
@@ -33,6 +36,10 @@ const controller = createGroupController({
   subscribeGroup: (groupId) => calls.push(["subscribe", groupId]),
   getSelectedRoomId: () => state.selectedRoomId,
   markGroupRoomRead: (room) => calls.push(["read", room.id]),
+  getVoiceSoundContext: () => calls.push(["voice-context"]),
+  getMessageComposerInput: () => ({ focus: () => calls.push(["focus"]) }),
+  tick: async () => {},
+  joinVoiceRoom: async () => calls.push(["join-voice"]),
 });
 
 await controller.loadGroups();
@@ -47,4 +54,16 @@ assert.equal(state.groupLoading, false);
 assert.ok(calls.some(([name, id]) => name === "subscribe" && id === "group-1"));
 assert.ok(calls.some(([name, id]) => name === "read" && id === "room-1"));
 
-console.log(JSON.stringify({ ok: true, checks: 10 }));
+await controller.selectRoom("room-2");
+assert.equal(state.selectedRoomId, "room-2");
+assert.equal(state.showMobileChannels, false);
+assert.ok(calls.some(([name]) => name === "voice-context"));
+assert.ok(calls.some(([name]) => name === "join-voice"));
+
+await controller.selectRoom("room-1");
+assert.equal(state.selectedRoomId, "room-1");
+assert.deepEqual(state.mentionSuggestions, []);
+assert.equal(state.mentionStartIndex, -1);
+assert.ok(calls.some(([name]) => name === "focus"));
+
+console.log(JSON.stringify({ ok: true, checks: 18 }));

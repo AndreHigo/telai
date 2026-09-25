@@ -1132,6 +1132,9 @@
           if ("selectedGroupId" in next) selectedGroupId = next.selectedGroupId;
           if ("selectedRoomId" in next) selectedRoomId = next.selectedRoomId;
           if ("showGroupPicker" in next) showGroupPicker = next.showGroupPicker;
+          if ("showMobileChannels" in next) showMobileChannels = next.showMobileChannels;
+          if ("mentionSuggestions" in next) mentionSuggestions = next.mentionSuggestions;
+          if ("mentionStartIndex" in next) mentionStartIndex = next.mentionStartIndex;
           if ("watchingGroupLiveStreamId" in next) watchingGroupLiveStreamId = next.watchingGroupLiveStreamId;
         },
         mergeActiveVoicePresence,
@@ -1144,12 +1147,17 @@
         subscribeGroup: (groupId) => ensureGroupEventGateway().subscribeGroup(groupId),
         getSelectedRoomId: () => selectedRoomId,
         markGroupRoomRead: (room) => markGroupRoomRead(room),
+        getVoiceSoundContext: () => getVoiceSoundContext(),
+        getMessageComposerInput: () => messageComposerInput,
+        tick,
+        joinVoiceRoom: () => joinVoiceRoom(),
       }));
     }
     return groupControllerPromise;
   }
   async function loadGroups(...args) { return (await getGroupController()).loadGroups(...args); }
   async function loadGroup(...args) { return (await getGroupController()).loadGroup(...args); }
+  async function selectRoom(...args) { return (await getGroupController()).selectRoom(...args); }
 
   let groupMembershipControllerPromise = null;
   function getGroupMembershipController() {
@@ -4600,31 +4608,6 @@
       ...groupOverview,
       rooms: (groupOverview.rooms || []).map((room) => messageBelongsToRoom(message, room) ? { ...room, unreadCount: (room.unreadCount || 0) + 1 } : room),
     };
-  }
-
-  async function selectRoom(roomId) {
-    const room = rooms.find((candidate) => candidate.id === roomId);
-    if (!room) return;
-    selectedRoomId = room.id;
-    watchingGroupLiveStreamId = "";
-    showMobileChannels = false;
-    mentionSuggestions = [];
-    mentionStartIndex = -1;
-    if (room.kind === "text") void markGroupRoomRead(room);
-    if (room.kind === "voice") {
-      // O Electron pode bloquear o AudioContext depois de qualquer await.
-      // Inicialize-o ainda dentro do gesto que abriu o canal para que o VAD
-      // consiga ler o microfone assim que a sala conectar.
-      getVoiceSoundContext();
-    }
-    await tick();
-    if (room.kind === "text" && selectedRoomId === room.id) {
-      messageComposerInput?.focus();
-      void scrollGroupMessagesToBottom({ force: true });
-    }
-    if (room.kind === "voice") {
-      if (selectedRoomId === room.id) await joinVoiceRoom();
-    }
   }
 
   function watchSelectedRoomLive(streamId = selectedRoomLiveStream?.id) {

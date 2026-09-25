@@ -167,7 +167,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair o controle do breakpoint responsivo e fechamento da sidebar para `frontend/src/features/shell/viewport-controller.js`, preservando o layout.
     - [x] Extrair submissão de login/cadastro e início de OAuth para `frontend/src/features/auth/controller.js`, preservando payloads e navegação existentes.
     - [x] Extrair abertura e navegação da tela de configurações para `frontend/src/features/settings/navigation-controller.js`, preservando bindings e carregamentos existentes.
-    - [x] Extrair o pós-carregamento do workspace de grupos, inscrição em eventos e marcação de leitura para `frontend/src/features/groups/controller.js`.
+    - [x] Extrair o pós-carregamento, seleção de salas, inscrição em eventos e marcação de leitura para `frontend/src/features/groups/controller.js`.
     - [x] Extrair notas de atualização e seu estado de leitura para `frontend/src/features/shell/release-notes-controller.js` em chunk lazy.
     - [x] Extrair atualização, inicialização com o sistema, aceleração gráfica e seletores de captura Electron para `frontend/src/features/shell/desktop-controller.js` em chunk lazy.
     - [x] Extrair transporte WebSocket, pares WebRTC, ICE, renegociação e chat do host para `frontend/src/features/broadcast/transport-controller.js` em chunk lazy.

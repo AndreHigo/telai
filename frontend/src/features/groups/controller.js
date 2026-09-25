@@ -12,6 +12,10 @@ export function createGroupController({
   subscribeGroup,
   getSelectedRoomId,
   markGroupRoomRead,
+  getVoiceSoundContext,
+  getMessageComposerInput,
+  tick,
+  joinVoiceRoom,
 }) {
   async function loadGroups() {
     const result = await api("/api/groups");
@@ -125,5 +129,27 @@ export function createGroupController({
     finally { setState({ groupPresenceRefreshInFlight: false }); }
   }
 
-  return { loadGroup, loadGroups, refreshGroupOverview, refreshGroupPresence };
+  async function selectRoom(roomId) {
+    const state = getState();
+    const room = (state.groupOverview?.rooms || []).find((candidate) => candidate.id === roomId);
+    if (!room) return;
+    setState({
+      selectedRoomId: room.id,
+      watchingGroupLiveStreamId: "",
+      showMobileChannels: false,
+      mentionSuggestions: [],
+      mentionStartIndex: -1,
+    });
+    if (room.kind === "text") void markGroupRoomRead?.(room);
+    if (room.kind === "voice") getVoiceSoundContext?.();
+    await tick?.();
+    const current = getState();
+    if (room.kind === "text" && current.selectedRoomId === room.id) {
+      getMessageComposerInput?.()?.focus?.();
+      void scrollGroupMessagesToBottom({ force: true });
+    }
+    if (room.kind === "voice" && current.selectedRoomId === room.id) await joinVoiceRoom?.();
+  }
+
+  return { loadGroup, loadGroups, refreshGroupOverview, refreshGroupPresence, selectRoom };
 }
