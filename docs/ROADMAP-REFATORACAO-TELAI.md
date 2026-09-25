@@ -120,6 +120,8 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
   - [ ] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
   - [ ] Separar a tela de configurações por domínio e reduzir o markup restante do shell.
+    - [x] Extrair navegação, cabeçalho, subnavegação interna e formulário de perfil do canal para `frontend/src/features/settings`.
+    - [ ] Extrair os cartões restantes de perfil, preferências, contas conectadas, voz, notificações e administração de grupo.
 
 ### Fase 2 — Contratos e tempo real
 
