@@ -103,6 +103,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair agendamento, consulta e cancelamento de manutenção do roteador HTTP.
 - [x] Extrair rotas de perfil, canal, preferências e preferências de voz para `server/http/user-settings-routes.mjs`.
 - [x] Extrair busca social, amizades, solicitações e follows para `server/http/social-routes.mjs`.
+- [x] Extrair listagem, leitura e sincronização de notificações para `server/http/notification-routes.mjs`.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
