@@ -37,6 +37,7 @@ export const IMPORT_ORDER = [
   ["group_webhooks", ["id"]],
   ["applications", ["id"]],
   ["application_tokens", ["id"]],
+  ["application_commands", ["id"]],
   ["application_group_installations", ["application_id", "group_id"]],
   ["direct_conversations", ["id"]],
   ["direct_conversation_members", ["conversation_id", "user_id"]],

@@ -4,6 +4,27 @@ function normalizeText(value, maxLength) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
 }
 
+function normalizeCommandName(value) {
+  const name = String(value ?? "").trim().toLowerCase();
+  return /^[a-z0-9_-]{1,32}$/.test(name) ? name : null;
+}
+
+function normalizeCommandOptions(value) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 25) return null;
+  const seen = new Set();
+  const options = [];
+  for (const item of value) {
+    const name = normalizeCommandName(item?.name);
+    const description = normalizeText(item?.description, 100);
+    const type = String(item?.type || "string").trim().toLowerCase();
+    if (!name || seen.has(name) || !description || !["string", "integer", "number", "boolean"].includes(type)) return null;
+    seen.add(name);
+    options.push({ name, description, type, required: item?.required === true });
+  }
+  return options;
+}
+
 function applicationPayload(application) {
   return application ? {
     id: application.id,
@@ -84,7 +105,7 @@ export function createApplicationRoutes({
     }
 
     const applicationMatch = requestUrl.pathname.match(/^\/api\/applications\/([A-Za-z0-9-]{16,64})(?:\/([^/]+)(?:\/([^/]+))?)?$/);
-    if (applicationMatch && ["GET", "POST", "DELETE"].includes(request.method)) {
+    if (applicationMatch && ["GET", "POST", "PATCH", "DELETE"].includes(request.method)) {
       const [, applicationId, segment, childId] = applicationMatch;
       const context = await ownedApplication(request, response, applicationId);
       if (!context) return true;
@@ -126,6 +147,59 @@ export function createApplicationRoutes({
         }
       }
 
+      if (segment === "commands") {
+        if (request.method === "GET" && !childId) {
+          json(response, 200, { commands: await applicationRepository.listCommands(applicationId) });
+          return true;
+        }
+        if (request.method === "POST" && !childId) {
+          try {
+            const body = await readJson(request, 32 * 1024);
+            const name = normalizeCommandName(body.name);
+            const description = normalizeText(body.description, 100);
+            const options = normalizeCommandOptions(body.options);
+            if (!name || !description || !options) {
+              json(response, 400, { error: "Comando, descrição e opções precisam seguir o contrato da aplicação." });
+              return true;
+            }
+            const command = await applicationRepository.createCommand({ applicationId, name, description, options });
+            json(response, 201, { command });
+          } catch {
+            json(response, 409, { error: "Não foi possível criar o comando; o nome pode já estar em uso." });
+          }
+          return true;
+        }
+        if (request.method === "PATCH" && childId) {
+          try {
+            const body = await readJson(request, 32 * 1024);
+            const name = body.name === undefined ? undefined : normalizeCommandName(body.name);
+            const description = body.description === undefined ? undefined : normalizeText(body.description, 100);
+            const options = normalizeCommandOptions(body.options);
+            if ((body.name !== undefined && !name) || (body.description !== undefined && !description) || (options !== undefined && !options)) {
+              json(response, 400, { error: "Comando, descrição e opções precisam seguir o contrato da aplicação." });
+              return true;
+            }
+            const command = await applicationRepository.updateCommand({ applicationId, commandId: childId, name, description, options });
+            if (!command) {
+              json(response, 404, { error: "Comando não encontrado." });
+              return true;
+            }
+            json(response, 200, { command });
+          } catch {
+            json(response, 409, { error: "Não foi possível atualizar o comando; o nome pode já estar em uso." });
+          }
+          return true;
+        }
+        if (request.method === "DELETE" && childId) {
+          if (!await applicationRepository.deleteCommand(applicationId, childId)) {
+            json(response, 404, { error: "Comando não encontrado." });
+            return true;
+          }
+          json(response, 200, { ok: true, commandId: childId });
+          return true;
+        }
+      }
+
       if (segment === "groups") {
         if (request.method === "GET" && !childId) {
           json(response, 200, { installations: await applicationRepository.listInstallations(applicationId) });
@@ -152,6 +226,21 @@ export function createApplicationRoutes({
       }
 
       json(response, 405, { error: "Método ou subrota de aplicação não permitido." });
+      return true;
+    }
+
+    if (requestUrl.pathname === "/api/bot/applications/commands" && request.method === "GET") {
+      const token = botToken(request);
+      const identity = token ? await applicationRepository.findByTokenHash(hashToken(token)) : null;
+      if (!identity) {
+        json(response, 401, { error: "Token de bot inválido ou revogado." });
+        return true;
+      }
+      json(response, 200, {
+        application: { id: identity.applicationId, name: identity.applicationName },
+        bot: { id: identity.botUserId, username: identity.botUsername, displayName: identity.botDisplayName },
+        commands: await applicationRepository.listCommands(identity.applicationId),
+      });
       return true;
     }
 

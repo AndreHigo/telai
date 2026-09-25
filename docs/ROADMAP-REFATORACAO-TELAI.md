@@ -293,6 +293,9 @@ enviada ao GitHub nem publicada em produção.
   - [x] Publicar mensagens autenticadas por token e propagar o evento pelo gateway.
   - [ ] Adicionar gerenciamento visual e ampliar a superfície de permissões, comandos e eventos.
 - [ ] Comandos, componentes e modais.
+  - [x] Registrar comandos por aplicação com validação de nome, descrição e opções em SQLite/PostgreSQL.
+  - [x] Expor o manifesto de comandos ao bot autenticado sem vazar tokens ou dados internos.
+  - [ ] Implementar despacho de interações, componentes e modais com permissões e respostas persistentes.
 - [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.
 - [x] Criar migration baseline e importador offline SQLite → PostgreSQL.
 - [x] Subir PostgreSQL local em Docker e aplicar/validar a migration baseline sem cutover.

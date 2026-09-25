@@ -77,6 +77,14 @@ const paths = {
   "/applications/{applicationId}/tokens/{tokenId}": pathItem("Aplicações", {
     delete: ["revokeApplicationToken", "Revoga um token de bot"],
   }),
+  "/applications/{applicationId}/commands": pathItem("Aplicações", {
+    get: ["listApplicationCommands", "Lista os comandos de uma aplicação"],
+    post: ["createApplicationCommand", "Registra um comando de aplicação", { methods: ["201"] }],
+  }),
+  "/applications/{applicationId}/commands/{commandId}": pathItem("Aplicações", {
+    patch: ["updateApplicationCommand", "Atualiza um comando de aplicação"],
+    delete: ["deleteApplicationCommand", "Remove um comando de aplicação"],
+  }),
   "/applications/{applicationId}/groups": pathItem("Aplicações", {
     get: ["listApplicationInstallations", "Lista grupos onde o bot foi instalado"],
   }),
@@ -86,6 +94,9 @@ const paths = {
   }),
   "/bot/groups/{groupId}/messages": pathItem("Aplicações", {
     post: ["createBotMessage", "Publica mensagem autenticada por token de bot", { auth: false, methods: ["201"] }],
+  }),
+  "/bot/applications/commands": pathItem("Aplicações", {
+    get: ["getBotCommandManifest", "Retorna o manifesto de comandos do bot", { auth: false }],
   }),
   "/users/search": pathItem("Social", { get: ["searchUsers", "Busca usuários"] }),
   "/social": pathItem("Social", { get: ["getSocialGraph", "Retorna amizades, solicitações e follows"] }),

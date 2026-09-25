@@ -112,7 +112,9 @@ async function main() {
     assert.ok(openApi.body.paths["/groups/{groupId}/rooms/{roomId}/read"].post);
     assert.ok(openApi.body.paths["/users/{userId}/block"].post);
     assert.ok(openApi.body.paths["/applications"].post);
+    assert.ok(openApi.body.paths["/applications/{applicationId}/commands"].post);
     assert.ok(openApi.body.paths["/bot/groups/{groupId}/messages"].post);
+    assert.ok(openApi.body.paths["/bot/applications/commands"].get);
     const missingVersionedRoute = await request("/api/v1/route-that-does-not-exist");
     assert.equal(missingVersionedRoute.response.status, 404);
     assert.equal(missingVersionedRoute.body.code, "not_found");
@@ -377,6 +379,23 @@ async function main() {
     assert.equal(tokenList.response.status, 200);
     assert.equal(tokenList.body.tokens.length, 1);
     assert.equal(Object.prototype.hasOwnProperty.call(tokenList.body.tokens[0], "token"), false);
+    const commandCreation = await api(owner, `/api/applications/${applicationId}/commands`, "POST", {
+      name: "status",
+      description: "Consulta o status do bot",
+      options: [{ name: "detalhe", description: "Nível de detalhe", type: "string", required: false }],
+    });
+    assert.equal(commandCreation.response.status, 201, JSON.stringify(commandCreation.body));
+    assert.equal(commandCreation.body.command.name, "status");
+    assert.equal(commandCreation.body.command.options[0].type, "string");
+    const commandUpdate = await api(owner, `/api/applications/${applicationId}/commands/${commandCreation.body.command.id}`, "PATCH", { description: "Consulta o status atualizado" });
+    assert.equal(commandUpdate.response.status, 200, JSON.stringify(commandUpdate.body));
+    assert.equal(commandUpdate.body.command.description, "Consulta o status atualizado");
+    assert.equal(commandUpdate.body.command.options.length, 1);
+    const commandManifest = await request("/api/bot/applications/commands", { headers: { authorization: `Bot ${tokenCreation.body.token}` } });
+    assert.equal(commandManifest.response.status, 200, JSON.stringify(commandManifest.body));
+    assert.equal(commandManifest.body.commands[0].name, "status");
+    assert.equal((await api(owner, `/api/applications/${applicationId}/commands/${commandCreation.body.command.id}`, "DELETE")).response.status, 200);
+    assert.equal((await api(owner, `/api/applications/${applicationId}/commands/${commandCreation.body.command.id}`, "DELETE")).response.status, 404);
     const install = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "POST");
     assert.equal(install.response.status, 201);
     const botMessage = await request(`/api/bot/groups/${groupId}/messages`, {

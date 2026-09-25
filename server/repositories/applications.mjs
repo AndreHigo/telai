@@ -35,6 +35,28 @@ function publicInstallation(row) {
   };
 }
 
+function parseCommandOptions(value) {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function publicCommand(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    applicationId: row.applicationId,
+    name: row.name,
+    description: row.description,
+    options: parseCommandOptions(row.optionsJson),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 export function createApplicationRepository(database, { createId = randomUUID } = {}) {
   function findOwned(ownerId, applicationId) {
     return publicApplication(database.prepare(`
@@ -86,6 +108,37 @@ export function createApplicationRepository(database, { createId = randomUUID } 
         last_used_at AS lastUsedAt, revoked_at AS revokedAt
       FROM application_tokens WHERE application_id = ? ORDER BY created_at DESC
     `).all(applicationId).map(publicToken);
+  }
+
+  function listCommands(applicationId) {
+    return database.prepare(`
+      SELECT id, application_id AS applicationId, name, description,
+        options_json AS optionsJson, created_at AS createdAt, updated_at AS updatedAt
+      FROM application_commands WHERE application_id = ? ORDER BY name COLLATE NOCASE
+    `).all(applicationId).map(publicCommand);
+  }
+
+  function createCommand({ applicationId, name, description = "", options = [], createdAt = new Date().toISOString() }) {
+    const id = createId();
+    const optionsJson = JSON.stringify(options);
+    database.prepare("INSERT INTO application_commands (id, application_id, name, description, options_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(id, applicationId, name, description, optionsJson, createdAt, createdAt);
+    return publicCommand({ id, applicationId, name, description, optionsJson, createdAt, updatedAt: createdAt });
+  }
+
+  function updateCommand({ applicationId, commandId, name, description, options, updatedAt = new Date().toISOString() }) {
+    const current = database.prepare("SELECT id, application_id AS applicationId, name, description, options_json AS optionsJson, created_at AS createdAt, updated_at AS updatedAt FROM application_commands WHERE application_id = ? AND id = ?").get(applicationId, commandId);
+    if (!current) return null;
+    const nextName = name ?? current.name;
+    const nextDescription = description ?? current.description;
+    const nextOptions = options ?? parseCommandOptions(current.optionsJson);
+    database.prepare("UPDATE application_commands SET name = ?, description = ?, options_json = ?, updated_at = ? WHERE application_id = ? AND id = ?")
+      .run(nextName, nextDescription, JSON.stringify(nextOptions), updatedAt, applicationId, commandId);
+    return publicCommand({ ...current, name: nextName, description: nextDescription, optionsJson: JSON.stringify(nextOptions), updatedAt });
+  }
+
+  function deleteCommand(applicationId, commandId) {
+    return database.prepare("DELETE FROM application_commands WHERE application_id = ? AND id = ?").run(applicationId, commandId).changes > 0;
   }
 
   function findByTokenHash(tokenHash) {
@@ -171,7 +224,7 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     }
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, createCommand, updateCommand, deleteCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }
 
 async function withPostgresTransaction(database, callback) {
@@ -231,6 +284,34 @@ export function createPostgresApplicationRepository(database, { createId = rando
   async function listTokens(applicationId) {
     const result = await database.query('SELECT id, application_id AS "applicationId", label, created_at AS "createdAt", last_used_at AS "lastUsedAt", revoked_at AS "revokedAt" FROM application_tokens WHERE application_id = $1 ORDER BY created_at DESC', [applicationId]);
     return result.rows.map(publicToken);
+  }
+
+  async function listCommands(applicationId) {
+    const result = await database.query('SELECT id, application_id AS "applicationId", name, description, options_json AS "optionsJson", created_at AS "createdAt", updated_at AS "updatedAt" FROM application_commands WHERE application_id = $1 ORDER BY LOWER(name)', [applicationId]);
+    return result.rows.map(publicCommand);
+  }
+
+  async function createCommand({ applicationId, name, description = "", options = [], createdAt = new Date().toISOString() }) {
+    const id = createId();
+    const optionsJson = JSON.stringify(options);
+    await database.query("INSERT INTO application_commands (id, application_id, name, description, options_json, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $6)", [id, applicationId, name, description, optionsJson, createdAt]);
+    return publicCommand({ id, applicationId, name, description, optionsJson, createdAt, updatedAt: createdAt });
+  }
+
+  async function updateCommand({ applicationId, commandId, name, description, options, updatedAt = new Date().toISOString() }) {
+    const result = await database.query('SELECT id, application_id AS "applicationId", name, description, options_json AS "optionsJson", created_at AS "createdAt", updated_at AS "updatedAt" FROM application_commands WHERE application_id = $1 AND id = $2', [applicationId, commandId]);
+    const current = result.rows[0];
+    if (!current) return null;
+    const nextName = name ?? current.name;
+    const nextDescription = description ?? current.description;
+    const nextOptions = options ?? parseCommandOptions(current.optionsJson);
+    await database.query("UPDATE application_commands SET name = $1, description = $2, options_json = $3, updated_at = $4 WHERE application_id = $5 AND id = $6", [nextName, nextDescription, JSON.stringify(nextOptions), updatedAt, applicationId, commandId]);
+    return publicCommand({ ...current, name: nextName, description: nextDescription, optionsJson: JSON.stringify(nextOptions), updatedAt });
+  }
+
+  async function deleteCommand(applicationId, commandId) {
+    const result = await database.query("DELETE FROM application_commands WHERE application_id = $1 AND id = $2", [applicationId, commandId]);
+    return result.rowCount > 0;
   }
 
   async function findByTokenHash(tokenHash) {
@@ -298,5 +379,5 @@ export function createPostgresApplicationRepository(database, { createId = rando
     });
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, createCommand, updateCommand, deleteCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }
