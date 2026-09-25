@@ -146,6 +146,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair a feature de amigos para `frontend/src/features/social`.
 - [x] Extrair a tela de canais seguidos para `frontend/src/features/social`.
 - [x] Extrair a feature de mensagens diretas para `frontend/src/features/direct`.
+- [x] Extrair o controlador de conversas diretas e carregá-lo em chunk separado para reduzir o bundle inicial.
 - [x] Extrair a camada de apresentação da transmissão para `frontend/src/features/broadcast`.
 - [x] Extrair o cabeçalho, navegação global e banner de reconexão do shell para `frontend/src/features/shell`.
 - [x] Extrair a tela inicial para `frontend/src/features/home` sem alterar sua identidade visual.

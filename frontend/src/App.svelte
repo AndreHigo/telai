@@ -791,6 +791,61 @@
     setHideReadNotifications,
     syncNotificationHideReadPreference,
   } = notificationController;
+  let directControllerPromise = null;
+  function getDirectController() {
+    if (!directControllerPromise) {
+      directControllerPromise = import("./features/direct/controller.js").then(({ createDirectController }) => createDirectController({
+        api,
+        tick,
+        getUser: () => user,
+        getView: () => view,
+        getState: () => ({
+          directConversationError,
+          directConversationId,
+          directConversationLoading,
+          directConversationRefreshId,
+          directConversationRefreshInFlight,
+          directConversationRefreshQueued,
+          directConversationSending,
+          directConversationTarget,
+          directConversations,
+          directConversationsRefreshInFlight,
+          directMessageDraft,
+          directMessages,
+        }),
+        setState: (next) => {
+          if ("directConversationError" in next) directConversationError = next.directConversationError;
+          if ("directConversationId" in next) directConversationId = next.directConversationId;
+          if ("directConversationLoading" in next) directConversationLoading = next.directConversationLoading;
+          if ("directConversationRefreshId" in next) directConversationRefreshId = next.directConversationRefreshId;
+          if ("directConversationRefreshInFlight" in next) directConversationRefreshInFlight = next.directConversationRefreshInFlight;
+          if ("directConversationRefreshQueued" in next) directConversationRefreshQueued = next.directConversationRefreshQueued;
+          if ("directConversationSending" in next) directConversationSending = next.directConversationSending;
+          if ("directConversationTarget" in next) directConversationTarget = next.directConversationTarget;
+          if ("directConversations" in next) directConversations = next.directConversations;
+          if ("directConversationsRefreshInFlight" in next) directConversationsRefreshInFlight = next.directConversationsRefreshInFlight;
+          if ("directMessageDraft" in next) directMessageDraft = next.directMessageDraft;
+          if ("directMessages" in next) directMessages = next.directMessages;
+          if ("view" in next) view = next.view;
+        },
+        loadNotifications,
+        closeVoiceContextMenu: () => closeVoiceContextMenu(),
+        setNotice: (message) => { notice = message; },
+      }));
+    }
+    return directControllerPromise;
+  }
+  async function loadDirectConversationMessages(...args) { return (await getDirectController()).loadDirectConversationMessages(...args); }
+  async function loadDirectConversations(...args) { return (await getDirectController()).loadDirectConversations(...args); }
+  async function openDirectConversationById(...args) { return (await getDirectController()).openDirectConversationById(...args); }
+  async function openDirectConversationWithUser(...args) { return (await getDirectController()).openDirectConversationWithUser(...args); }
+  async function sendDirectMessage(...args) { return (await getDirectController()).sendDirectMessage(...args); }
+  function handleDirectMessageKeydown(event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
+  }
 
   async function loadGroups() {
     const result = await api("/api/groups");
@@ -1070,133 +1125,6 @@
       maintenanceReloadKey = "";
     } finally {
       maintenanceRefreshInFlight = false;
-    }
-  }
-
-  async function loadDirectConversations() {
-    if (directConversationsRefreshInFlight) return;
-    directConversationsRefreshInFlight = true;
-    try {
-      const result = await api("/api/direct/conversations");
-      directConversations = result.conversations || [];
-    } finally {
-      directConversationsRefreshInFlight = false;
-    }
-  }
-
-  function listedDirectConversationTarget(conversationId) {
-    return directConversations.find((conversation) => conversation.id === conversationId)?.otherUser || null;
-  }
-
-  async function loadDirectConversationMessages({ silent = false } = {}) {
-    const conversationId = directConversationId;
-    if (!conversationId) return;
-    if (directConversationRefreshInFlight) {
-      directConversationRefreshQueued = true;
-      return;
-    }
-    directConversationRefreshInFlight = true;
-    directConversationRefreshId = conversationId;
-    if (!silent) directConversationLoading = true;
-    directConversationError = "";
-    try {
-      const result = await api(`/api/direct/conversations/${encodeURIComponent(conversationId)}/messages`);
-      if (directConversationId !== conversationId || directConversationRefreshId !== conversationId) return;
-      directConversationTarget = result.conversation?.otherUser || listedDirectConversationTarget(conversationId) || directConversationTarget;
-      directMessages = result.messages || [];
-      if (view === "direct" && directConversationId === conversationId) {
-        await tick();
-        const list = document.querySelector(".direct-message-list");
-        if (list) list.scrollTop = list.scrollHeight;
-      }
-    } catch (error) {
-      if (directConversationId === conversationId) directConversationError = error.message;
-    } finally {
-      directConversationRefreshInFlight = false;
-      directConversationRefreshId = "";
-      if (!silent) directConversationLoading = false;
-      if (directConversationRefreshQueued) {
-        directConversationRefreshQueued = false;
-        void loadDirectConversationMessages({ silent: true });
-      }
-    }
-  }
-
-  async function openDirectConversationById(conversationId) {
-    if (!conversationId) return;
-    const listedTarget = listedDirectConversationTarget(conversationId);
-    directConversationLoading = true;
-    directConversationError = "";
-    view = "direct";
-    try {
-      const result = await api(`/api/direct/conversations/${encodeURIComponent(conversationId)}/messages?includeAvatar=1`);
-      directConversationId = result.conversation.id;
-      directConversationTarget = result.conversation.otherUser || listedTarget;
-      directMessages = result.messages || [];
-      await loadDirectConversations();
-      await loadNotifications({ silent: true });
-      await tick();
-      const list = document.querySelector(".direct-message-list");
-      if (list) list.scrollTop = list.scrollHeight;
-    } catch (error) {
-      directConversationError = error.message;
-    } finally {
-      directConversationLoading = false;
-    }
-  }
-
-  async function openDirectConversationWithUser(targetUser) {
-    // Participantes de voz usam `id` para a conexão WebRTC; a conta Telai
-    // fica em `userId`. Para mensagens privadas, o segundo é a referência
-    // persistente e precisa ter prioridade quando os dois existem.
-    const targetUserId = targetUser?.userId || targetUser?.id;
-    if (!targetUserId || targetUserId === user?.id) {
-      notice = "Você não pode iniciar uma conversa consigo mesmo.";
-      closeVoiceContextMenu();
-      return;
-    }
-    closeVoiceContextMenu();
-    directConversationLoading = true;
-    directConversationError = "";
-    view = "direct";
-    try {
-      const result = await api("/api/direct/conversations", { method: "POST", body: JSON.stringify({ userId: targetUserId }) });
-      directConversationId = result.conversation.id;
-      directConversationTarget = result.conversation.otherUser;
-      await loadDirectConversationMessages();
-      await loadDirectConversations();
-    } catch (error) {
-      directConversationError = error.message;
-    } finally {
-      directConversationLoading = false;
-    }
-  }
-
-  async function sendDirectMessage(event) {
-    event.preventDefault();
-    const body = directMessageDraft.trim();
-    if (!directConversationId || !body || directConversationSending) return;
-    directConversationSending = true;
-    directConversationError = "";
-    try {
-      const result = await api(`/api/direct/conversations/${encodeURIComponent(directConversationId)}/messages`, { method: "POST", body: JSON.stringify({ body }) });
-      if (result.message) directMessages = [...directMessages, result.message];
-      directMessageDraft = "";
-      await loadDirectConversations();
-      await tick();
-      const list = document.querySelector(".direct-message-list");
-      if (list) list.scrollTop = list.scrollHeight;
-    } catch (error) {
-      directConversationError = error.message;
-    } finally {
-      directConversationSending = false;
-    }
-  }
-
-  function handleDirectMessageKeydown(event) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      event.currentTarget.form?.requestSubmit();
     }
   }
 
