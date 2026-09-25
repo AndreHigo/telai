@@ -65,15 +65,19 @@ export function createAdminRuntime({
     };
   }
 
-  function siteAdminOverview() {
+  async function siteAdminOverview() {
     const now = new Date().toISOString();
-    const activeStreams = streamRepository.listAdminStreams().filter(runtimeStreamIsLive);
+    const activeStreams = (await streamRepository.listAdminStreams()).filter(runtimeStreamIsLive);
     const liveCountByGroup = new Map();
     for (const stream of activeStreams) {
       if (stream.groupId) liveCountByGroup.set(stream.groupId, (liveCountByGroup.get(stream.groupId) || 0) + 1);
     }
-    const accounts = siteAdminRepository.listAccounts(now);
-    const groups = siteAdminRepository.listGroups().map((group) => ({ ...group, liveCount: liveCountByGroup.get(group.id) || 0 }));
+    const [accounts, groupsResult, activeSessions] = await Promise.all([
+      siteAdminRepository.listAccounts(now),
+      siteAdminRepository.listGroups(),
+      siteAdminRepository.countActiveSessions(now),
+    ]);
+    const groups = groupsResult.map((group) => ({ ...group, liveCount: liveCountByGroup.get(group.id) || 0 }));
     const streams = activeStreams.map((stream) => {
       const room = rooms.get(stream.roomName);
       return {
@@ -97,7 +101,7 @@ export function createAdminRuntime({
         accounts: accounts.length,
         groups: groups.length,
         openStreams: streams.length,
-        activeSessions: siteAdminRepository.countActiveSessions(now),
+        activeSessions,
         runtimeBroadcastRooms: rooms.size,
         runtimeVoiceRooms: voiceRooms.size,
       },
@@ -107,16 +111,21 @@ export function createAdminRuntime({
     };
   }
 
-  function siteAdminSummary() {
+  async function siteAdminSummary() {
     const now = new Date().toISOString();
-    const activeStreams = streamRepository.listActiveStreams().filter(runtimeStreamIsLive);
+    const activeStreams = (await streamRepository.listActiveStreams()).filter(runtimeStreamIsLive);
+    const [accounts, groups, activeSessions] = await Promise.all([
+      siteAdminRepository.countAccounts(),
+      siteAdminRepository.countGroups(),
+      siteAdminRepository.countActiveSessions(now),
+    ]);
     return {
       generatedAt: new Date().toISOString(),
       summary: {
-        accounts: siteAdminRepository.countAccounts(),
-        groups: siteAdminRepository.countGroups(),
+        accounts,
+        groups,
         openStreams: activeStreams.length,
-        activeSessions: siteAdminRepository.countActiveSessions(now),
+        activeSessions,
         runtimeBroadcastRooms: rooms.size,
         runtimeVoiceRooms: voiceRooms.size,
       },
@@ -144,39 +153,43 @@ export function createAdminRuntime({
     };
   }
 
-  function siteAdminAccountsPage(requestUrl) {
+  async function siteAdminAccountsPage(requestUrl) {
     const { page, pageSize, offset } = adminPagination(requestUrl);
     const now = new Date().toISOString();
-    const total = siteAdminRepository.countAccounts();
-    const accounts = siteAdminRepository.listAccounts(now, pageSize, offset);
+    const [total, accounts] = await Promise.all([
+      siteAdminRepository.countAccounts(),
+      siteAdminRepository.listAccounts(now, pageSize, offset),
+    ]);
     return adminPage(accounts, total, page, pageSize);
   }
 
-  function siteAdminGroupsPage(requestUrl) {
+  async function siteAdminGroupsPage(requestUrl) {
     const { page, pageSize, offset } = adminPagination(requestUrl);
-    const total = siteAdminRepository.countGroups();
+    const total = await siteAdminRepository.countGroups();
     const liveGroups = new Map();
-    streamRepository.listActiveStreams()
+    (await streamRepository.listActiveStreams())
       .filter(runtimeStreamIsLive)
       .forEach((stream) => {
         if (stream.groupId) liveGroups.set(stream.groupId, (liveGroups.get(stream.groupId) || 0) + 1);
       });
-    const groups = siteAdminRepository.listGroups(pageSize, offset).map((group) => ({ ...group, liveCount: liveGroups.get(group.id) || 0 }));
+    const groups = (await siteAdminRepository.listGroups(pageSize, offset)).map((group) => ({ ...group, liveCount: liveGroups.get(group.id) || 0 }));
     return adminPage(groups, total, page, pageSize);
   }
 
-  function siteAdminStreamsPage(requestUrl) {
+  async function siteAdminStreamsPage(requestUrl) {
     const { page, pageSize, offset } = adminPagination(requestUrl);
-    const streams = siteAdminOverview().streams;
+    const streams = (await siteAdminOverview()).streams;
     return adminPage(streams.slice(offset, offset + pageSize), streams.length, page, pageSize);
   }
 
-  function siteAdminGroupMembersPage(requestUrl, groupId) {
+  async function siteAdminGroupMembersPage(requestUrl, groupId) {
     const { page, pageSize, offset } = adminPagination(requestUrl);
-    const group = siteAdminRepository.findGroupWithOwner(groupId);
+    const group = await siteAdminRepository.findGroupWithOwner(groupId);
     if (!group) return null;
-    const total = siteAdminRepository.countGroupMembers(groupId);
-    const members = siteAdminRepository.listGroupMembers(groupId, pageSize, offset);
+    const [total, members] = await Promise.all([
+      siteAdminRepository.countGroupMembers(groupId),
+      siteAdminRepository.listGroupMembers(groupId, pageSize, offset),
+    ]);
     return { group, ...adminPage(members, total, page, pageSize) };
   }
 

@@ -97,7 +97,7 @@ export function createAdminRoutes({
       if (!await requireSiteAdmin(request, response)) return true;
       const [, handler, errorEvent, errorMessage] = adminPage;
       try {
-        const payload = handler === siteAdminSummary || handler === siteAdminOverview ? handler() : handler(requestUrl);
+        const payload = handler === siteAdminSummary || handler === siteAdminOverview ? await handler() : await handler(requestUrl);
         json(response, 200, payload);
       } catch (error) {
         errorLog(errorEvent, { error: error.message });
@@ -110,7 +110,7 @@ export function createAdminRoutes({
     if (adminMembersMatch && request.method === "GET") {
       if (!await requireSiteAdmin(request, response)) return true;
       try {
-        const result = siteAdminGroupMembersPage(requestUrl, adminMembersMatch[1]);
+        const result = await siteAdminGroupMembersPage(requestUrl, adminMembersMatch[1]);
         if (!result) {
           json(response, 404, { error: "Grupo não encontrado." });
           return true;
