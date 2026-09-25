@@ -169,6 +169,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair seleção de telas, abertura do workspace de grupos e navegação da sidebar para `frontend/src/features/shell/navigation-controller.js` em chunk lazy, preservando o layout.
     - [x] Extrair parsing de rotas públicas, visualizador, convites pendentes e canonicalização de login para `frontend/src/features/shell/route-controller.js`, preservando URLs e layout.
     - [x] Extrair o controle do breakpoint responsivo e fechamento da sidebar para `frontend/src/features/shell/viewport-controller.js`, preservando o layout.
+    - [x] Extrair polling condicionado por visibilidade, manutenção e countdown para `frontend/src/services/client-polling.js`, preservando frequências e condições do shell.
     - [x] Extrair submissão de login/cadastro e início de OAuth para `frontend/src/features/auth/controller.js`, preservando payloads e navegação existentes.
     - [x] Extrair abertura e navegação da tela de configurações para `frontend/src/features/settings/navigation-controller.js`, preservando bindings e carregamentos existentes.
     - [x] Extrair o pós-carregamento, seleção de salas e inscrição em eventos para `frontend/src/features/groups/controller.js`.

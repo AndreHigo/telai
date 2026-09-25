@@ -65,6 +65,7 @@
     readStoredVoiceDeviceLabel,
   } from "./services/media/voice-device-utils.js";
   import { createClientDiagnostics } from "./services/client-diagnostics.js";
+  import { createClientPollingController } from "./services/client-polling.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
@@ -5710,53 +5711,22 @@
     loading = false;
   });
 
-  const GROUP_OVERVIEW_POLL_MS = 15_000;
-  const STREAMS_POLL_MS = 15_000;
-  const NOTIFICATIONS_POLL_MS = 30_000;
-  const DIRECT_MESSAGES_POLL_MS = 8_000;
-  const MAINTENANCE_POLL_MS = 30_000;
-
-  function shouldPollClientData() {
-    return typeof document === "undefined" || document.visibilityState === "visible";
-  }
-
-  const groupOverviewTimer = setInterval(() => {
-    if (!shouldPollClientData()) return;
-    if (user && !isViewer && view === "groups" && groupsWorkspaceOpen && selectedGroupId) {
-      void refreshGroupOverview({ includeMessages: false }).catch((error) => reportClientError("group_overview_refresh_error", error, { groupId: selectedGroupId }));
-    }
-  }, GROUP_OVERVIEW_POLL_MS);
-  const streamsTimer = setInterval(() => {
-    if (!shouldPollClientData()) return;
-    if (user && !isViewer && ["home", "live", "groups"].includes(view)) loadStreams().catch(() => {});
-  }, STREAMS_POLL_MS);
-  const notificationTimer = setInterval(() => {
-    if (!shouldPollClientData()) return;
-    if (user && !isViewer && view !== "viewer") {
-      loadNotifications({ silent: true }).catch(() => {});
-    }
-  }, NOTIFICATIONS_POLL_MS);
-  const directMessagesTimer = setInterval(() => {
-    if (!shouldPollClientData()) return;
-    if (user && !isViewer && view === "direct" && directConversationId) {
-      loadDirectConversationMessages({ silent: true }).catch(() => {});
-    }
-  }, DIRECT_MESSAGES_POLL_MS);
-  const maintenanceTimer = setInterval(() => {
-    if (shouldPollClientData()) void loadMaintenance();
-  }, MAINTENANCE_POLL_MS);
-  const maintenanceCountdownTimer = setInterval(updateMaintenanceCountdown, 1000);
+  const clientPollingController = createClientPollingController({
+    getState: () => ({ user, isViewer, view, groupsWorkspaceOpen, selectedGroupId, directConversationId }),
+    refreshGroupOverview: () => refreshGroupOverview({ includeMessages: false }).catch((error) => reportClientError("group_overview_refresh_error", error, { groupId: selectedGroupId })),
+    loadStreams: () => loadStreams().catch(() => {}),
+    loadNotifications: () => loadNotifications({ silent: true }).catch(() => {}),
+    loadDirectConversationMessages: () => loadDirectConversationMessages({ silent: true }).catch(() => {}),
+    loadMaintenance,
+    updateMaintenanceCountdown,
+  });
+  clientPollingController.start();
   onDestroy(() => {
     clearBroadcastCaptureRecoveryTimer();
     clearVoiceSpeakingPublishTimer();
     stopVoiceTest();
     stopVoiceInputStream(voiceLocalStream);
-    clearInterval(groupOverviewTimer);
-    clearInterval(streamsTimer);
-    clearInterval(notificationTimer);
-    clearInterval(directMessagesTimer);
-    clearInterval(maintenanceTimer);
-    clearInterval(maintenanceCountdownTimer);
+    clientPollingController.stop();
     groupEventRuntime.close();
     clearInterval(voiceActivityTimer);
     voiceQualityController.stop();
