@@ -30,6 +30,7 @@ import { createNotificationSyncService } from "./server/services/notification-sy
 import { createPostgresNotificationSyncService } from "./server/services/postgres-notification-sync.mjs";
 import { createNotificationRuntime, liveNotificationContext } from "./server/notifications/runtime.mjs";
 import { createNotificationService } from "./server/notifications/service.mjs";
+import { createRuntimeCleanup } from "./server/services/runtime-cleanup.mjs";
 import { openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { SQLITE_SCHEMA } from "./server/database/sqlite-schema.mjs";
 import { ensureCompatibilityColumns, ensureCompatibilityIndexes } from "./server/database/sqlite-compatibility.mjs";
@@ -799,19 +800,8 @@ const { upsertOAuthUser, linkOAuthAccount } = (databaseDriver === "postgres" ? c
   mergeUsers: (targetId, sourceId) => mergeUsers(targetId, sourceId),
 });
 
-function pruneExpiredRuntimeState() {
-  const now = Date.now();
-  for (const [key, entry] of oauthStates) {
-    if (!entry || entry.expiresAt <= now) oauthStates.delete(key);
-  }
-  for (const [key, lastSeen] of groupPresence) {
-    if (now - lastSeen > 35_000) groupPresence.delete(key);
-  }
-  Promise.resolve(sessionRepository.deleteExpired(new Date(now).toISOString()))
-    .catch((error) => errorLog("expired_state_cleanup_error", { error }));
-}
-
-setInterval(pruneExpiredRuntimeState, 5 * 60_000).unref();
+const runtimeCleanup = createRuntimeCleanup({ oauthStates, groupPresence, sessionRepository, errorLog });
+runtimeCleanup.start();
 
 const handleAuthRoutes = createAuthRoutes({
   json,

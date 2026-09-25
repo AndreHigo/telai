@@ -106,6 +106,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair listagem, leitura e sincronização de notificações para `server/http/notification-routes.mjs`.
 - [x] Extrair apresentação contextual de lives e sincronização de notificações para `server/notifications/runtime.mjs`.
 - [x] Extrair persistência e publicação de notificações para `server/notifications/service.mjs`, mantendo o evento pessoal `/events`.
+- [x] Extrair limpeza periódica de OAuth, presença e sessões para `server/services/runtime-cleanup.mjs`, preservando o timer desacoplado do processo.
 - [x] Extrair criação, leitura e envio de conversas diretas para `server/http/direct-routes.mjs`.
 - [x] Extrair convites de membro e resgate de convites para `server/http/member-invite-routes.mjs`.
 - [x] Extrair manutenção e API administrativa para `server/http/admin-routes.mjs`, mantendo a página `/admin` no servidor principal.
