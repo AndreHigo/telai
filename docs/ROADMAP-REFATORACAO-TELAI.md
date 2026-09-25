@@ -297,7 +297,8 @@ enviada ao GitHub nem publicada em produção.
   - [x] Expor o manifesto de comandos ao bot autenticado sem vazar tokens ou dados internos.
   - [x] Implementar fila expirada, claim exclusivo, resposta sanitizada e despacho de eventos para interações de comandos.
   - [x] Aceitar interações de componentes e submissões de modal com validação de campos e opções.
-  - [ ] Persistir respostas no histórico visual e integrar renderização no frontend.
+  - [x] Renderizar respostas de bot, botões, seleções e formulários modais no workspace de chat existente, preservando o shell visual.
+  - [ ] Persistir respostas no histórico visual e recuperar seus componentes após refresh.
 - [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.
 - [x] Criar migration baseline e importador offline SQLite → PostgreSQL.
 - [x] Subir PostgreSQL local em Docker e aplicar/validar a migration baseline sem cutover.

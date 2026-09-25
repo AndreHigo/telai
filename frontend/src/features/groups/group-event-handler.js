@@ -62,6 +62,31 @@ export function createGroupEventHandler({
       setGroupOverview({ ...overview, messages: (overview.messages || []).filter((item) => item.id !== message.messageId) });
       return;
     }
+    if (message.type === "application-interaction-response" && message.interaction?.response?.type === "message" && overview) {
+      const interaction = message.interaction;
+      const response = interaction.response;
+      const incoming = {
+        id: `interaction-${interaction.id}`,
+        groupId: message.groupId,
+        roomId: interaction.roomId || null,
+        userId: message.bot?.id || "",
+        username: message.bot?.username || "bot",
+        displayName: message.bot?.displayName || "Bot",
+        body: response.content || "",
+        components: Array.isArray(response.components) ? response.components : [],
+        interactionId: interaction.id,
+        botInteraction: true,
+        createdAt: interaction.respondedAt || new Date().toISOString(),
+        attachments: [],
+      };
+      if (getKnownGroupMessageIds().has(incoming.id)) return;
+      const messageList = document.querySelector(".chat-workspace .message-list");
+      const keepAtBottom = shouldKeepGroupMessagesAtBottom(messageList);
+      setKnownGroupMessageIds(new Set([...getKnownGroupMessageIds(), incoming.id]));
+      setGroupOverview({ ...overview, messages: [...(overview.messages || []), incoming].slice(-80) });
+      if (keepAtBottom) void scrollGroupMessagesToBottom({ force: true });
+      return;
+    }
     if (message.type !== "group-message" || !message.message || !overview) return;
     const incoming = message.message;
     if (!incoming.id || getKnownGroupMessageIds().has(incoming.id)) return;

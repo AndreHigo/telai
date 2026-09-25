@@ -295,7 +295,11 @@ export function createApplicationRoutes({
           return true;
         }
         await applicationRepository.touchToken(identity.tokenId);
-        await publishGroupEvent(interaction.groupId, { type: "application-interaction-response", interaction });
+        await publishGroupEvent(interaction.groupId, {
+          type: "application-interaction-response",
+          interaction,
+          bot: { id: identity.botUserId, username: identity.botUsername, displayName: identity.botDisplayName },
+        });
         json(response, 200, { interaction });
       } catch {
         json(response, 400, { error: "Não foi possível responder à interação." });
