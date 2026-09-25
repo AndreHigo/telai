@@ -18,6 +18,7 @@ import { createSessionRepository } from "./server/repositories/sessions.mjs";
 import { createAuthRepository } from "./server/repositories/auth.mjs";
 import { createOAuthRepository } from "./server/repositories/oauth.mjs";
 import { createAccountRepository } from "./server/repositories/accounts.mjs";
+import { createSocialRepository } from "./server/repositories/social.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -771,6 +772,7 @@ const notificationSyncService = createNotificationSyncService(database, {
   createNotification,
 });
 const accountRepository = createAccountRepository(database, { legalPolicyVersion, createId: randomUUID });
+const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2781,77 +2783,13 @@ async function handleHttpRequest(request, response) {
     if (!user) return;
     const query = String(requestUrl.searchParams.get("q") || "").trim().replace(/^@/, "").slice(0, 48);
     if (query.length < 2) return json(response, 200, { users: [] });
-    const like = `%${query}%`;
-    const users = database.prepare(`
-      SELECT users.id, users.username, users.display_name AS displayName, users.avatar_data AS avatarData,
-        CASE WHEN EXISTS(SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = users.id)
-          OR EXISTS(SELECT 1 FROM friendships WHERE user_id = users.id AND friend_id = ?) THEN 'accepted'
-          WHEN EXISTS(SELECT 1 FROM friend_requests WHERE sender_id = ? AND recipient_id = users.id AND status = 'pending') THEN 'pending_sent'
-          WHEN EXISTS(SELECT 1 FROM friend_requests WHERE sender_id = users.id AND recipient_id = ? AND status = 'pending') THEN 'pending_received'
-          ELSE 'none' END AS friendshipStatus,
-        (SELECT id FROM friend_requests WHERE sender_id = ? AND recipient_id = users.id AND status = 'pending' LIMIT 1) AS friendRequestId,
-        EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = users.id) AS following
-      FROM users
-      WHERE users.id <> ? AND (users.username LIKE ? COLLATE NOCASE OR users.display_name LIKE ? COLLATE NOCASE)
-      ORDER BY CASE WHEN users.username = ? COLLATE NOCASE THEN 0 ELSE 1 END, users.display_name COLLATE NOCASE
-      LIMIT 20
-    `).all(user.id, user.id, user.id, user.id, user.id, user.id, user.id, like, like, query).map((item) => ({
-      ...item,
-      avatarData: compactAvatarData(item.avatarData),
-      following: Boolean(item.following),
-    }));
+    const users = socialRepository.searchUsers(user.id, query);
     return json(response, 200, { users });
   }
   if (requestUrl.pathname === "/api/social" && request.method === "GET") {
     const user = requireUser(request, response);
     if (!user) return;
-    const friends = database.prepare(`
-      SELECT users.id, users.username, users.display_name AS displayName, users.avatar_data AS avatarData,
-        friendships.created_at AS createdAt
-      FROM friendships JOIN users ON users.id = friendships.friend_id
-      WHERE friendships.user_id = ?
-      UNION ALL
-      SELECT users.id, users.username, users.display_name AS displayName, users.avatar_data AS avatarData,
-        friendships.created_at AS createdAt
-      FROM friendships JOIN users ON users.id = friendships.user_id
-      WHERE friendships.friend_id = ?
-      ORDER BY displayName COLLATE NOCASE
-    `).all(user.id, user.id).map((item) => ({ ...item, avatarData: compactAvatarData(item.avatarData) }));
-    const incomingRequests = database.prepare(`
-      SELECT friend_requests.id, friend_requests.created_at AS createdAt,
-        users.id AS userId, users.username, users.display_name AS displayName, users.avatar_data AS avatarData
-      FROM friend_requests JOIN users ON users.id = friend_requests.sender_id
-      WHERE friend_requests.recipient_id = ? AND friend_requests.status = 'pending'
-      ORDER BY friend_requests.created_at DESC
-    `).all(user.id).map((item) => ({ ...item, avatarData: compactAvatarData(item.avatarData) }));
-    const outgoingRequests = database.prepare(`
-      SELECT friend_requests.id, friend_requests.created_at AS createdAt,
-        users.id AS userId, users.username, users.display_name AS displayName, users.avatar_data AS avatarData
-      FROM friend_requests JOIN users ON users.id = friend_requests.recipient_id
-      WHERE friend_requests.sender_id = ? AND friend_requests.status = 'pending'
-      ORDER BY friend_requests.created_at DESC
-    `).all(user.id).map((item) => ({ ...item, avatarData: compactAvatarData(item.avatarData) }));
-    const following = database.prepare(`
-      SELECT users.id, users.username, users.display_name AS displayName, users.avatar_data AS avatarData,
-        follows.created_at AS createdAt,
-        COALESCE(channel_profiles.display_name, users.display_name) AS channelName,
-        COALESCE(channel_profiles.avatar_data, users.avatar_data) AS channelAvatarData
-      FROM follows JOIN users ON users.id = follows.followed_id
-      LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id
-      WHERE follows.follower_id = ?
-      ORDER BY channelName COLLATE NOCASE
-    `).all(user.id).map((item) => ({
-      ...item,
-      avatarData: compactAvatarData(item.avatarData),
-      channelAvatarData: compactAvatarData(item.channelAvatarData),
-    }));
-    return json(response, 200, {
-      friends,
-      incomingRequests,
-      outgoingRequests,
-      following,
-      counts: { friends: friends.length, incomingRequests: incomingRequests.length, following: following.length },
-    });
+    return json(response, 200, socialRepository.listSocial(user.id));
   }
   const friendRequestActionMatch = requestUrl.pathname.match(/^\/api\/friends\/requests\/([\w-]{16,64})\/(accept|decline)$/);
   if (friendRequestActionMatch && request.method === "POST") {
@@ -2859,25 +2797,12 @@ async function handleHttpRequest(request, response) {
     if (!user) return;
     const requestId = friendRequestActionMatch[1];
     const action = friendRequestActionMatch[2];
-    const friendRequest = database.prepare(`
-      SELECT friend_requests.id, friend_requests.sender_id AS senderId, friend_requests.recipient_id AS recipientId,
-        users.display_name AS senderName
-      FROM friend_requests JOIN users ON users.id = friend_requests.sender_id
-      WHERE friend_requests.id = ? AND friend_requests.recipient_id = ? AND friend_requests.status = 'pending'
-    `).get(requestId, user.id);
+    const friendRequest = socialRepository.pendingFriendRequest(requestId, user.id);
     if (!friendRequest) return json(response, 404, { error: "Solicitação de amizade não encontrada." });
     const now = new Date().toISOString();
     try {
-      database.exec("BEGIN IMMEDIATE");
-      database.prepare("UPDATE friend_requests SET status = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
-        .run(action === "accept" ? "accepted" : "declined", now, requestId);
-      if (action === "accept") {
-        database.prepare("INSERT OR IGNORE INTO friendships (user_id, friend_id, created_at) VALUES (?, ?, ?), (?, ?, ?)")
-          .run(user.id, friendRequest.senderId, now, friendRequest.senderId, user.id, now);
-      }
-      database.exec("COMMIT");
+      socialRepository.decideFriendRequest(requestId, user.id, action, now);
     } catch (error) {
-      try { database.exec("ROLLBACK"); } catch {}
       return json(response, 400, { error: "Não foi possível atualizar a solicitação de amizade." });
     }
     if (action === "accept") {
@@ -2896,9 +2821,7 @@ async function handleHttpRequest(request, response) {
   if (friendRequestCancelMatch && request.method === "DELETE") {
     const user = requireUser(request, response);
     if (!user) return;
-    const result = database.prepare("UPDATE friend_requests SET status = 'canceled', updated_at = ? WHERE id = ? AND sender_id = ? AND status = 'pending'")
-      .run(new Date().toISOString(), friendRequestCancelMatch[1], user.id);
-    if (!result.changes) return json(response, 404, { error: "Solicitação de amizade não encontrada." });
+    if (!socialRepository.cancelFriendRequest(friendRequestCancelMatch[1], user.id)) return json(response, 404, { error: "Solicitação de amizade não encontrada." });
     return json(response, 200, { ok: true });
   }
   const friendTargetMatch = requestUrl.pathname.match(/^\/api\/friends\/([\w-]{16,64})$/);
@@ -2907,21 +2830,15 @@ async function handleHttpRequest(request, response) {
     if (!user) return;
     const targetUserId = friendTargetMatch[1];
     if (targetUserId === user.id) return json(response, 400, { error: "Você não pode adicionar a si mesmo." });
-    const target = database.prepare("SELECT id, display_name AS displayName FROM users WHERE id = ?").get(targetUserId);
+    const target = socialRepository.targetUser(targetUserId);
     if (!target) return json(response, 404, { error: "Usuário não encontrado." });
-    const alreadyFriends = database.prepare("SELECT 1 FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?) LIMIT 1")
-      .get(user.id, targetUserId, targetUserId, user.id);
-    if (alreadyFriends) return json(response, 409, { error: "Vocês já são amigos." });
-    const pendingIncoming = database.prepare("SELECT id FROM friend_requests WHERE sender_id = ? AND recipient_id = ? AND status = 'pending'")
-      .get(targetUserId, user.id);
+    if (socialRepository.friendshipExists(user.id, targetUserId)) return json(response, 409, { error: "Vocês já são amigos." });
+    const pendingIncoming = socialRepository.pendingRequest(targetUserId, user.id);
     if (pendingIncoming) return json(response, 409, { error: "Essa pessoa já enviou uma solicitação. Aceite-a na área de amigos." });
-    const pendingOutgoing = database.prepare("SELECT id FROM friend_requests WHERE sender_id = ? AND recipient_id = ? AND status = 'pending'")
-      .get(user.id, targetUserId);
+    const pendingOutgoing = socialRepository.pendingRequest(user.id, targetUserId);
     if (pendingOutgoing) return json(response, 200, { ok: true, requestId: pendingOutgoing.id, status: "pending" });
-    const requestId = randomUUID();
     const now = new Date().toISOString();
-    database.prepare("INSERT INTO friend_requests (id, sender_id, recipient_id, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?)")
-      .run(requestId, user.id, targetUserId, now, now);
+    const { requestId } = socialRepository.createFriendRequest(user.id, targetUserId, now);
     createNotification({ userId: targetUserId, type: "friend_request", entityId: requestId, title: `${user.displayName} quer ser seu amigo`, body: "Abra Amigos para aceitar ou recusar a solicitação.", createdAt: now });
     return json(response, 201, { ok: true, requestId, status: "pending" });
   }
@@ -2929,9 +2846,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const targetUserId = friendTargetMatch[1];
-    const result = database.prepare("DELETE FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)")
-      .run(user.id, targetUserId, targetUserId, user.id);
-    if (!result.changes) return json(response, 404, { error: "Amizade não encontrada." });
+    if (!socialRepository.removeFriendship(user.id, targetUserId)) return json(response, 404, { error: "Amizade não encontrada." });
     return json(response, 200, { ok: true });
   }
   const userFollowMatch = requestUrl.pathname.match(/^\/api\/users\/([\w-]{16,64})\/follow$/);
@@ -2940,14 +2855,10 @@ async function handleHttpRequest(request, response) {
     if (!user) return;
     const targetUserId = userFollowMatch[1];
     if (targetUserId === user.id) return json(response, 400, { error: "Você não pode seguir o próprio canal." });
-    const target = database.prepare("SELECT id FROM users WHERE id = ?").get(targetUserId);
-    if (!target) return json(response, 404, { error: "Canal não encontrado." });
-    if (request.method === "POST") {
-      database.prepare("INSERT OR IGNORE INTO follows (follower_id, followed_id, created_at) VALUES (?, ?, ?)").run(user.id, targetUserId, new Date().toISOString());
-      return json(response, 200, { ok: true, following: true });
-    }
-    database.prepare("DELETE FROM follows WHERE follower_id = ? AND followed_id = ?").run(user.id, targetUserId);
-    return json(response, 200, { ok: true, following: false });
+    if (!socialRepository.userExists(targetUserId)) return json(response, 404, { error: "Canal não encontrado." });
+    const following = request.method === "POST";
+    socialRepository.setFollowing(user.id, targetUserId, following);
+    return json(response, 200, { ok: true, following });
   }
   if (requestUrl.pathname === "/api/groups" && request.method === "GET") {
     const user = requireUser(request, response);
