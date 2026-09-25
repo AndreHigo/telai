@@ -1494,6 +1494,76 @@
   function maybeShowReleaseNotes(...args) { void getReleaseNotesController().then((controller) => controller.maybeShowReleaseNotes(...args)); }
   function dismissReleaseNotes(...args) { void getReleaseNotesController().then((controller) => controller.dismissReleaseNotes(...args)); }
 
+  let desktopControllerPromise = null;
+  function getDesktopController() {
+    if (!desktopControllerPromise) {
+      desktopControllerPromise = import("./features/shell/desktop-controller.js").then(({ createDesktopController }) => createDesktopController({
+        appVersion: APP_VERSION,
+        getState: () => ({
+          audioMode,
+          broadcastAudioSelection,
+          broadcastAudioSources,
+          broadcastDisplaySurface,
+          broadcastSelectedSourceName,
+          desktopUpdate,
+          desktopVersion,
+          displaySourceFilter,
+          displaySourceSelection,
+          displaySources,
+          hardwareAccelerationBusy,
+          hardwareAccelerationError,
+          hardwareAccelerationMode,
+          isDesktop,
+          launchAtLogin,
+          launchAtLoginBusy,
+          launchAtLoginError,
+          selectedDisplayProcessId,
+          showBroadcastAudioPicker,
+          showDisplayPicker,
+          voiceState,
+        }),
+        setState: (next) => {
+          if ("broadcastAudioSelection" in next) broadcastAudioSelection = next.broadcastAudioSelection;
+          if ("broadcastAudioSources" in next) broadcastAudioSources = next.broadcastAudioSources;
+          if ("broadcastDisplaySurface" in next) broadcastDisplaySurface = next.broadcastDisplaySurface;
+          if ("broadcastSelectedSourceName" in next) broadcastSelectedSourceName = next.broadcastSelectedSourceName;
+          if ("desktopUpdate" in next) desktopUpdate = next.desktopUpdate;
+          if ("desktopVersion" in next) desktopVersion = next.desktopVersion;
+          if ("displaySourceFilter" in next) displaySourceFilter = next.displaySourceFilter;
+          if ("displaySourceSelection" in next) displaySourceSelection = next.displaySourceSelection;
+          if ("displaySources" in next) displaySources = next.displaySources;
+          if ("hardwareAccelerationBusy" in next) hardwareAccelerationBusy = next.hardwareAccelerationBusy;
+          if ("hardwareAccelerationError" in next) hardwareAccelerationError = next.hardwareAccelerationError;
+          if ("hardwareAccelerationMode" in next) hardwareAccelerationMode = next.hardwareAccelerationMode;
+          if ("launchAtLogin" in next) launchAtLogin = next.launchAtLogin;
+          if ("launchAtLoginBusy" in next) launchAtLoginBusy = next.launchAtLoginBusy;
+          if ("launchAtLoginError" in next) launchAtLoginError = next.launchAtLoginError;
+          if ("selectedDisplayProcessId" in next) selectedDisplayProcessId = next.selectedDisplayProcessId;
+          if ("showBroadcastAudioPicker" in next) showBroadcastAudioPicker = next.showBroadcastAudioPicker;
+          if ("showDisplayPicker" in next) showDisplayPicker = next.showDisplayPicker;
+        },
+        setNotice: (message) => { notice = message; },
+        toggleVoiceMute,
+        toggleVoiceDeafen,
+      }));
+    }
+    return desktopControllerPromise;
+  }
+  function handleDesktopUpdate(...args) { void getDesktopController().then((controller) => controller.handleDesktopUpdate(...args)); }
+  function handleDesktopTrayAction(...args) { void getDesktopController().then((controller) => controller.handleDesktopTrayAction(...args)); }
+  function loadDesktopVersion(...args) { void getDesktopController().then((controller) => controller.loadDesktopVersion(...args)); }
+  function loadDesktopLaunchAtLogin(...args) { void getDesktopController().then((controller) => controller.loadDesktopLaunchAtLogin(...args)); }
+  function loadDesktopHardwareAcceleration(...args) { void getDesktopController().then((controller) => controller.loadDesktopHardwareAcceleration(...args)); }
+  function setHardwareAcceleration(...args) { void getDesktopController().then((controller) => controller.setHardwareAcceleration(...args)); }
+  function toggleLaunchAtLogin(...args) { void getDesktopController().then((controller) => controller.toggleLaunchAtLogin(...args)); }
+  function updateDesktopApp(...args) { void getDesktopController().then((controller) => controller.updateDesktopApp(...args)); }
+  async function requestBroadcastAudioSource(...args) { return (await getDesktopController()).requestBroadcastAudioSource(...args); }
+  function selectBroadcastAudioSource(...args) { void getDesktopController().then((controller) => controller.selectBroadcastAudioSource(...args)); }
+  function skipBroadcastAudioSource(...args) { void getDesktopController().then((controller) => controller.skipBroadcastAudioSource(...args)); }
+  function cancelBroadcastAudioPicker(...args) { void getDesktopController().then((controller) => controller.skipBroadcastAudioSource(...args)); }
+  function selectDisplaySource(...args) { void getDesktopController().then((controller) => controller.selectDisplaySource(...args)); }
+  function cancelDisplayPicker(...args) { void getDesktopController().then((controller) => controller.cancelDisplayPicker(...args)); }
+
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
     return list.scrollHeight - list.scrollTop - list.clientHeight <= 96;
@@ -6406,29 +6476,6 @@
     user = { ...user, legal: event.detail };
   }
 
-  function handleDesktopUpdate(payload = {}) {
-    // A checagem acontece em segundo plano; só exibimos o resultado ou uma ação necessária.
-    desktopUpdate = payload.status === "checking"
-      ? { ...desktopUpdate, status: "idle" }
-      : { ...desktopUpdate, ...payload };
-  }
-
-  function handleDesktopTrayAction(action) {
-    if (action === "toggle-mute") {
-      if (voiceState !== "connected") {
-        notice = "Entre em uma sala de voz para controlar o microfone.";
-        return;
-      }
-      toggleVoiceMute();
-    } else if (action === "toggle-deafen") {
-      if (voiceState !== "connected") {
-        notice = "Entre em uma sala de voz para controlar o áudio.";
-        return;
-      }
-      toggleVoiceDeafen();
-    }
-  }
-
   function desktopUpdateLabel() {
     if (!isDesktop) return `Web ${WEB_VERSION}`;
     if (desktopUpdate.status === "available") return `Nova versão${desktopUpdate.version ? ` v${desktopUpdate.version}` : ""}`;
@@ -6437,158 +6484,6 @@
     if (desktopUpdate.status === "current") return "Atualizado";
     if (desktopUpdate.status === "error") return "Não foi possível verificar";
     return "Atualizações automáticas";
-  }
-
-  async function loadDesktopVersion() {
-    if (!window.miranteDesktop?.isDesktop) return;
-    try {
-      desktopVersion = await window.miranteDesktop.getVersion() || APP_VERSION;
-    } catch {
-      desktopVersion = APP_VERSION;
-    }
-    try {
-      await window.miranteDesktop.checkForUpdates();
-    } catch (error) {
-      handleDesktopUpdate({ status: "error", message: error?.message || "Não foi possível verificar atualizações." });
-    }
-  }
-
-  async function loadDesktopLaunchAtLogin() {
-    if (!window.miranteDesktop?.getLaunchAtLogin) return;
-    try {
-      const result = await window.miranteDesktop.getLaunchAtLogin();
-      if (result?.supported) launchAtLogin = Boolean(result.enabled);
-    } catch {
-      launchAtLoginError = "Não foi possível consultar a inicialização do Telai.";
-    }
-  }
-
-  async function loadDesktopHardwareAcceleration() {
-    if (!window.miranteDesktop?.getHardwareAcceleration) return;
-    try {
-      const result = await window.miranteDesktop.getHardwareAcceleration();
-      if (result?.ok) hardwareAccelerationMode = result.mode === "disabled" ? "disabled" : "auto";
-    } catch {
-      hardwareAccelerationError = "Não foi possível consultar a aceleração gráfica.";
-    }
-  }
-
-  async function setHardwareAcceleration(event) {
-    if (!window.miranteDesktop?.setHardwareAcceleration) return;
-    const nextMode = event.currentTarget.value === "disabled" ? "disabled" : "auto";
-    const previousMode = hardwareAccelerationMode;
-    hardwareAccelerationBusy = true;
-    hardwareAccelerationError = "";
-    try {
-      const result = await window.miranteDesktop.setHardwareAcceleration(nextMode);
-      if (!result?.ok) throw new Error(result?.message || "Não foi possível salvar o modo de compatibilidade.");
-      hardwareAccelerationMode = nextMode;
-      notice = nextMode === "disabled"
-        ? "A aceleração gráfica será desativada ao reiniciar o Telai."
-        : "A aceleração gráfica será reativada ao reiniciar o Telai.";
-    } catch (error) {
-      hardwareAccelerationMode = previousMode;
-      hardwareAccelerationError = error?.message || "Não foi possível salvar o modo de compatibilidade.";
-    } finally {
-      hardwareAccelerationBusy = false;
-    }
-  }
-
-  async function toggleLaunchAtLogin(event) {
-    if (!window.miranteDesktop?.setLaunchAtLogin) return;
-    const nextValue = Boolean(event.currentTarget.checked);
-    launchAtLoginBusy = true;
-    launchAtLoginError = "";
-    try {
-      const result = await window.miranteDesktop.setLaunchAtLogin(nextValue);
-      if (!result?.ok) throw new Error(result?.message || "Não foi possível alterar a inicialização do Telai.");
-      launchAtLogin = Boolean(result.enabled);
-      notice = launchAtLogin ? "O Telai iniciará com o computador." : "O Telai não iniciará mais com o computador.";
-    } catch (error) {
-      launchAtLogin = !nextValue;
-      launchAtLoginError = error?.message || "Não foi possível alterar a inicialização do Telai.";
-    } finally {
-      launchAtLoginBusy = false;
-    }
-  }
-
-  async function updateDesktopApp() {
-    try {
-      if (desktopUpdate.status === "available") {
-        handleDesktopUpdate({ status: "downloading", percent: 0 });
-        await window.miranteDesktop.downloadUpdate();
-      } else if (desktopUpdate.status === "downloaded") {
-        await window.miranteDesktop.installUpdate();
-      } else {
-        handleDesktopUpdate({ status: "idle", message: "" });
-        await window.miranteDesktop.checkForUpdates();
-      }
-    } catch (error) {
-      handleDesktopUpdate({ status: "error", message: error?.message || "Não foi possível atualizar agora." });
-    }
-  }
-
-  function resolveBroadcastAudioSource(source) {
-    if (!source?.processId) return null;
-    return {
-      processId: Number(source.processId),
-      name: String(source.name || source.processName || "aplicativo").trim(),
-    };
-  }
-
-  async function requestBroadcastAudioSource() {
-    if (!window.miranteDesktop?.getDisplayMediaSources) return null;
-    const sources = await window.miranteDesktop.getDisplayMediaSources();
-    const candidates = (sources || []).filter((source) => source?.kind === "window" && source?.processId && !/(discord|telai|mirante)/i.test(`${source.processName || ""} ${source.name || ""}`));
-    broadcastAudioSources = candidates;
-    if (!candidates.length) return null;
-    showBroadcastAudioPicker = true;
-    return new Promise((resolve, reject) => {
-      broadcastAudioSelection = { resolve, reject };
-    });
-  }
-
-  function selectBroadcastAudioSource(source) {
-    const selected = resolveBroadcastAudioSource(source);
-    showBroadcastAudioPicker = false;
-    broadcastAudioSources = [];
-    broadcastAudioSelection?.resolve(selected);
-    broadcastAudioSelection = null;
-  }
-
-  function skipBroadcastAudioSource() {
-    showBroadcastAudioPicker = false;
-    broadcastAudioSources = [];
-    broadcastAudioSelection?.resolve(null);
-    broadcastAudioSelection = null;
-  }
-
-  function cancelBroadcastAudioPicker() {
-    skipBroadcastAudioSource();
-  }
-
-  function selectDisplaySource(source) {
-    if (!window.miranteDesktop?.isDesktop) return;
-    showDisplayPicker = false;
-    displaySources = [];
-    broadcastDisplaySurface = source.kind === "screen" ? "screen" : "window";
-    broadcastSelectedSourceName = source.name || (source.kind === "screen" ? "Tela inteira" : "Janela escolhida");
-    selectedDisplayProcessId = source.processId || null;
-    displaySourceSelection?.resolve(source);
-    displaySourceSelection = null;
-    displaySourceFilter = "all";
-    window.miranteDesktop.selectDisplaySource(source.id, { audioMode: audioMode === "system" ? "none" : audioMode });
-  }
-
-  function cancelDisplayPicker() {
-    showDisplayPicker = false;
-    displaySources = [];
-    displaySourceFilter = "all";
-    selectedDisplayProcessId = null;
-    broadcastDisplaySurface = null;
-    displaySourceSelection?.reject(new DOMException("Seleção de captura cancelada.", "NotAllowedError"));
-    displaySourceSelection = null;
-    window.miranteDesktop?.cancelDisplaySource?.();
   }
 
   function handleViewerFullscreenMessage(event) {
