@@ -35,6 +35,7 @@ import { createSiteAdminRepository } from "./server/repositories/site-admin.mjs"
 import { createMaintenanceRepository } from "./server/repositories/maintenance.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { createUserSettingsRoutes } from "./server/http/user-settings-routes.mjs";
+import { createSocialRoutes } from "./server/http/social-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -760,6 +761,7 @@ const notificationSyncService = createNotificationSyncService(database, {
 });
 const accountRepository = createAccountRepository(database, { legalPolicyVersion, createId: randomUUID });
 const socialRepository = createSocialRepository(database, { compactAvatarData, createId: randomUUID });
+const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialRepository, createNotification });
 const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
 const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });
 const groupRepository = createGroupRepository(database, { createId: randomUUID, groupSetupRepository });
@@ -2490,88 +2492,7 @@ async function handleHttpRequest(request, response) {
     return json(response, 200, { ok: true });
   }
   if (await handleUserSettingsRoutes(request, response, requestUrl)) return;
-  if (requestUrl.pathname === "/api/users/search" && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const query = String(requestUrl.searchParams.get("q") || "").trim().replace(/^@/, "").slice(0, 48);
-    if (query.length < 2) return json(response, 200, { users: [] });
-    const users = socialRepository.searchUsers(user.id, query);
-    return json(response, 200, { users });
-  }
-  if (requestUrl.pathname === "/api/social" && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    return json(response, 200, socialRepository.listSocial(user.id));
-  }
-  const friendRequestActionMatch = requestUrl.pathname.match(/^\/api\/friends\/requests\/([\w-]{16,64})\/(accept|decline)$/);
-  if (friendRequestActionMatch && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const requestId = friendRequestActionMatch[1];
-    const action = friendRequestActionMatch[2];
-    const friendRequest = socialRepository.pendingFriendRequest(requestId, user.id);
-    if (!friendRequest) return json(response, 404, { error: "Solicitação de amizade não encontrada." });
-    const now = new Date().toISOString();
-    try {
-      socialRepository.decideFriendRequest(requestId, user.id, action, now);
-    } catch (error) {
-      return json(response, 400, { error: "Não foi possível atualizar a solicitação de amizade." });
-    }
-    if (action === "accept") {
-      createNotification({
-        userId: friendRequest.senderId,
-        type: "friend_accepted",
-        entityId: requestId,
-        title: `${user.displayName} aceitou sua amizade`,
-        body: "Agora vocês podem conversar pelo Telai.",
-        createdAt: now,
-      });
-    }
-    return json(response, 200, { ok: true, status: action === "accept" ? "accepted" : "declined" });
-  }
-  const friendRequestCancelMatch = requestUrl.pathname.match(/^\/api\/friends\/requests\/([\w-]{16,64})$/);
-  if (friendRequestCancelMatch && request.method === "DELETE") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    if (!socialRepository.cancelFriendRequest(friendRequestCancelMatch[1], user.id)) return json(response, 404, { error: "Solicitação de amizade não encontrada." });
-    return json(response, 200, { ok: true });
-  }
-  const friendTargetMatch = requestUrl.pathname.match(/^\/api\/friends\/([\w-]{16,64})$/);
-  if (friendTargetMatch && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const targetUserId = friendTargetMatch[1];
-    if (targetUserId === user.id) return json(response, 400, { error: "Você não pode adicionar a si mesmo." });
-    const target = socialRepository.targetUser(targetUserId);
-    if (!target) return json(response, 404, { error: "Usuário não encontrado." });
-    if (socialRepository.friendshipExists(user.id, targetUserId)) return json(response, 409, { error: "Vocês já são amigos." });
-    const pendingIncoming = socialRepository.pendingRequest(targetUserId, user.id);
-    if (pendingIncoming) return json(response, 409, { error: "Essa pessoa já enviou uma solicitação. Aceite-a na área de amigos." });
-    const pendingOutgoing = socialRepository.pendingRequest(user.id, targetUserId);
-    if (pendingOutgoing) return json(response, 200, { ok: true, requestId: pendingOutgoing.id, status: "pending" });
-    const now = new Date().toISOString();
-    const { requestId } = socialRepository.createFriendRequest(user.id, targetUserId, now);
-    createNotification({ userId: targetUserId, type: "friend_request", entityId: requestId, title: `${user.displayName} quer ser seu amigo`, body: "Abra Amigos para aceitar ou recusar a solicitação.", createdAt: now });
-    return json(response, 201, { ok: true, requestId, status: "pending" });
-  }
-  if (friendTargetMatch && request.method === "DELETE") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const targetUserId = friendTargetMatch[1];
-    if (!socialRepository.removeFriendship(user.id, targetUserId)) return json(response, 404, { error: "Amizade não encontrada." });
-    return json(response, 200, { ok: true });
-  }
-  const userFollowMatch = requestUrl.pathname.match(/^\/api\/users\/([\w-]{16,64})\/follow$/);
-  if (userFollowMatch && ["POST", "DELETE"].includes(request.method)) {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const targetUserId = userFollowMatch[1];
-    if (targetUserId === user.id) return json(response, 400, { error: "Você não pode seguir o próprio canal." });
-    if (!socialRepository.userExists(targetUserId)) return json(response, 404, { error: "Canal não encontrado." });
-    const following = request.method === "POST";
-    socialRepository.setFollowing(user.id, targetUserId, following);
-    return json(response, 200, { ok: true, following });
-  }
+  if (await handleSocialRoutes(request, response, requestUrl)) return;
   if (requestUrl.pathname === "/api/groups" && request.method === "GET") {
     const user = requireUser(request, response);
     if (!user) return;
