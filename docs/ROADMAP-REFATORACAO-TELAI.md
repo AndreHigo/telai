@@ -70,7 +70,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair configuração de runtime e limites operacionais.
 - [x] Extrair validações puras de entrada e normalização de dados.
 - [ ] Padronizar formato de erros HTTP sem alterar contratos existentes.
-- [ ] Separar repositórios SQLite das rotas HTTP.
+- [x] Extrair abertura do SQLite e migrações genéricas para `server/repositories`.
+- [ ] Separar consultas/repositórios de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [ ] Dividir `App.svelte` em serviços, stores e features sem alterar o layout.
 

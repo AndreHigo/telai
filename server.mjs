@@ -3,10 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash, createHmac } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
 import { WebSocketServer } from "ws";
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
+import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -434,9 +434,7 @@ setInterval(() => {
   }
 }, loginRateWindowMs).unref();
 
-fs.mkdirSync(path.dirname(databasePath), { recursive: true });
-const database = new DatabaseSync(databasePath);
-database.exec(`
+const databaseSchema = `
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
   CREATE TABLE IF NOT EXISTS users (
@@ -708,40 +706,36 @@ database.exec(`
   );
   CREATE INDEX IF NOT EXISTS direct_conversation_members_user_idx ON direct_conversation_members(user_id, conversation_id);
   CREATE INDEX IF NOT EXISTS direct_messages_conversation_idx ON direct_messages(conversation_id, created_at DESC);
-`);
+`;
+const database = openSqliteDatabase(databasePath, databaseSchema);
 
-function ensureColumn(tableName, columnName, definition) {
-  const columns = database.prepare(`PRAGMA table_info(${tableName})`).all();
-  if (!columns.some((column) => column.name === columnName)) database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
-}
-
-ensureColumn("group_messages", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE CASCADE");
-ensureColumn("streams", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE SET NULL");
+ensureColumn(database, "group_messages", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE CASCADE");
+ensureColumn(database, "streams", "room_id", "TEXT REFERENCES group_rooms(id) ON DELETE SET NULL");
 // Salas de voz ficam em uma tabela separada dos canais de transmissão.
 // Guardamos o vínculo em uma coluna própria para manter compatibilidade com
 // os bancos antigos e não apontar a FK para a tabela errada.
-ensureColumn("streams", "voice_room_id", "TEXT");
-ensureColumn("group_members", "role_id", "TEXT");
-ensureColumn("group_roles", "can_chat", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn("group_roles", "can_stream", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn("group_roles", "can_invite", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn("group_roles", "can_view_voice_members", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn("group_roles", "can_move_members", "INTEGER NOT NULL DEFAULT 0");
-ensureColumn("group_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
-ensureColumn("group_member_permissions", "can_view_voice_members", "INTEGER NOT NULL DEFAULT 1");
-ensureColumn("group_voice_rooms", "max_participants", "INTEGER NOT NULL DEFAULT 8");
-ensureColumn("users", "email", "TEXT");
-ensureColumn("users", "avatar_data", "TEXT");
-ensureColumn("user_preferences", "button_color", "TEXT");
-ensureColumn("user_preferences", "input_background_color", "TEXT");
-ensureColumn("user_preferences", "background_color", "TEXT");
-ensureColumn("user_preferences", "push_to_talk_key", "TEXT");
-ensureColumn("user_preferences", "mute_shortcut", "TEXT");
-ensureColumn("user_preferences", "live_notification_scope", "TEXT NOT NULL DEFAULT 'related'");
-ensureColumn("user_preferences", "voice_microphone_volume", "REAL NOT NULL DEFAULT 1");
-ensureColumn("user_preferences", "voice_output_volume", "REAL NOT NULL DEFAULT 1");
-ensureColumn("user_preferences", "preferred_input_device_id", "TEXT");
-ensureColumn("user_preferences", "preferred_output_device_id", "TEXT");
+ensureColumn(database, "streams", "voice_room_id", "TEXT");
+ensureColumn(database, "group_members", "role_id", "TEXT");
+ensureColumn(database, "group_roles", "can_chat", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn(database, "group_roles", "can_stream", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn(database, "group_roles", "can_invite", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn(database, "group_roles", "can_view_voice_members", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn(database, "group_roles", "can_move_members", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn(database, "group_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn(database, "group_member_permissions", "can_view_voice_members", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn(database, "group_voice_rooms", "max_participants", "INTEGER NOT NULL DEFAULT 8");
+ensureColumn(database, "users", "email", "TEXT");
+ensureColumn(database, "users", "avatar_data", "TEXT");
+ensureColumn(database, "user_preferences", "button_color", "TEXT");
+ensureColumn(database, "user_preferences", "input_background_color", "TEXT");
+ensureColumn(database, "user_preferences", "background_color", "TEXT");
+ensureColumn(database, "user_preferences", "push_to_talk_key", "TEXT");
+ensureColumn(database, "user_preferences", "mute_shortcut", "TEXT");
+ensureColumn(database, "user_preferences", "live_notification_scope", "TEXT NOT NULL DEFAULT 'related'");
+ensureColumn(database, "user_preferences", "voice_microphone_volume", "REAL NOT NULL DEFAULT 1");
+ensureColumn(database, "user_preferences", "voice_output_volume", "REAL NOT NULL DEFAULT 1");
+ensureColumn(database, "user_preferences", "preferred_input_device_id", "TEXT");
+ensureColumn(database, "user_preferences", "preferred_output_device_id", "TEXT");
 database.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email) WHERE email IS NOT NULL AND email <> ''");
 database.exec("CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at)");
 database.exec("CREATE INDEX IF NOT EXISTS stream_chat_messages_stream_idx ON stream_chat_messages(stream_id, created_at DESC)");
