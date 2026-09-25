@@ -24,6 +24,7 @@ import { createGroupMessageRepository } from "./server/repositories/group-messag
 import { createGroupInviteRepository } from "./server/repositories/group-invites.mjs";
 import { createGroupJoinRequestRepository } from "./server/repositories/group-join-requests.mjs";
 import { createGroupRoleRepository } from "./server/repositories/group-roles.mjs";
+import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -795,6 +796,7 @@ const groupJoinRequestRepository = createGroupJoinRequestRepository(database, {
   compactAvatarData,
 });
 const groupRoleRepository = createGroupRoleRepository(database, { createId: randomUUID });
+const groupRoomRepository = createGroupRoomRepository(database, { createId: randomUUID });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -3085,14 +3087,8 @@ async function handleHttpRequest(request, response) {
     touchGroupPresence(groupId, user.id);
     const group = database.prepare("SELECT id, name, slug FROM groups WHERE id = ?").get(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    const rooms = database.prepare(`
-      SELECT id, name, slug, kind, created_at AS createdAt
-      FROM group_rooms WHERE group_id = ? AND kind = 'text' ORDER BY CASE WHEN slug = 'geral' THEN 0 ELSE 1 END, name COLLATE NOCASE
-    `).all(groupId);
-    const voiceRoomsForGroup = database.prepare(`
-      SELECT id, name, slug, 'voice' AS kind, COALESCE(max_participants, 8) AS maxParticipants, created_at AS createdAt
-      FROM group_voice_rooms WHERE group_id = ? ORDER BY name COLLATE NOCASE
-    `).all(groupId).map((room) => {
+    const rooms = groupRoomRepository.listTextRooms(groupId);
+    const voiceRoomsForGroup = groupRoomRepository.listVoiceRooms(groupId).map((room) => {
       const runtimeRoom = voiceRooms.get(room.id);
       const canView = groupPermissions(groupId, user.id)?.canViewVoiceMembers !== false;
       return { ...room, participants: canView ? [...(runtimeRoom?.participants?.values() || [])].map(voiceParticipantFor) : [] };
@@ -3147,18 +3143,16 @@ async function handleHttpRequest(request, response) {
       if (!kind) return json(response, 400, { error: "Escolha uma sala de texto ou de voz." });
       if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para a sala." });
       const maxParticipants = kind === "voice" ? parseVoiceRoomParticipantLimit(body.maxParticipants) : null;
-      const room = { id: randomUUID(), groupId, name, slug, kind, ...(kind === "voice" ? { maxParticipants } : {}), createdAt: new Date().toISOString() };
       if (kind === "voice" && !canGroupAction(user.id, groupId, "canChat")) return json(response, 403, { error: "Você não tem permissão para criar salas de voz." });
       try {
-        const duplicate = database.prepare("SELECT 1 FROM group_rooms WHERE group_id = ? AND slug = ? UNION ALL SELECT 1 FROM group_voice_rooms WHERE group_id = ? AND slug = ? LIMIT 1").get(groupId, slug, groupId, slug);
+        const duplicate = groupRoomRepository.findBySlug(groupId, slug);
         if (duplicate) return json(response, 409, { error: "Já existe uma sala com esse nome neste grupo." });
-        if (kind === "voice") database.prepare("INSERT INTO group_voice_rooms (id, group_id, name, slug, max_participants, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(room.id, groupId, name, slug, maxParticipants, user.id, room.createdAt);
-        else database.prepare("INSERT INTO group_rooms (id, group_id, name, slug, kind, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(room.id, groupId, name, slug, kind, user.id, room.createdAt);
+        const room = groupRoomRepository.createRoom({ groupId, name, slug, kind, maxParticipants, createdBy: user.id });
+        return json(response, 201, { room });
       } catch (error) {
         if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe uma sala com esse nome neste grupo." });
         throw error;
       }
-      return json(response, 201, { room });
     }).catch(() => json(response, 400, { error: "Não foi possível criar a sala." }));
     return;
   }
@@ -3169,28 +3163,24 @@ async function handleHttpRequest(request, response) {
     const [, groupId, roomId] = groupRoomActionMatch;
     const member = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
     if (member?.role !== "owner") return json(response, 403, { error: "Somente o dono pode gerenciar canais." });
-    const textRoom = database.prepare("SELECT id, name, slug, kind FROM group_rooms WHERE id = ? AND group_id = ?").get(roomId, groupId);
-    const voiceRoom = textRoom ? null : database.prepare("SELECT id, name, slug, 'voice' AS kind, COALESCE(max_participants, 8) AS maxParticipants FROM group_voice_rooms WHERE id = ? AND group_id = ?").get(roomId, groupId);
-    const room = textRoom || voiceRoom;
+    const room = groupRoomRepository.findRoom(groupId, roomId);
     if (!room) return json(response, 404, { error: "Canal não encontrado." });
     if (room.slug === "geral") return json(response, 400, { error: "O canal Geral não pode ser alterado ou excluído." });
     if (request.method === "DELETE") {
-      database.prepare(`DELETE FROM ${room.kind === "voice" ? "group_voice_rooms" : "group_rooms"} WHERE id = ? AND group_id = ?`).run(roomId, groupId);
+      groupRoomRepository.deleteRoom(groupId, roomId, room.kind);
       return json(response, 200, { ok: true });
     }
     readJson(request).then((body) => {
       const name = String(body.name || "").trim().slice(0, 48);
       const slug = roomSlugFor(name);
       if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para o canal." });
-      const duplicate = database.prepare("SELECT 1 FROM group_rooms WHERE group_id = ? AND slug = ? AND id <> ? UNION ALL SELECT 1 FROM group_voice_rooms WHERE group_id = ? AND slug = ? AND id <> ? LIMIT 1").get(groupId, slug, roomId, groupId, slug, roomId);
+      const duplicate = groupRoomRepository.findBySlug(groupId, slug, roomId);
       if (duplicate) return json(response, 409, { error: "Já existe um canal com esse nome neste grupo." });
       if (room.kind === "voice") {
         const maxParticipants = parseVoiceRoomParticipantLimit(body.maxParticipants, room.maxParticipants);
-        database.prepare("UPDATE group_voice_rooms SET name = ?, slug = ?, max_participants = ? WHERE id = ? AND group_id = ?").run(name, slug, maxParticipants, roomId, groupId);
-        return json(response, 200, { room: { ...room, name, slug, maxParticipants } });
+        return json(response, 200, { room: groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug, maxParticipants }) });
       }
-      database.prepare("UPDATE group_rooms SET name = ?, slug = ? WHERE id = ? AND group_id = ?").run(name, slug, roomId, groupId);
-      return json(response, 200, { room: { ...room, name, slug } });
+      return json(response, 200, { room: groupRoomRepository.updateRoom({ groupId, roomId, kind: room.kind, name, slug }) });
     }).catch(() => json(response, 400, { error: "Não foi possível atualizar o canal." }));
     return;
   }
