@@ -43,6 +43,7 @@
   import { createVoicePeerRecoveryController } from "./features/voice/peer-recovery-controller.js";
   import { createVoiceAudioTestController } from "./features/voice/audio-test-controller.js";
   import { createVoiceRemotePlaybackController } from "./features/voice/remote-playback-controller.js";
+  import { createVoiceParticipantPreferencesController } from "./features/voice/participant-preferences-controller.js";
   import { createVoiceSoundController, readSoundPreferences, SOUND_PREFERENCE_DEFAULTS } from "./features/voice/sound-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
@@ -522,15 +523,8 @@
   const soundPreferenceDefaults = SOUND_PREFERENCE_DEFAULTS;
   let soundPreferences = readSoundPreferences();
   let voiceSoundEffects = soundPreferences.enabled;
-  class VoicePreferenceMap extends Map {
-    get(key) {
-      const targetUserId = voicePreferenceTargetId(key);
-      return super.get(targetUserId) ?? super.get(key);
-    }
-  }
-  let voiceVolumes = new VoicePreferenceMap();
+  let voiceVolumes = new Map();
   let voiceLocallyMutedParticipants = new Set();
-  let voicePreferencePersistTimers = new Map();
   let voiceContextMenu = null;
   let profilePreview = null;
   let draggedVoiceParticipantId = "";
@@ -572,30 +566,6 @@
   let selectedInputDeviceId = readStoredVoiceDeviceId("mirante-voice-input");
   let selectedInputDeviceLabel = readStoredVoiceDeviceLabel("mirante-voice-input-label");
   let selectedOutputDeviceId = readStoredVoiceDeviceId("mirante-voice-output");
-  function voicePreferenceTargetId(participantOrId) {
-    const participant = participantOrId && typeof participantOrId === "object"
-      ? participantOrId
-      : voiceParticipants.get(participantOrId);
-    return String(participant?.userId || participant?.id || participantOrId || "").trim();
-  }
-
-  function scheduleVoiceUserPreferencePersistence(targetUserId) {
-    if (!user?.id || !targetUserId || targetUserId === user.id) return;
-    const currentTimer = voicePreferencePersistTimers.get(targetUserId);
-    if (currentTimer) window.clearTimeout(currentTimer);
-    const timer = window.setTimeout(() => {
-      voicePreferencePersistTimers.delete(targetUserId);
-      api("/api/auth/voice-preferences", {
-        method: "PATCH",
-        body: JSON.stringify({
-          targetUserId,
-          volume: voiceVolumes.get(targetUserId) ?? 1,
-          locallyMuted: voiceLocallyMutedParticipants.has(targetUserId),
-        }),
-      }).catch((error) => reportClientError("voice_user_preference_persist_error", error, { targetUserId }));
-    }, 250);
-    voicePreferencePersistTimers = new Map(voicePreferencePersistTimers).set(targetUserId, timer);
-  }
   // O servidor é a fonte por conta; estes valores mantêm um estado audível
   // enquanto as preferências autenticadas ainda estão sendo carregadas.
   let voiceMicrophoneVolume = 1;
@@ -993,6 +963,32 @@
     playVoiceSound,
     previewVoiceSound,
   } = voiceSoundController;
+  const voiceParticipantPreferencesController = createVoiceParticipantPreferencesController({
+    api,
+    getState: () => ({
+      user,
+      voiceParticipants,
+      voiceVolumes,
+      voiceLocallyMutedParticipants,
+      voiceOutputVolume,
+      voiceRemoteAudio,
+      voiceDeafened,
+    }),
+    setState: (next) => {
+      if ("voiceVolumes" in next) voiceVolumes = next.voiceVolumes;
+      if ("voiceLocallyMutedParticipants" in next) voiceLocallyMutedParticipants = next.voiceLocallyMutedParticipants;
+    },
+    normalizeAudioVolume,
+    reportClientError,
+  });
+  const {
+    VoicePreferenceMap,
+    effectiveVolume: effectiveVoiceOutputVolume,
+    isLocallyMuted: isVoiceParticipantLocallyMutedPreference,
+    resolveTargetId: voicePreferenceTargetId,
+    setVolume: setVoiceParticipantVolumePreference,
+    toggleLocallyMuted: toggleVoiceParticipantLocalMutePreference,
+  } = voiceParticipantPreferencesController;
   const voiceAudioTestController = createVoiceAudioTestController({
     captureInputStream: () => captureVoiceInputStream(),
     stopInputStream: (stream) => stopVoiceInputStream(stream),
@@ -2491,11 +2487,6 @@
     }
   }
 
-  function effectiveVoiceOutputVolume(participantId) {
-    const targetUserId = voicePreferenceTargetId(participantId);
-    return normalizeAudioVolume((voiceVolumes.get(targetUserId) ?? 1) * voiceOutputVolume);
-  }
-
   function setVoiceOutputVolume(value) {
     voiceOutputVolume = normalizeAudioVolume(Number(value) / 100);
     try { localStorage.setItem("mirante-voice-output-volume", String(voiceOutputVolume)); } catch (error) { reportClientError("voice_output_volume_persist_error", error); }
@@ -3619,32 +3610,10 @@
     document.querySelector(".message-composer textarea")?.focus();
   }
 
-  function setVoiceVolume(participantId, value) {
-    const volume = Math.max(0, Math.min(1, Number(value) / 100));
-    const targetUserId = voicePreferenceTargetId(participantId);
-    if (!targetUserId) return;
-    voiceVolumes = new VoicePreferenceMap(voiceVolumes).set(targetUserId, volume);
-    const audio = voiceRemoteAudio.get(participantId);
-    if (audio) audio.volume = effectiveVoiceOutputVolume(participantId);
-    scheduleVoiceUserPreferencePersistence(targetUserId);
-  }
-
-  function isVoiceParticipantLocallyMuted(participantId) {
-    return voiceLocallyMutedParticipants.has(voicePreferenceTargetId(participantId));
-  }
-
+  const setVoiceVolume = (participantId, value) => setVoiceParticipantVolumePreference(participantId, value);
+  const isVoiceParticipantLocallyMuted = (participantId) => isVoiceParticipantLocallyMutedPreference(participantId);
   function toggleVoiceParticipantLocalMute(participantId) {
-    if (!participantId) return;
-    const targetUserId = voicePreferenceTargetId(participantId);
-    if (!targetUserId) return;
-    const next = new Set(voiceLocallyMutedParticipants);
-    if (next.has(targetUserId)) next.delete(targetUserId);
-    else next.add(targetUserId);
-    voiceLocallyMutedParticipants = next;
-    const audio = voiceRemoteAudio.get(participantId);
-    if (audio) audio.muted = voiceDeafened || next.has(targetUserId);
-    scheduleVoiceUserPreferencePersistence(targetUserId);
-    closeVoiceContextMenu();
+    if (toggleVoiceParticipantLocalMutePreference(participantId)) closeVoiceContextMenu();
   }
 
   function toggleContextParticipantServerMute() {
