@@ -6,7 +6,16 @@ export function createChannelProfileRepository(database, { compactAvatarData, pa
     return user ? { userId: user.userId, displayName: user.displayName, avatarData: compactAvatarData(user.avatarData), games: [] } : null;
   }
 
-  return { channelProfileForUser };
+  function saveChannelProfile(userId, { displayName, avatarData = null, games = [], updatedAt = new Date().toISOString() }) {
+    database.prepare(`
+      INSERT INTO channel_profiles (user_id, display_name, avatar_data, games, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET display_name = excluded.display_name, avatar_data = excluded.avatar_data, games = excluded.games, updated_at = excluded.updated_at
+    `).run(userId, displayName, avatarData, JSON.stringify(games), updatedAt);
+    return channelProfileForUser(userId);
+  }
+
+  return { channelProfileForUser, saveChannelProfile };
 }
 
 export function createPostgresChannelProfileRepository(database, { compactAvatarData = (value) => value, parseChannelGames = (value) => JSON.parse(value || "[]") } = {}) {
@@ -26,5 +35,14 @@ export function createPostgresChannelProfileRepository(database, { compactAvatar
     return user ? { userId: user.userId, displayName: user.displayName, avatarData: compactAvatarData(user.avatarData), games: [] } : null;
   }
 
-  return { channelProfileForUser };
+  async function saveChannelProfile(userId, { displayName, avatarData = null, games = [], updatedAt = new Date().toISOString() }) {
+    await database.query(`
+      INSERT INTO channel_profiles (user_id, display_name, avatar_data, games, updated_at)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT(user_id) DO UPDATE SET display_name = EXCLUDED.display_name, avatar_data = EXCLUDED.avatar_data, games = EXCLUDED.games, updated_at = EXCLUDED.updated_at
+    `, [userId, displayName, avatarData, JSON.stringify(games), updatedAt]);
+    return channelProfileForUser(userId);
+  }
+
+  return { channelProfileForUser, saveChannelProfile };
 }
