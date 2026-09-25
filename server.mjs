@@ -37,6 +37,7 @@ import { json, readJson } from "./server/http/body.mjs";
 import { createUserSettingsRoutes } from "./server/http/user-settings-routes.mjs";
 import { createSocialRoutes } from "./server/http/social-routes.mjs";
 import { createNotificationRoutes } from "./server/http/notification-routes.mjs";
+import { createDirectRoutes } from "./server/http/direct-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -751,6 +752,16 @@ const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents, createU
 });
 const notificationRepository = createNotificationRepository(database);
 const { createNotification } = notificationRepository;
+const handleDirectRoutes = createDirectRoutes({
+  json,
+  readJson,
+  requireUser,
+  directConversationRepository,
+  directConversationForUser,
+  directConversationPayload,
+  createNotification,
+  errorLog,
+});
 const channelProfileRepository = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
 const { channelProfileForUser } = channelProfileRepository;
 const userPreferenceRepository = createUserPreferenceRepository(database, { normalizePreferenceVolume });
@@ -2954,70 +2965,7 @@ async function handleHttpRequest(request, response) {
     const invites = groupInviteRepository.listPendingMemberInvites(user.id);
     return json(response, 200, { invites });
   }
-  if (requestUrl.pathname === "/api/direct/conversations" && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    return json(response, 200, { conversations: directConversationRepository.listConversationsForUser(user.id) });
-  }
-  if (requestUrl.pathname === "/api/direct/conversations" && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    readJson(request).then((body) => {
-      const targetUserId = String(body.userId || "").trim();
-      if (!targetUserId || targetUserId === user.id) return json(response, 400, { error: "Escolha outra pessoa para iniciar a conversa." });
-      const target = directConversationRepository.findUser(targetUserId);
-      if (!target) return json(response, 404, { error: "Usuário não encontrado." });
-      const conversationId = directConversationRepository.createConversation(user.id, targetUserId);
-      return json(response, 201, { conversation: directConversationPayload(conversationId, user.id) });
-    }).catch((error) => {
-      errorLog("direct_conversation_create_error", { error });
-      return json(response, 400, { error: "Não foi possível iniciar a conversa." });
-    });
-    return;
-  }
-  const directConversationMatch = requestUrl.pathname.match(/^\/api\/direct\/conversations\/([\w-]{16,64})(?:\/(messages|read))?$/);
-  if (directConversationMatch && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const conversationId = directConversationMatch[1];
-    const conversation = directConversationPayload(conversationId, user.id);
-    if (!conversation) return json(response, 404, { error: "Conversa não encontrada." });
-    if (directConversationMatch[2] === "messages") {
-      const includeConversationAvatar = requestUrl.searchParams.get("includeAvatar") === "1";
-      const { messages } = directConversationRepository.listMessages(conversationId, user.id, includeConversationAvatar);
-      const responseConversation = includeConversationAvatar
-        ? conversation
-        : { ...conversation, otherUser: null };
-      return json(response, 200, { conversation: responseConversation, messages });
-    }
-    return json(response, 200, { conversation });
-  }
-  if (directConversationMatch && directConversationMatch[2] === "read" && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const conversationId = directConversationMatch[1];
-    if (!directConversationForUser(conversationId, user.id)) return json(response, 404, { error: "Conversa não encontrada." });
-    directConversationRepository.markRead(conversationId, user.id);
-    return json(response, 200, { ok: true });
-  }
-  const directMessagesMatch = requestUrl.pathname.match(/^\/api\/direct\/conversations\/([\w-]{16,64})\/messages$/);
-  if (directMessagesMatch && request.method === "POST") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const conversationId = directMessagesMatch[1];
-    if (!directConversationForUser(conversationId, user.id)) return json(response, 404, { error: "Conversa não encontrada." });
-    readJson(request).then((body) => {
-      const messageBody = String(body.body || "").trim().slice(0, 1000);
-      if (!messageBody) return json(response, 400, { error: "Escreva uma mensagem antes de enviar." });
-      const createdAt = new Date().toISOString();
-      const message = directConversationRepository.createMessage({ conversationId, senderId: user.id, body: messageBody, createdAt, displayName: user.displayName, username: user.username, createNotification });
-      return json(response, 201, { message });
-    }).catch((error) => {
-      errorLog("direct_message_create_error", { error });
-      return json(response, 400, { error: "Não foi possível enviar a mensagem." });
-    });
-    return;
-  }
+  if (await handleDirectRoutes(request, response, requestUrl)) return;
   if (await handleNotificationRoutes(request, response, requestUrl)) return;
   const memberInviteActionMatch = requestUrl.pathname.match(/^\/api\/member-invites\/([\w-]{16,})\/(accept|decline)$/);
   if (memberInviteActionMatch && request.method === "POST") {
