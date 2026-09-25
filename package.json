@@ -47,6 +47,7 @@
     "test:notifications": "electron --no-sandbox qa/e2e-notifications.cjs",
     "test:notification-service": "node qa/test-notification-service.mjs",
     "test:runtime-cleanup": "node qa/test-runtime-cleanup.mjs",
+    "test:socket-sender": "node qa/test-socket-sender.mjs",
     "test:web-audit": "electron --no-sandbox qa/e2e-web-audit.cjs",
     "test:media": "electron --no-sandbox qa/e2e-media.cjs",
     "test:voice-reconnect": "electron --no-sandbox qa/e2e-voice-reconnect.cjs",

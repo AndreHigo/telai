@@ -136,6 +136,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair o despacho HTTP e a página administrativa para `server/http/router.mjs`, mantendo a ordem dos domínios e dos fallbacks.
 - [x] Extrair ciclo de vida, headers de segurança, métricas e despacho de cada requisição para `server/http/request-handler.mjs`.
 - [x] Extrair bootstrap, limites, heartbeat e lifecycle do WebSocket para `server/gateway/websocket.mjs`, mantendo handlers de voz/transmissão e o protocolo `/signal`.
+- [x] Extrair serialização, sequência e envio seguro de mensagens do gateway para `server/gateway/socket-sender.mjs`, preservando o protocolo existente.
 - [x] Extrair o handler binário do relay de mídia para `server/gateway/binary-message.mjs`, mantendo limites e ressincronização.
 - [x] Extrair entrada, moderação, estado e sinalização das salas de voz para `server/gateway/voice-message-handler.mjs`.
 - [x] Extrair criação de salas, participantes, autorização, saída e substituição de sessões para `server/domain/voice/runtime.mjs`.

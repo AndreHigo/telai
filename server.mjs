@@ -7,6 +7,7 @@ import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./maile
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { createDatabaseConfig } from "./server/config/database.mjs";
 import { createWebsocketGateway } from "./server/gateway/websocket.mjs";
+import { createSocketSender } from "./server/gateway/socket-sender.mjs";
 import { createEventGateway } from "./server/gateway/events.mjs";
 import { createGatewayPolicy } from "./server/gateway/policy.mjs";
 import { createGatewayMessageDispatcher } from "./server/gateway/message-dispatcher.mjs";
@@ -145,6 +146,7 @@ const {
   addResponseBytes,
   isLocalObservabilityRequest,
 } = observabilityRuntime;
+const send = createSocketSender({ errorLog });
 const downloadRateLimitPerMinute = Math.max(1, Number(process.env.MIRANTE_DOWNLOAD_RATE_LIMIT_PER_MIN || 20));
 const downloadRateWindowMs = 60_000;
 const downloadRate = new Map();
@@ -880,23 +882,6 @@ const handleObservabilityRoutes = createObservabilityRoutes({
 const mergeUsers = (targetId, sourceId) => accountRepository.mergeUsers(targetId, sourceId);
 
 await groupSetupRepository.initializeExistingGroups();
-
-function send(socket, message) {
-  if (socket?.readyState !== 1) return false;
-  try {
-    const sequence = (socket.gatewaySequence || 0) + 1;
-    socket.gatewaySequence = sequence;
-    socket.send(JSON.stringify(
-      message && typeof message === "object" && !Buffer.isBuffer(message)
-        ? { ...message, sequence }
-        : message,
-    ));
-    return true;
-  } catch (error) {
-    errorLog("ws_send_error", { clientId: socket.clientId, type: message?.type, error: error.message });
-    return false;
-  }
-}
 
 function allowWebsocketConnection(request) {
   return consumeFixedWindow(websocketConnectionRate, `ws:${clientIp(request)}`, websocketConnectionRateLimit, websocketConnectionRateWindowMs);
