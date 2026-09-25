@@ -28,6 +28,7 @@
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
   import { createApiClient } from "./services/api.js";
+  import { createDirectStateStore } from "./features/direct/direct-state.js";
   import { createGroupRoomReadController } from "./features/groups/room-read-controller.js";
   import { createGroupStateStore } from "./features/groups/group-state.js";
   import { createMessageStateStore } from "./features/groups/message-state.js";
@@ -132,6 +133,7 @@
   let user = null;
   const groupState = createGroupStateStore();
   const messageState = createMessageStateStore();
+  const directState = createDirectStateStore();
   let groups = groupState.getState().groups;
   let streams = [];
   const navigationState = createNavigationStateStore();
@@ -832,18 +834,18 @@
   let groupOverviewRefreshInFlight = groupState.getState().groupOverviewRefreshInFlight;
   let groupPresenceRefreshInFlight = groupState.getState().groupPresenceRefreshInFlight;
   let maintenanceRefreshInFlight = false;
-  let directConversations = [];
-  let directConversationId = "";
-  let directConversationTarget = null;
-  let directMessages = [];
-  let directMessageDraft = "";
-  let directConversationLoading = false;
-  let directConversationSending = false;
-  let directConversationError = "";
-  let directConversationsRefreshInFlight = false;
-  let directConversationRefreshInFlight = false;
-  let directConversationRefreshQueued = false;
-  let directConversationRefreshId = "";
+  let directConversations = directState.getState().directConversations;
+  let directConversationId = directState.getState().directConversationId;
+  let directConversationTarget = directState.getState().directConversationTarget;
+  let directMessages = directState.getState().directMessages;
+  let directMessageDraft = directState.getState().directMessageDraft;
+  let directConversationLoading = directState.getState().directConversationLoading;
+  let directConversationSending = directState.getState().directConversationSending;
+  let directConversationError = directState.getState().directConversationError;
+  let directConversationsRefreshInFlight = directState.getState().directConversationsRefreshInFlight;
+  let directConversationRefreshInFlight = directState.getState().directConversationRefreshInFlight;
+  let directConversationRefreshQueued = directState.getState().directConversationRefreshQueued;
+  let directConversationRefreshId = directState.getState().directConversationRefreshId;
   let social = { friends: [], incomingRequests: [], outgoingRequests: [], following: [], blocked: [], counts: { friends: 0, incomingRequests: 0, following: 0, blocked: 0 } };
   let socialSearchQuery = "";
   let socialSearchOpen = false;
@@ -903,6 +905,25 @@
     groupMessageSearchResults = next.groupMessageSearchResults;
     groupMessageSearchBusy = next.groupMessageSearchBusy;
     groupMessageSearchError = next.groupMessageSearchError;
+  });
+
+  function setDirectState(next) {
+    directState.setState(next);
+  }
+
+  const unsubscribeDirectState = directState.subscribe((next) => {
+    directConversations = next.directConversations;
+    directConversationId = next.directConversationId;
+    directConversationTarget = next.directConversationTarget;
+    directMessages = next.directMessages;
+    directMessageDraft = next.directMessageDraft;
+    directConversationLoading = next.directConversationLoading;
+    directConversationSending = next.directConversationSending;
+    directConversationError = next.directConversationError;
+    directConversationsRefreshInFlight = next.directConversationsRefreshInFlight;
+    directConversationRefreshInFlight = next.directConversationRefreshInFlight;
+    directConversationRefreshQueued = next.directConversationRefreshQueued;
+    directConversationRefreshId = next.directConversationRefreshId;
   });
 
   const routeController = createRouteController({
@@ -1285,18 +1306,20 @@
           directMessages,
         }),
         setState: (next) => {
-          if ("directConversationError" in next) directConversationError = next.directConversationError;
-          if ("directConversationId" in next) directConversationId = next.directConversationId;
-          if ("directConversationLoading" in next) directConversationLoading = next.directConversationLoading;
-          if ("directConversationRefreshId" in next) directConversationRefreshId = next.directConversationRefreshId;
-          if ("directConversationRefreshInFlight" in next) directConversationRefreshInFlight = next.directConversationRefreshInFlight;
-          if ("directConversationRefreshQueued" in next) directConversationRefreshQueued = next.directConversationRefreshQueued;
-          if ("directConversationSending" in next) directConversationSending = next.directConversationSending;
-          if ("directConversationTarget" in next) directConversationTarget = next.directConversationTarget;
-          if ("directConversations" in next) directConversations = next.directConversations;
-          if ("directConversationsRefreshInFlight" in next) directConversationsRefreshInFlight = next.directConversationsRefreshInFlight;
-          if ("directMessageDraft" in next) directMessageDraft = next.directMessageDraft;
-          if ("directMessages" in next) directMessages = next.directMessages;
+          const directPatch = {};
+          if ("directConversationError" in next) directPatch.directConversationError = next.directConversationError;
+          if ("directConversationId" in next) directPatch.directConversationId = next.directConversationId;
+          if ("directConversationLoading" in next) directPatch.directConversationLoading = next.directConversationLoading;
+          if ("directConversationRefreshId" in next) directPatch.directConversationRefreshId = next.directConversationRefreshId;
+          if ("directConversationRefreshInFlight" in next) directPatch.directConversationRefreshInFlight = next.directConversationRefreshInFlight;
+          if ("directConversationRefreshQueued" in next) directPatch.directConversationRefreshQueued = next.directConversationRefreshQueued;
+          if ("directConversationSending" in next) directPatch.directConversationSending = next.directConversationSending;
+          if ("directConversationTarget" in next) directPatch.directConversationTarget = next.directConversationTarget;
+          if ("directConversations" in next) directPatch.directConversations = next.directConversations;
+          if ("directConversationsRefreshInFlight" in next) directPatch.directConversationsRefreshInFlight = next.directConversationsRefreshInFlight;
+          if ("directMessageDraft" in next) directPatch.directMessageDraft = next.directMessageDraft;
+          if ("directMessages" in next) directPatch.directMessages = next.directMessages;
+          if (Object.keys(directPatch).length) setDirectState(directPatch);
           if ("view" in next) setNavigationState({ view: next.view });
         },
         loadNotifications,
@@ -1786,7 +1809,7 @@
         loadGroup,
         setNotice: (message) => { notice = message; },
         setNotificationsError: (message) => { notificationsError = message; },
-        setDirectConversationError: (message) => { directConversationError = message; },
+        setDirectConversationError: (message) => setDirectState({ directConversationError: message }),
         setSocialError: (message) => { socialError = message; },
       }));
     }
@@ -5640,6 +5663,7 @@
     unsubscribeNavigationState();
     unsubscribeGroupState();
     unsubscribeMessageState();
+    unsubscribeDirectState();
     clearBroadcastCaptureRecoveryTimer();
     clearVoiceSpeakingPublishTimer();
     stopVoiceTest();
@@ -5848,7 +5872,8 @@
           {directConversationTarget}
           {directConversationLoading}
           {directMessages}
-          bind:directMessageDraft
+          directMessageDraft={directMessageDraft}
+          on:directMessageDraft={(event) => setDirectState({ directMessageDraft: event.detail })}
           {directConversationSending}
           onOpenConversation={openDirectConversationById}
           onSendMessage={sendDirectMessage}
