@@ -39,6 +39,7 @@
   import { createVoiceCaptureService } from "./services/media/voice-capture.js";
   import { createVoiceTrackSyncService } from "./services/media/voice-track-sync.js";
   import { createGroupEventGateway } from "./services/events.js";
+  import { streamViewerUrl } from "./features/live/stream-url.js";
   import {
     audioDeviceDisplayLabel,
     isUnavailableVoiceInputError,
@@ -1423,6 +1424,54 @@
   async function toggleBlockUser(...args) { return (await getSocialController()).toggleBlockUser(...args); }
   async function toggleFollowStream(...args) { return (await getSocialController()).toggleFollowStream(...args); }
 
+  let liveControllerPromise = null;
+  function getLiveController() {
+    if (!liveControllerPromise) {
+      liveControllerPromise = import("./features/live/controller.js").then(({ createLiveController }) => createLiveController({
+        api,
+        getUser: () => user,
+        getState: () => ({
+          followingOnly,
+          isViewer,
+          liveNotificationScopes,
+          multistreamOpen,
+          selectedStreams,
+          streams,
+          streamsRefreshInFlight,
+          viewerRoomId,
+          viewerStream,
+          viewerStreamPath,
+          view,
+        }),
+        setState: (next) => {
+          if ("followingOnly" in next) followingOnly = next.followingOnly;
+          if ("isViewer" in next) isViewer = next.isViewer;
+          if ("liveNotificationScope" in next) liveNotificationScope = next.liveNotificationScope;
+          if ("liveNotificationScopes" in next) liveNotificationScopes = next.liveNotificationScopes;
+          if ("multistreamOpen" in next) multistreamOpen = next.multistreamOpen;
+          if ("selectedStreams" in next) selectedStreams = next.selectedStreams;
+          if ("streams" in next) streams = next.streams;
+          if ("streamsRefreshInFlight" in next) streamsRefreshInFlight = next.streamsRefreshInFlight;
+          if ("view" in next) view = next.view;
+          if ("viewerRoomId" in next) viewerRoomId = next.viewerRoomId;
+          if ("viewerStream" in next) viewerStream = next.viewerStream;
+          if ("viewerStreamPath" in next) viewerStreamPath = next.viewerStreamPath;
+        },
+        markNotificationRead,
+        returnToBroadcast: () => returnToBroadcast(),
+      }));
+    }
+    return liveControllerPromise;
+  }
+  async function loadStreams(...args) { return (await getLiveController()).loadStreams(...args); }
+  function openStreamViewer(...args) { void getLiveController().then((controller) => controller.openStreamViewer(...args)); }
+  async function openStreamNotification(...args) { return (await getLiveController()).openStreamNotification(...args); }
+  function setLiveNotificationScope(...args) { void getLiveController().then((controller) => controller.setLiveNotificationScope(...args)); }
+  function toggleStream(...args) { void getLiveController().then((controller) => controller.toggleStream(...args)); }
+  function handleStreamCardClick(...args) { void getLiveController().then((controller) => controller.handleStreamCardClick(...args)); }
+  function handleStreamCardKeydown(...args) { void getLiveController().then((controller) => controller.handleStreamCardKeydown(...args)); }
+  function openMultistream(...args) { void getLiveController().then((controller) => controller.openMultistream(...args)); }
+  function closeMultistream(...args) { void getLiveController().then((controller) => controller.closeMultistream(...args)); }
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
     return list.scrollHeight - list.scrollTop - list.clientHeight <= 96;
@@ -1437,18 +1486,6 @@
 
   async function refreshGroupOverview(...args) { return (await getGroupController()).refreshGroupOverview(...args); }
   async function refreshGroupPresence(...args) { return (await getGroupController()).refreshGroupPresence(...args); }
-
-  async function loadStreams() {
-    if (streamsRefreshInFlight) return;
-    streamsRefreshInFlight = true;
-    try {
-      const result = await api(`/api/streams${followingOnly ? "?following=1" : ""}`);
-      streams = result.streams || [];
-      selectedStreams = new Set([...selectedStreams].filter((id) => streams.some((stream) => stream.id === id)));
-    } finally {
-      streamsRefreshInFlight = false;
-    }
-  }
 
   async function sendFriendRequestFromContext(target) {
     const friendTarget = {
@@ -1605,51 +1642,6 @@
     try { localStorage.removeItem(VOICE_RECONNECT_STORAGE_KEY); } catch (error) { reportClientError("voice_reconnect_clear_error", error); }
   }
 
-  function isOwnPublicStream(stream) {
-    if (!stream || typeof stream === "string") return false;
-    const currentUserId = user?.id == null ? "" : String(user.id);
-    const streamOwnerId = stream.createdBy == null ? "" : String(stream.createdBy);
-    if (currentUserId && streamOwnerId && currentUserId === streamOwnerId) return true;
-    const currentUsername = String(user?.username || "").trim().toLowerCase();
-    const streamUsername = String(stream.channelUsername || "").trim().toLowerCase();
-    return Boolean(currentUsername && streamUsername && currentUsername === streamUsername);
-  }
-
-  function openStreamViewer(streamOrPath) {
-    if (isOwnPublicStream(streamOrPath)) {
-      void returnToBroadcast();
-      return;
-    }
-    const streamPath = typeof streamOrPath === "string"
-      ? streamOrPath
-      : streamOrPath?.publicPath || streamViewerUrl(streamOrPath);
-    if (!streamPath) return;
-    isViewer = false;
-    viewerRoomId = "";
-    viewerStreamPath = streamPath;
-    viewerStream = typeof streamOrPath === "string" ? null : streamOrPath;
-    const nextUrl = new URL(streamPath, window.location.origin);
-    window.history.pushState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
-    view = "viewer";
-  }
-
-  async function openStreamNotification(notification) {
-    if (!notification?.streamPath) return;
-    await markNotificationRead(notification);
-    if (notification?.streamPath) openStreamViewer(notification.streamPath);
-  }
-
-  function setLiveNotificationScope(scope, enabled) {
-    const next = new Set(liveNotificationScopes);
-    if (enabled) next.add(scope);
-    else next.delete(scope);
-    // Pelo menos um escopo precisa continuar ativo para evitar uma
-    // configuração que pareça salva, mas silencie todos os avisos.
-    if (!next.size) next.add("related");
-    liveNotificationScopes = ["related", "all"].filter((item) => next.has(item));
-    liveNotificationScope = liveNotificationScopes.includes("all") ? "all" : "related";
-  }
-
   async function createGroup() {
     if (groupName.trim().length < 2) return;
     try {
@@ -1710,42 +1702,6 @@
       await loadGroup(selectedGroupId);
       notice = editing ? "Canal atualizado." : "Sala criada.";
     } catch (error) { notice = error.message; }
-  }
-
-  function toggleStream(id) {
-    const next = new Set(selectedStreams);
-    if (next.has(id)) next.delete(id);
-    else if (next.size < 4) next.add(id);
-    selectedStreams = next;
-  }
-
-  function handleStreamCardClick(event, stream) {
-    if (event.target?.closest?.("button, input, a, select, textarea")) return;
-    toggleStream(stream.id);
-  }
-
-  function handleStreamCardKeydown(event, stream) {
-    if (event.target?.closest?.("button, input, a, select, textarea")) return;
-    if (!["Enter", " "].includes(event.key)) return;
-    event.preventDefault();
-    toggleStream(stream.id);
-  }
-
-  function openMultistream() {
-    if (selectedStreams.size < 2) return;
-    multistreamOpen = true;
-    view = "multistream";
-  }
-
-  function closeMultistream() {
-    multistreamOpen = false;
-    view = "live";
-  }
-
-  function streamViewerUrl(stream, embed = false) {
-    const path = stream?.publicPath || `/?room=${encodeURIComponent(stream?.roomName || "")}&mode=viewer`;
-    if (!embed) return path;
-    return `${path}${path.includes("?") ? "&" : "?"}embed=1`;
   }
 
   function randomRoom() {
