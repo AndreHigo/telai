@@ -62,7 +62,7 @@
       <div class="channel-section">
         <p class="channel-section-label"><span class="channel-section-title"><span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("message")} size={15} strokeWidth={1.8} /></span><span>Texto</span><small>{textRooms.length}</small></span><button aria-label="Criar canal de texto" on:click={() => onCreateRoom("text")}><HugeiconsIcon icon={iconFor("add")} size={17} strokeWidth={1.8} /></button></p>
         {#each textRooms as room}
-          <button class:active={room.id === selectedRoomId} class="channel-item" aria-current={room.id === selectedRoomId ? "page" : undefined} on:click={() => onSelectRoom(room.id)}><span class="channel-icon telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("message")} size={15} strokeWidth={1.8} /></span><span>{room.name}</span><small>chat</small></button>
+          <button class:active={room.id === selectedRoomId} class="channel-item" aria-current={room.id === selectedRoomId ? "page" : undefined} on:click={() => onSelectRoom(room.id)}><span class="channel-icon telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("message")} size={15} strokeWidth={1.8} /></span><span>{room.name}</span>{#if room.unreadCount}<strong class="channel-unread-count" aria-label={`${room.unreadCount} mensagens não lidas`}>{room.unreadCount > 99 ? "99+" : room.unreadCount}</strong>{:else}<small>chat</small>{/if}</button>
         {/each}
       </div>
       <div class="channel-section voice-channel-section">

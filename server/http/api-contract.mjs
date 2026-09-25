@@ -97,6 +97,7 @@ const paths = {
     patch: ["updateRoom", "Atualiza uma sala"],
     delete: ["deleteRoom", "Exclui uma sala"],
   }),
+  "/groups/{groupId}/rooms/{roomId}/read": pathItem("Mensagens", { post: ["markGroupRoomRead", "Marca o canal como lido"] }),
   "/groups/{groupId}/rooms/{roomId}/permissions": pathItem("Permissões", {
     get: ["listRoomPermissions", "Lista overrides de permissão do canal"],
     patch: ["updateRoomPermission", "Atualiza override de permissão do canal"],

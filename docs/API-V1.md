@@ -33,6 +33,11 @@ O dono também pode consultar `GET /api/v1/groups/{groupId}/audit-log`. A
 resposta contém `entries` com as ações administrativas recentes e
 `nextBefore`; use esse cursor em `before` para buscar páginas anteriores.
 
+`POST /api/v1/groups/{groupId}/rooms/{roomId}/read` persiste o último ponto
+lido do membro no canal de texto. O overview devolve `unreadCount` por canal;
+mensagens anteriores à entrada do membro e mensagens próprias não entram nessa
+contagem.
+
 O dono pode usar `POST /api/v1/groups/{groupId}/moderation` com `action` igual
 a `kick`, `ban`, `mute`, `unmute` ou `unban`. Cargos com a permissão de moderar
 membros também podem usar a rota, mas somente contra cargos inferiores na ordem

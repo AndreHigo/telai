@@ -17,6 +17,7 @@ export function createGroupController({
 
   async function loadGroup(groupId) {
     if (!groupId) return;
+    let loadedResult = null;
     const state = getState();
     const loadSequence = state.groupLoadSequence + 1;
     const switchingGroup = Boolean(state.selectedGroupId && state.selectedGroupId !== groupId);
@@ -36,6 +37,7 @@ export function createGroupController({
     }
     try {
       const result = await request;
+      loadedResult = result;
       const current = getState();
       setState({ groupOverviewRetryAt: 0 });
       if (loadSequence !== current.groupLoadSequence || current.selectedGroupId !== groupId) return;
@@ -61,6 +63,7 @@ export function createGroupController({
         setNotice("Sua live continua ativa. Use “Voltar à live” no topo ou encerre-a antes de iniciar outra.");
       }
     }
+    return loadedResult;
   }
 
   async function refreshGroupOverview({ includeMessages = true } = {}) {

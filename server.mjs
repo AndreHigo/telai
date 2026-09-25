@@ -45,6 +45,7 @@ import { createGroupRoomPermissionRepository } from "./server/repositories/group
 import { createGroupAuditRepository } from "./server/repositories/group-audit.mjs";
 import { createGroupModerationRepository } from "./server/repositories/group-moderation.mjs";
 import { createGroupAttachmentRepository } from "./server/repositories/group-attachments.mjs";
+import { createGroupRoomReadRepository } from "./server/repositories/group-room-reads.mjs";
 import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
 import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
 import { createStreamRepository } from "./server/repositories/streams.mjs";
@@ -486,6 +487,7 @@ const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialReposit
 const groupSetupRepository = createGroupSetupRepository(database, { createId: randomUUID });
 const groupMessageRepository = createGroupMessageRepository(database, { createId: randomUUID });
 const groupAttachmentRepository = createGroupAttachmentRepository(database, { createId: randomUUID });
+const groupRoomReadRepository = createGroupRoomReadRepository(database);
 const attachmentStorage = createLocalAttachmentStorage(process.env.TELAI_ATTACHMENT_DIR || path.join(dataDir, "attachments"));
 const attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${encodeURIComponent(groupId)}/attachments/${encodeURIComponent(attachmentId)}`;
 const groupRepository = createGroupRepository(database, { createId: randomUUID, groupSetupRepository });
@@ -721,6 +723,7 @@ const handleGroupRuntimeRoutes = createGroupRuntimeRoutes({
   groupJoinRequestRepository,
   groupSettingsRepository,
   groupRoomRepository,
+  groupRoomReadRepository,
   groupMemberRepository,
   groupMessageRepository,
   groupAttachmentRepository,

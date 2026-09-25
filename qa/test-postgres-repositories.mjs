@@ -16,6 +16,7 @@ import { createPostgresSocialRepository } from "../server/repositories/social.mj
 import { createPostgresGroupSetupRepository } from "../server/repositories/group-setup.mjs";
 import { createPostgresGroupMessageRepository } from "../server/repositories/group-messages.mjs";
 import { createPostgresGroupAttachmentRepository } from "../server/repositories/group-attachments.mjs";
+import { createPostgresGroupRoomReadRepository } from "../server/repositories/group-room-reads.mjs";
 import { createPostgresGroupInviteRepository } from "../server/repositories/group-invites.mjs";
 import { createPostgresGroupJoinRequestRepository } from "../server/repositories/group-join-requests.mjs";
 import { createPostgresGroupRoleRepository } from "../server/repositories/group-roles.mjs";
@@ -202,6 +203,10 @@ try {
   assert.equal((await groupRooms.listVoiceRooms(createdGroup.id)).some((room) => room.id === voiceRoom.id), true);
   assert.equal((await groupRooms.findRoom(createdGroup.id, voiceRoom.id)).kind, "voice");
   assert.equal((await groupRooms.findVoiceRoomById(voiceRoom.id)).groupId, createdGroup.id);
+  const groupRoomReads = createPostgresGroupRoomReadRepository(client);
+  const markedRoomRead = await groupRoomReads.markRead({ groupId: createdGroup.id, userId: ids.owner, roomId: textRoom.id, readAt: now });
+  assert.equal(markedRoomRead.roomId, textRoom.id);
+  assert.deepEqual(await groupRoomReads.listUnreadCounts(createdGroup.id, ids.owner), {});
   await groupRooms.updateRoom({ groupId: createdGroup.id, roomId: textRoom.id, kind: "text", name: "Discussão atualizada", slug: "discussao-atualizada" });
   assert.equal((await groupRooms.findRoom(createdGroup.id, textRoom.id)).slug, "discussao-atualizada");
   assert.equal(await groupRooms.deleteRoom(createdGroup.id, voiceRoom.id, "voice"), true);
@@ -334,7 +339,7 @@ try {
   assert.equal(await groupSettings.deleteGroup(createdGroup.id), true);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-attachments", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-room-permissions", "group-permissions", "group-members", "group-moderation", "group-settings", "user-profile", "site-admin", "maintenance", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-attachments", "group-room-reads", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-room-permissions", "group-permissions", "group-members", "group-moderation", "group-settings", "user-profile", "site-admin", "maintenance", "streams", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

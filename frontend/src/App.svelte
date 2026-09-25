@@ -734,6 +734,8 @@
   let groupLoadSequence = 0;
   let groupOverviewRetryAt = 0;
   const pendingGroupOverviewRequests = new Map();
+  const groupRoomReadRequests = new Map();
+  let lastAutoMarkedGroupRoomKey = "";
   const maxAvatarFileBytes = 5 * 1024 * 1024;
   const gameOptions = ["League of Legends", "Valorant", "Minecraft", "Fortnite", "Roblox", "GTA V", "CS2", "Outro"];
   const visualDefaults = {
@@ -773,6 +775,13 @@
   $: watchingSelectedRoomLive = Boolean(watchedSelectedRoomLive);
   $: activeVoiceRoom = voiceRooms.find((room) => room.id === voiceRoomId) || null;
   $: selectedRoom = rooms.find((room) => room.id === selectedRoomId) || rooms[0] || null;
+  $: if (selectedGroupId && selectedRoom?.kind === "text" && groupOverview?.group?.id === selectedGroupId) {
+    const autoReadKey = `${selectedGroupId}:${selectedRoom.id}`;
+    if (lastAutoMarkedGroupRoomKey !== autoReadKey) {
+      lastAutoMarkedGroupRoomKey = autoReadKey;
+      void markGroupRoomRead(selectedRoom);
+    }
+  }
   $: selectedRoomRemoteVoice = Boolean(
     selectedRoom?.kind === "voice" &&
     voiceState === "idle" &&
@@ -956,7 +965,13 @@
     const keepAtBottom = shouldKeepGroupMessagesAtBottom(messageList);
     knownGroupMessageIds = new Set([...knownGroupMessageIds, incoming.id]);
     groupOverview = { ...groupOverview, messages: [...(groupOverview.messages || []), incoming].slice(-80) };
-    if (incoming.userId !== user?.id) playVoiceSound("message");
+    const incomingIsUnread = incoming.userId !== user?.id;
+    if (incomingIsUnread) {
+      const currentRoom = rooms.find((room) => room.id === selectedRoomId);
+      if (keepAtBottom && messageBelongsToRoom(incoming, currentRoom)) void markGroupRoomRead(currentRoom);
+      else incrementGroupRoomUnread(incoming);
+      playVoiceSound("message");
+    }
     if (keepAtBottom) void scrollGroupMessagesToBottom({ force: true });
   }
 
@@ -1020,6 +1035,8 @@
     const result = await (await getGroupController()).loadGroup(...args);
     const groupId = args[0];
     if (groupId && user && !isViewer) ensureGroupEventGateway().subscribeGroup(groupId);
+    const room = rooms.find((candidate) => candidate.id === selectedRoomId && candidate.kind === "text");
+    if (room && result?.group?.id === groupId) void markGroupRoomRead(room);
     return result;
   }
 
@@ -2570,7 +2587,8 @@
       closeRoomContextMenu();
       void selectRoom(room.id);
     } else if (action === "read") {
-      knownGroupMessageIds = new Set([...knownGroupMessageIds, ...roomMessages.filter((message) => message.roomId === room.id).map((message) => message.id)]);
+      knownGroupMessageIds = new Set([...knownGroupMessageIds, ...(groupOverview?.messages || []).filter((message) => messageBelongsToRoom(message, room)).map((message) => message.id)]);
+      if (room.kind === "text") void markGroupRoomRead(room);
       closeRoomContextMenu();
       notice = `#${room.name} marcado como lido.`;
     } else if (action === "copy") {
@@ -4543,6 +4561,38 @@
     settingsSection = "voice";
   }
 
+  function markGroupRoomRead(room) {
+    if (!selectedGroupId || room?.kind !== "text") return Promise.resolve();
+    const groupId = selectedGroupId;
+    const key = `${groupId}:${room.id}`;
+    if (groupRoomReadRequests.has(key)) return groupRoomReadRequests.get(key);
+    const request = api(`/api/groups/${encodeURIComponent(groupId)}/rooms/${encodeURIComponent(room.id)}/read`, { method: "POST" })
+      .then(() => {
+        if (selectedGroupId !== groupId || groupOverview?.group?.id !== groupId) return;
+        groupOverview = {
+          ...groupOverview,
+          rooms: (groupOverview.rooms || []).map((candidate) => candidate.id === room.id ? { ...candidate, unreadCount: 0 } : candidate),
+        };
+      })
+      .catch(() => {})
+      .finally(() => groupRoomReadRequests.delete(key));
+    groupRoomReadRequests.set(key, request);
+    return request;
+  }
+
+  function messageBelongsToRoom(message, room) {
+    if (!message || !room || room.kind !== "text") return false;
+    return message.roomId ? message.roomId === room.id : room.slug === "geral";
+  }
+
+  function incrementGroupRoomUnread(message) {
+    if (!groupOverview || !message || message.userId === user?.id) return;
+    groupOverview = {
+      ...groupOverview,
+      rooms: (groupOverview.rooms || []).map((room) => messageBelongsToRoom(message, room) ? { ...room, unreadCount: (room.unreadCount || 0) + 1 } : room),
+    };
+  }
+
   async function selectRoom(roomId) {
     const room = rooms.find((candidate) => candidate.id === roomId);
     if (!room) return;
@@ -4551,6 +4601,7 @@
     showMobileChannels = false;
     mentionSuggestions = [];
     mentionStartIndex = -1;
+    if (room.kind === "text") void markGroupRoomRead(room);
     if (room.kind === "voice") {
       // O Electron pode bloquear o AudioContext depois de qualquer await.
       // Inicialize-o ainda dentro do gesto que abriu o canal para que o VAD

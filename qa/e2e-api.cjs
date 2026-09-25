@@ -105,6 +105,7 @@ async function main() {
     assert.equal(openApi.body.servers[0].url, "/api/v1");
     assert.ok(openApi.body.paths["/groups/{groupId}/messages"].post);
     assert.ok(openApi.body.paths["/groups/{groupId}/attachments/{attachmentId}"].get);
+    assert.ok(openApi.body.paths["/groups/{groupId}/rooms/{roomId}/read"].post);
     const missingVersionedRoute = await request("/api/v1/route-that-does-not-exist");
     assert.equal(missingVersionedRoute.response.status, 404);
     assert.equal(missingVersionedRoute.body.code, "not_found");
@@ -271,6 +272,13 @@ async function main() {
     assert.ok(editedGroupMessage.body.message.editedAt);
     const overview = await api(owner, `/api/groups/${groupId}/overview`);
     assert.ok(overview.body.messages.some((message) => message.id === sentGroupMessage.body.message.id && message.body === "mensagem QA editada"));
+    const roomBeforeRead = overview.body.rooms.find((room) => room.id === group.textRoomId);
+    assert.ok(roomBeforeRead.unreadCount >= 1, "a mensagem do membro não apareceu como não lida");
+    assert.equal((await api(null, `/api/groups/${groupId}/rooms/${group.textRoomId}/read`, "POST")).response.status, 401);
+    assert.equal((await api(outsider, `/api/groups/${groupId}/rooms/${group.textRoomId}/read`, "POST")).response.status, 403);
+    assert.equal((await api(owner, `/api/groups/${groupId}/rooms/${group.textRoomId}/read`, "POST")).response.status, 200);
+    const readOverview = await api(owner, `/api/groups/${groupId}/overview`);
+    assert.equal(readOverview.body.rooms.find((room) => room.id === group.textRoomId).unreadCount, 0);
     const deletedGroupMessage = await api(owner, `/api/groups/${groupId}/messages/${sentGroupMessage.body.message.id}`, "DELETE");
     assert.equal(deletedGroupMessage.response.status, 200);
     const afterMessageDelete = await api(owner, `/api/groups/${groupId}/overview`);

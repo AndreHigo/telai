@@ -691,6 +691,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .channel-icon { width: 17px; color: #8397c2; font-size: 15px; text-align: center; }
 .channel-item span:not(.channel-icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 800; }
 .channel-item small { margin-left: auto; color: #7589b2; font-size: 9px; }
+.channel-unread-count { display: grid; min-width: 18px; height: 18px; margin-left: auto; place-items: center; border-radius: 999px; padding: 0 5px; color: #fff; background: #5865f2; font-size: 8px; line-height: 1; }
 .channel-voice-members { display: grid; gap: 5px; margin: -1px 8px 9px 29px; padding: 5px 7px 6px; border-left: 1px solid #2e4773; }
 .channel-voice-members span { display: flex; align-items: center; gap: 6px; overflow: hidden; color: #94a8cf; font-size: 9px; white-space: nowrap; }
 .channel-voice-members .channel-voice-member { cursor: grab; }
@@ -985,6 +986,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mirante-shell.light .group-picker-create { border-color: #d6dfec !important; color: #5963dd !important; }
 .mirante-shell.light .community-item, .mirante-shell.light .channel-item { color: #50617b; }
 .mirante-shell.light .community-item:hover, .mirante-shell.light .community-item.active, .mirante-shell.light .channel-item:hover, .mirante-shell.light .channel-item.active { border-color: #b4c5e7; background: #e9effb; color: #14203a; }
+.mirante-shell.light .channel-unread-count { color: #fff; background: #4f5edb; }
 .mirante-shell.light .workspace-heading { border-color: #d6dfec; }
 .mirante-shell.light .message-meta strong, .mirante-shell.light .message-empty h2, .mirante-shell.light .member-item strong { color: #1d2b45; }
 .mirante-shell.light .message-item p { color: #526480; }

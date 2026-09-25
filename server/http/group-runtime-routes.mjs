@@ -6,6 +6,7 @@ export function createGroupRuntimeRoutes({
   groupJoinRequestRepository,
   groupSettingsRepository,
   groupRoomRepository,
+  groupRoomReadRepository,
   groupMemberRepository,
   groupMessageRepository,
   groupAttachmentRepository,
@@ -27,6 +28,30 @@ export function createGroupRuntimeRoutes({
   canGroupRoomAction = () => true,
 }) {
   return async function handleGroupRuntimeRoutes(request, response, requestUrl) {
+    const groupRoomReadMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms\/([\w-]{1,64})\/read$/);
+    if (groupRoomReadMatch && request.method === "POST") {
+      const user = requireUser(request, response);
+      if (!user) return true;
+      const [, groupId, roomId] = groupRoomReadMatch;
+      if (!isGroupMember(user.id, groupId)) {
+        json(response, 403, { error: "Você não participa deste grupo." });
+        return true;
+      }
+      const room = groupRoomRepository.findRoom(groupId, roomId);
+      if (!room || room.kind !== "text") {
+        json(response, 404, { error: "Canal de texto não encontrado." });
+        return true;
+      }
+      if (!canGroupRoomAction(user.id, groupId, room.id, "canView")) {
+        json(response, 403, { error: "Você não tem permissão para visualizar este canal." });
+        return true;
+      }
+      const readAt = new Date().toISOString();
+      const state = groupRoomReadRepository.markRead({ groupId, userId: user.id, roomId: room.slug === "geral" ? null : room.id, readAt });
+      json(response, 200, { ok: true, ...state });
+      return true;
+    }
+
     const groupDeleteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})$/);
     if (groupDeleteMatch && request.method === "DELETE") {
       const user = requireUser(request, response);
@@ -71,7 +96,11 @@ export function createGroupRuntimeRoutes({
         json(response, 404, { error: "Grupo não encontrado." });
         return true;
       }
-      const rooms = groupRoomRepository.listTextRooms(groupId).filter((room) => canGroupRoomAction(user.id, groupId, room.id, "canView"));
+      const unreadCounts = groupRoomReadRepository.listUnreadCounts(groupId, user.id);
+      const rooms = groupRoomRepository.listTextRooms(groupId).filter((room) => canGroupRoomAction(user.id, groupId, room.id, "canView")).map((room) => ({
+        ...room,
+        unreadCount: unreadCounts[room.slug === "geral" ? "__general__" : room.id] || 0,
+      }));
       const voiceRoomsForGroup = groupRoomRepository.listVoiceRooms(groupId).filter((room) => canGroupRoomAction(user.id, groupId, room.id, "canView")).map((room) => {
         const runtimeRoom = voiceRooms.get(room.id);
         const canView = groupPermissions(groupId, user.id)?.canViewVoiceMembers !== false;
