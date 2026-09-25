@@ -755,7 +755,8 @@ database.exec("CREATE INDEX IF NOT EXISTS stream_chat_messages_stream_idx ON str
 database.exec("CREATE INDEX IF NOT EXISTS group_messages_room_idx ON group_messages(group_id, room_id, created_at DESC)");
 database.exec("CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_messages(sender_id, created_at DESC)");
 const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
-const { directConversationForUser, directConversationPayload } = createDirectConversationRepository(database, { compactUserSummary });
+const directConversationRepository = createDirectConversationRepository(database, { compactUserSummary, createId: randomUUID });
+const { directConversationForUser, directConversationPayload } = directConversationRepository;
 const sessionRepository = createSessionRepository(database, { hashSessionToken });
 const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents } = createAuthRepository(database, {
   compactAvatarData,
@@ -3406,30 +3407,7 @@ async function handleHttpRequest(request, response) {
   if (requestUrl.pathname === "/api/direct/conversations" && request.method === "GET") {
     const user = requireUser(request, response);
     if (!user) return;
-    const conversations = database.prepare(`
-      SELECT conversations.id, conversations.created_at AS createdAt,
-        conversations.updated_at AS updatedAt, other.id AS userId,
-        other.username, other.display_name AS displayName, other.avatar_data AS avatarData,
-        (SELECT body FROM direct_messages WHERE conversation_id = conversations.id ORDER BY created_at DESC LIMIT 1) AS lastBody,
-        (SELECT created_at FROM direct_messages WHERE conversation_id = conversations.id ORDER BY created_at DESC LIMIT 1) AS lastMessageAt,
-        (SELECT COUNT(*) FROM direct_messages unread_messages
-          WHERE unread_messages.conversation_id = conversations.id
-            AND unread_messages.sender_id <> ? AND unread_messages.read_at IS NULL) AS unreadCount
-      FROM direct_conversations conversations
-      JOIN direct_conversation_members mine ON mine.conversation_id = conversations.id AND mine.user_id = ?
-      JOIN direct_conversation_members other_member ON other_member.conversation_id = conversations.id AND other_member.user_id <> ?
-      JOIN users other ON other.id = other_member.user_id
-      ORDER BY conversations.updated_at DESC
-    `).all(user.id, user.id, user.id).map((conversation) => ({
-      id: conversation.id,
-      createdAt: conversation.createdAt,
-      updatedAt: conversation.updatedAt,
-      otherUser: compactUserSummary({ id: conversation.userId, username: conversation.username, displayName: conversation.displayName, avatarData: conversation.avatarData }),
-      lastBody: conversation.lastBody || "",
-      lastMessageAt: conversation.lastMessageAt || null,
-      unreadCount: Number(conversation.unreadCount || 0),
-    }));
-    return json(response, 200, { conversations });
+    return json(response, 200, { conversations: directConversationRepository.listConversationsForUser(user.id) });
   }
   if (requestUrl.pathname === "/api/direct/conversations" && request.method === "POST") {
     const user = requireUser(request, response);
@@ -3437,29 +3415,9 @@ async function handleHttpRequest(request, response) {
     readJson(request).then((body) => {
       const targetUserId = String(body.userId || "").trim();
       if (!targetUserId || targetUserId === user.id) return json(response, 400, { error: "Escolha outra pessoa para iniciar a conversa." });
-      const target = database.prepare("SELECT id, username, display_name AS displayName, avatar_data AS avatarData FROM users WHERE id = ?").get(targetUserId);
+      const target = directConversationRepository.findUser(targetUserId);
       if (!target) return json(response, 404, { error: "Usuário não encontrado." });
-      const existing = database.prepare(`
-        SELECT conversations.id FROM direct_conversations conversations
-        JOIN direct_conversation_members mine ON mine.conversation_id = conversations.id AND mine.user_id = ?
-        JOIN direct_conversation_members other ON other.conversation_id = conversations.id AND other.user_id = ?
-        WHERE (SELECT COUNT(*) FROM direct_conversation_members members WHERE members.conversation_id = conversations.id) = 2
-        LIMIT 1
-      `).get(user.id, targetUserId);
-      let conversationId = existing?.id;
-      if (!conversationId) {
-        conversationId = randomUUID();
-        const now = new Date().toISOString();
-        try {
-          database.exec("BEGIN");
-          database.prepare("INSERT INTO direct_conversations (id, created_at, updated_at) VALUES (?, ?, ?)").run(conversationId, now, now);
-          database.prepare("INSERT INTO direct_conversation_members (conversation_id, user_id, created_at) VALUES (?, ?, ?), (?, ?, ?)").run(conversationId, user.id, now, conversationId, targetUserId, now);
-          database.exec("COMMIT");
-        } catch (error) {
-          try { database.exec("ROLLBACK"); } catch {}
-          throw error;
-        }
-      }
+      const conversationId = directConversationRepository.createConversation(user.id, targetUserId);
       return json(response, 201, { conversation: directConversationPayload(conversationId, user.id) });
     }).catch((error) => {
       errorLog("direct_conversation_create_error", { error });
@@ -3476,18 +3434,7 @@ async function handleHttpRequest(request, response) {
     if (!conversation) return json(response, 404, { error: "Conversa não encontrada." });
     if (directConversationMatch[2] === "messages") {
       const includeConversationAvatar = requestUrl.searchParams.get("includeAvatar") === "1";
-      const readAt = new Date().toISOString();
-      database.prepare("UPDATE direct_messages SET read_at = COALESCE(read_at, ?) WHERE conversation_id = ? AND sender_id <> ? AND read_at IS NULL").run(readAt, conversationId, user.id);
-      database.prepare("UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE user_id = ? AND type = 'direct_message' AND entity_id IN (SELECT id FROM direct_messages WHERE conversation_id = ?)").run(readAt, user.id, conversationId);
-      const messages = database.prepare(`
-        SELECT direct_messages.id, direct_messages.conversation_id AS conversationId,
-          direct_messages.sender_id AS senderId, direct_messages.body,
-          direct_messages.created_at AS createdAt, direct_messages.read_at AS readAt,
-          users.display_name AS displayName, users.username
-        FROM direct_messages JOIN users ON users.id = direct_messages.sender_id
-        WHERE direct_messages.conversation_id = ?
-        ORDER BY direct_messages.created_at ASC LIMIT 200
-      `).all(conversationId);
+      const { messages } = directConversationRepository.listMessages(conversationId, user.id, includeConversationAvatar);
       const responseConversation = includeConversationAvatar
         ? conversation
         : { ...conversation, otherUser: null };
@@ -3500,9 +3447,7 @@ async function handleHttpRequest(request, response) {
     if (!user) return;
     const conversationId = directConversationMatch[1];
     if (!directConversationForUser(conversationId, user.id)) return json(response, 404, { error: "Conversa não encontrada." });
-    const readAt = new Date().toISOString();
-    database.prepare("UPDATE direct_messages SET read_at = COALESCE(read_at, ?) WHERE conversation_id = ? AND sender_id <> ? AND read_at IS NULL").run(readAt, conversationId, user.id);
-    database.prepare("UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE user_id = ? AND type = 'direct_message' AND entity_id IN (SELECT id FROM direct_messages WHERE conversation_id = ?)").run(readAt, user.id, conversationId);
+    directConversationRepository.markRead(conversationId, user.id);
     return json(response, 200, { ok: true });
   }
   const directMessagesMatch = requestUrl.pathname.match(/^\/api\/direct\/conversations\/([\w-]{16,64})\/messages$/);
@@ -3514,25 +3459,8 @@ async function handleHttpRequest(request, response) {
     readJson(request).then((body) => {
       const messageBody = String(body.body || "").trim().slice(0, 1000);
       if (!messageBody) return json(response, 400, { error: "Escreva uma mensagem antes de enviar." });
-      const recipient = database.prepare(`
-        SELECT users.id FROM direct_conversation_members
-        JOIN users ON users.id = direct_conversation_members.user_id
-        WHERE direct_conversation_members.conversation_id = ? AND direct_conversation_members.user_id <> ?
-        LIMIT 1
-      `).get(conversationId, user.id);
-      if (!recipient) return json(response, 400, { error: "Essa conversa não possui outro participante." });
       const createdAt = new Date().toISOString();
-      const message = { id: randomUUID(), conversationId, senderId: user.id, body: messageBody, createdAt, readAt: null, displayName: user.displayName, username: user.username };
-      try {
-        database.exec("BEGIN");
-        database.prepare("INSERT INTO direct_messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)").run(message.id, conversationId, user.id, messageBody, createdAt);
-        database.prepare("UPDATE direct_conversations SET updated_at = ? WHERE id = ?").run(createdAt, conversationId);
-        createNotification({ userId: recipient.id, type: "direct_message", entityId: message.id, title: `${user.displayName} enviou uma mensagem`, body: messageBody.slice(0, 160), createdAt });
-        database.exec("COMMIT");
-      } catch (error) {
-        try { database.exec("ROLLBACK"); } catch {}
-        throw error;
-      }
+      const message = directConversationRepository.createMessage({ conversationId, senderId: user.id, body: messageBody, createdAt, displayName: user.displayName, username: user.username, createNotification });
       return json(response, 201, { message });
     }).catch((error) => {
       errorLog("direct_message_create_error", { error });

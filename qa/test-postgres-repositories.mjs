@@ -105,9 +105,16 @@ try {
   assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canViewVoiceMembers: true });
   assert.equal(await groups.canGroupAction(ids.member, ids.group, "canChat"), true);
 
-  const conversations = createPostgresDirectConversationRepository(client, { compactUserSummary });
+  const conversations = createPostgresDirectConversationRepository(client, { compactUserSummary, transactionClient: true });
   assert.equal((await conversations.directConversationForUser(ids.conversation, ids.owner))?.id, ids.conversation);
   assert.equal((await conversations.directConversationPayload(ids.conversation, ids.owner))?.otherUser.username, memberUsername);
+  assert.equal(await conversations.createConversation(ids.owner, ids.member, now), ids.conversation);
+  const directMessage = await conversations.createMessage({
+    conversationId: ids.conversation, senderId: ids.owner, body: "Mensagem PostgreSQL", displayName: "PG Owner", username: ownerUsername, createdAt: now,
+    createNotification: async () => {},
+  });
+  assert.equal((await conversations.listMessages(ids.conversation, ids.member, true)).messages[0].body, directMessage.body);
+  await conversations.markRead(ids.conversation, ids.member, now);
 
   const profiles = createPostgresChannelProfileRepository(client, { parseChannelGames: (value) => JSON.parse(value || "[]") });
   assert.equal((await profiles.channelProfileForUser(ids.owner))?.displayName, "Owner Channel");
