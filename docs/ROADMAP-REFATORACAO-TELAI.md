@@ -78,7 +78,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair o repositório de perfil de canal.
 - [x] Extrair o repositório de preferências gerais e de áudio por usuário.
 - [x] Extrair listagem e estado de leitura das notificações persistentes.
-- [ ] Separar o sincronizador de notificações e suas consultas de domínio.
+- [x] Separar o sincronizador de notificações e suas consultas de domínio.
 - [x] Preparar pool, Compose local e plano de migração para PostgreSQL.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
