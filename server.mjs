@@ -23,6 +23,7 @@ import { createGroupSetupRepository } from "./server/repositories/group-setup.mj
 import { createGroupMessageRepository } from "./server/repositories/group-messages.mjs";
 import { createGroupInviteRepository } from "./server/repositories/group-invites.mjs";
 import { createGroupJoinRequestRepository } from "./server/repositories/group-join-requests.mjs";
+import { createGroupRoleRepository } from "./server/repositories/group-roles.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -793,6 +794,7 @@ const groupJoinRequestRepository = createGroupJoinRequestRepository(database, {
   ensureGroupPermissionRow,
   compactAvatarData,
 });
+const groupRoleRepository = createGroupRoleRepository(database, { createId: randomUUID });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2935,21 +2937,7 @@ async function handleHttpRequest(request, response) {
     const group = database.prepare("SELECT id, name, slug, owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     groupSetupRepository.ensureDefaultGroupRoles(groupId, group.ownerId);
-    const roles = database.prepare(`
-      SELECT id, name, color, can_chat AS canChat, can_stream AS canStream,
-        can_invite AS canInvite, can_view_voice_members AS canViewVoiceMembers,
-        can_move_members AS canMoveMembers, is_default AS isDefault, sort_order AS sortOrder
-      FROM group_roles WHERE group_id = ? ORDER BY sort_order ASC, name COLLATE NOCASE
-    `).all(groupId).map((role) => ({
-      ...role,
-      sortOrder: Number(role.sortOrder),
-      canChat: Boolean(role.canChat),
-      canStream: Boolean(role.canStream),
-      canInvite: Boolean(role.canInvite),
-      canViewVoiceMembers: Boolean(role.canViewVoiceMembers),
-      canMoveMembers: Boolean(role.canMoveMembers),
-      isDefault: Boolean(role.isDefault),
-    }));
+    const roles = groupRoleRepository.listRoles(groupId);
     const invites = groupInviteRepository.listGroupInvites(groupId);
     const joinRequests = group.ownerId === user.id ? database.prepare(`
       SELECT group_join_requests.id, group_join_requests.status, group_join_requests.created_at AS createdAt,
@@ -2977,14 +2965,9 @@ async function handleHttpRequest(request, response) {
       const canInvite = body.canInvite !== false;
       const canViewVoiceMembers = body.canViewVoiceMembers !== false;
       const canMoveMembers = body.canMoveMembers === true;
-      const nextSortOrder = Number(database.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS sortOrder FROM group_roles WHERE group_id = ?").get(groupId)?.sortOrder || 0);
-      const role = { id: randomUUID(), groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, isDefault: false, sortOrder: nextSortOrder };
+      let role;
       try {
-        database.prepare(`
-          INSERT INTO group_roles (id, group_id, name, color, can_chat, can_stream, can_invite,
-            can_view_voice_members, can_move_members, is_default, sort_order, created_by, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
-        `).run(role.id, groupId, name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, nextSortOrder, user.id, new Date().toISOString());
+        role = groupRoleRepository.createRole({ groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, createdBy: user.id });
       } catch (error) {
         if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe um cargo com esse nome." });
         throw error;
@@ -3002,36 +2985,16 @@ async function handleHttpRequest(request, response) {
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode ordenar cargos." });
     readJson(request).then((body) => {
       const roleIds = Array.isArray(body.roleIds) ? body.roleIds.map((roleId) => String(roleId || "").trim()) : null;
-      const roles = database.prepare("SELECT id FROM group_roles WHERE group_id = ?").all(groupId);
-      const knownRoleIds = new Set(roles.map((role) => role.id));
-      if (!roleIds || roleIds.length !== roles.length || roleIds.some((roleId) => !roleId || !knownRoleIds.has(roleId)) || new Set(roleIds).size !== roleIds.length) {
+      const knownRoleIds = new Set(groupRoleRepository.listRoleIds(groupId));
+      if (!roleIds || roleIds.length !== knownRoleIds.size || roleIds.some((roleId) => !roleId || !knownRoleIds.has(roleId)) || new Set(roleIds).size !== roleIds.length) {
         return json(response, 400, { error: "A ordem precisa conter todos os cargos do grupo uma única vez." });
       }
       try {
-        database.exec("BEGIN");
-        const update = database.prepare("UPDATE group_roles SET sort_order = ? WHERE id = ? AND group_id = ?");
-        roleIds.forEach((roleId, index) => update.run(index, roleId, groupId));
-        database.exec("COMMIT");
+        const orderedRoles = groupRoleRepository.reorderRoles(groupId, roleIds);
+        return json(response, 200, { roles: orderedRoles });
       } catch (error) {
-        try { database.exec("ROLLBACK"); } catch {}
         throw error;
       }
-      const orderedRoles = database.prepare(`
-        SELECT id, name, color, can_chat AS canChat, can_stream AS canStream,
-          can_invite AS canInvite, can_view_voice_members AS canViewVoiceMembers,
-          can_move_members AS canMoveMembers, is_default AS isDefault, sort_order AS sortOrder
-        FROM group_roles WHERE group_id = ? ORDER BY sort_order ASC, name COLLATE NOCASE
-      `).all(groupId).map((role) => ({
-        ...role,
-        sortOrder: Number(role.sortOrder),
-        canChat: Boolean(role.canChat),
-        canStream: Boolean(role.canStream),
-        canInvite: Boolean(role.canInvite),
-        canViewVoiceMembers: Boolean(role.canViewVoiceMembers),
-        canMoveMembers: Boolean(role.canMoveMembers),
-        isDefault: Boolean(role.isDefault),
-      }));
-      return json(response, 200, { roles: orderedRoles });
     }).catch(() => json(response, 400, { error: "Não foi possível salvar a ordem dos cargos." }));
     return;
   }
@@ -3042,19 +3005,13 @@ async function handleHttpRequest(request, response) {
     const [, groupId, roleId] = groupRoleMatch;
     const owner = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode administrar cargos." });
-    const role = database.prepare(`
-      SELECT id, name, color, can_chat AS canChat, can_stream AS canStream,
-        can_invite AS canInvite, can_view_voice_members AS canViewVoiceMembers,
-        can_move_members AS canMoveMembers, is_default AS isDefault, sort_order AS sortOrder
-      FROM group_roles WHERE id = ? AND group_id = ?
-    `).get(roleId, groupId);
+    const role = groupRoleRepository.findRole(groupId, roleId);
     if (!role) return json(response, 404, { error: "Cargo não encontrado neste grupo." });
     if (request.method === "DELETE") {
       if (role.isDefault) return json(response, 400, { error: "O cargo padrão não pode ser removido." });
-      const defaultRole = database.prepare("SELECT id FROM group_roles WHERE group_id = ? AND is_default = 1 LIMIT 1").get(groupId);
+      const defaultRole = groupRoleRepository.defaultRole(groupId);
       if (!defaultRole) return json(response, 500, { error: "O grupo não possui um cargo padrão disponível." });
-      database.prepare("UPDATE group_members SET role_id = ? WHERE group_id = ? AND role_id = ?").run(defaultRole.id, groupId, roleId);
-      database.prepare("DELETE FROM group_roles WHERE id = ? AND group_id = ?").run(roleId, groupId);
+      groupRoleRepository.deleteRole(groupId, roleId, defaultRole.id);
       return json(response, 200, { ok: true, fallbackRoleId: defaultRole.id });
     }
     readJson(request).then((body) => {
@@ -3067,15 +3024,12 @@ async function handleHttpRequest(request, response) {
       const canMoveMembers = body.canMoveMembers === undefined ? Boolean(role.canMoveMembers) : body.canMoveMembers === true;
       if (name.length < 2) return json(response, 400, { error: "Informe um nome válido para o cargo." });
       try {
-        database.prepare(`
-          UPDATE group_roles SET name = ?, color = ?, can_chat = ?, can_stream = ?, can_invite = ?,
-            can_view_voice_members = ?, can_move_members = ? WHERE id = ? AND group_id = ?
-        `).run(name, color, canChat ? 1 : 0, canStream ? 1 : 0, canInvite ? 1 : 0, canViewVoiceMembers ? 1 : 0, canMoveMembers ? 1 : 0, roleId, groupId);
+        const updatedRole = groupRoleRepository.updateRole({ groupId, roleId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers });
+        return json(response, 200, { role: updatedRole });
       } catch (error) {
         if (String(error.message).includes("UNIQUE")) return json(response, 409, { error: "Já existe um cargo com esse nome." });
         throw error;
       }
-      return json(response, 200, { role: { id: roleId, groupId, name, color, canChat, canStream, canInvite, canViewVoiceMembers, canMoveMembers, isDefault: Boolean(role.isDefault), sortOrder: Number(role.sortOrder) } });
     }).catch(() => json(response, 400, { error: "Não foi possível atualizar o cargo." }));
     return;
   }
@@ -3086,13 +3040,13 @@ async function handleHttpRequest(request, response) {
     const [, groupId, memberId] = groupMemberRoleMatch;
     const owner = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode atribuir cargos." });
-    const member = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, memberId);
+    const member = groupRoleRepository.member(groupId, memberId);
     if (!member) return json(response, 404, { error: "Membro não encontrado neste grupo." });
     if (member.role === "owner") return json(response, 400, { error: "O dono mantém o cargo de dono." });
     readJson(request).then((body) => {
       const roleId = String(body.roleId || "").trim();
-      if (roleId && !database.prepare("SELECT 1 FROM group_roles WHERE id = ? AND group_id = ?").get(roleId, groupId)) return json(response, 400, { error: "Esse cargo não pertence ao grupo." });
-      database.prepare("UPDATE group_members SET role_id = ? WHERE group_id = ? AND user_id = ?").run(roleId || null, groupId, memberId);
+      if (roleId && !groupRoleRepository.roleBelongs(groupId, roleId)) return json(response, 400, { error: "Esse cargo não pertence ao grupo." });
+      groupRoleRepository.assignMemberRole(groupId, memberId, roleId);
       return json(response, 200, { roleId: roleId || null });
     }).catch(() => json(response, 400, { error: "Não foi possível atribuir o cargo." }));
     return;

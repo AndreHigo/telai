@@ -17,6 +17,7 @@ import { createPostgresGroupSetupRepository } from "../server/repositories/group
 import { createPostgresGroupMessageRepository } from "../server/repositories/group-messages.mjs";
 import { createPostgresGroupInviteRepository } from "../server/repositories/group-invites.mjs";
 import { createPostgresGroupJoinRequestRepository } from "../server/repositories/group-join-requests.mjs";
+import { createPostgresGroupRoleRepository } from "../server/repositories/group-roles.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -120,6 +121,19 @@ try {
   assert.deepEqual(await groups.groupPermissions(ids.group, ids.owner), { canChat: true, canStream: true, canInvite: true, canMoveMembers: true, canViewVoiceMembers: true });
   assert.equal(await groups.canGroupAction(ids.member, ids.group, "canChat"), true);
 
+  const groupRoles = createPostgresGroupRoleRepository(client, { createId: randomUUID, transactionClient: true });
+  const customRole = await groupRoles.createRole({ groupId: createdGroup.id, name: "Moderador PG", color: "#123456", canChat: true, canStream: true, canInvite: false, canViewVoiceMembers: true, canMoveMembers: false, createdBy: ids.owner, createdAt: now });
+  const createdDefaultRole = await groupRoles.defaultRole(createdGroup.id);
+  await client.query("INSERT INTO group_members (group_id, user_id, role, role_id, created_at) VALUES ($1, $2, 'member', $3, $4)", [createdGroup.id, ids.member, createdDefaultRole.id, now]);
+  assert.equal((await groupRoles.findRole(createdGroup.id, customRole.id)).name, "Moderador PG");
+  assert.equal((await groupRoles.listRoles(createdGroup.id)).some((role) => role.id === customRole.id), true);
+  await groupRoles.assignMemberRole(createdGroup.id, ids.member, customRole.id);
+  assert.equal((await client.query("SELECT role_id FROM group_members WHERE group_id = $1 AND user_id = $2", [createdGroup.id, ids.member])).rows[0].role_id, customRole.id);
+  await groupRoles.reorderRoles(createdGroup.id, [customRole.id, createdDefaultRole.id]);
+  const updatedRole = await groupRoles.updateRole({ groupId: createdGroup.id, roleId: customRole.id, name: "Moderador atualizado", color: "#654321", canChat: true, canStream: false, canInvite: false, canViewVoiceMembers: true, canMoveMembers: true });
+  assert.equal(updatedRole.name, "Moderador atualizado");
+  assert.equal(await groupRoles.deleteRole(createdGroup.id, customRole.id, createdDefaultRole.id), true);
+
   const groupJoinRequests = createPostgresGroupJoinRequestRepository(client, {
     createId: randomUUID,
     groupSetupRepository: groupSetup,
@@ -193,7 +207,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

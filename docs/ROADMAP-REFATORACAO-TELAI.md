@@ -92,6 +92,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair lista, busca e criação transacional de grupos.
 - [x] Extrair convites de membro e convites por token, incluindo aceitação, expiração, resgate e revogação.
 - [x] Extrair solicitações de entrada em grupos, decisão administrativa e aprovação transacional.
+- [x] Extrair criação, ordenação, edição, exclusão e atribuição de cargos de grupo.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
