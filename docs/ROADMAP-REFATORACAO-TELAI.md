@@ -112,7 +112,8 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Tokens de aplicação e bots.
 - [ ] Comandos, componentes e modais.
 - [x] Decidir PostgreSQL como banco principal e preparar a migração sem cutover.
-- [ ] Migrar schema, repositórios e dados de SQLite para PostgreSQL.
+- [x] Criar migration baseline e importador offline SQLite → PostgreSQL.
+- [ ] Executar migration, importar dados e ativar PostgreSQL após validação real.
 - [ ] Adicionar Redis/event bus somente quando houver mais de uma instância ou necessidade de filas.
 
 ## Critérios de conclusão

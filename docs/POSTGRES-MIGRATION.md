@@ -14,6 +14,8 @@ etapa.
 - O runtime de produção ainda usa SQLite por padrão.
 - O pacote `pg`, a configuração de pool e um Compose local foram adicionados.
 - SSL exige validação de certificado por padrão; a exceção local deve ser explícita.
+- A migration baseline e o importador SQLite → PostgreSQL já existem.
+- O comando `pnpm run db:import:postgres -- --plan` inspeciona o SQLite sem conectar no PostgreSQL.
 - Nenhum ambiente de produção foi apontado para PostgreSQL.
 - Nenhum banco SQLite foi apagado ou alterado por esta preparação.
 
@@ -45,3 +47,9 @@ docker compose --env-file deploy/.env.postgres -f deploy/docker-compose.postgres
 ```
 
 O arquivo `.env.postgres` é local e não deve ser commitado.
+
+Para validar a cobertura do schema sem Docker:
+
+```powershell
+pnpm run db:test:postgres-migration
+```

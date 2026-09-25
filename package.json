@@ -22,6 +22,9 @@
     "test:tray": "electron --no-sandbox qa/e2e-tray.cjs",
     "generate:tray-icons": "electron --no-sandbox qa/generate-tray-icons.cjs",
     "test:observability": "node qa/e2e-observability.cjs",
+    "db:migrate:postgres": "node qa/migrate-postgres.mjs",
+    "db:import:postgres": "node qa/import-sqlite-to-postgres.mjs",
+    "db:test:postgres-migration": "node qa/validate-postgres-migration.mjs",
     "dist": "npm run build:frontend && electron-builder --win nsis"
   },
   "dependencies": {
