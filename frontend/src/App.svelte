@@ -29,6 +29,7 @@
   import LinkedAccountsSettings from "./features/settings/LinkedAccountsSettings.svelte";
   import GroupAdministrationSettings from "./features/settings/GroupAdministrationSettings.svelte";
   import GroupRolePermissionsPanel from "./features/settings/GroupRolePermissionsPanel.svelte";
+  import GroupAccessSettingsPanel from "./features/settings/GroupAccessSettingsPanel.svelte";
   import NotificationPreferencesSettings from "./features/settings/NotificationPreferencesSettings.svelte";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
@@ -6284,16 +6285,37 @@
             onUpdateRolePermission={updateRolePermission}
             onSetRoleMember={setRoleMember}
           />
-          {#if GroupChannelPermissionsSettings}<svelte:component this={GroupChannelPermissionsSettings} rooms={rooms} bind:selectedRoomId={selectedRoomPermissionId} {groupRoles} permissions={groupRoomPermissions} isOwner={selectedGroup?.role === "owner"} busyKey={roomPermissionBusyKey} onLoadRoom={loadGroupRoomPermissions} onUpdatePermission={updateGroupRoomPermission} onResetPermission={resetGroupRoomPermission} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}
-            <section class="settings-card">
-              <div class="settings-card-heading"><div><p class="eyebrow">acesso</p><h2>Convites</h2><p class="muted">Gere um link temporário para adicionar pessoas a este servidor.</p></div><button class="primary rounded-xl px-4 py-2 text-xs font-extrabold" type="button" on:click={createGroupInvite} disabled={groupInviteCreating || (selectedGroup?.role !== "owner" && !groupMembers.find((member) => member.id === user.id)?.canInvite)}>{groupInviteCreating ? "Criando…" : "Criar convite"}</button></div>
-              <p class="admin-help">Cada convite vale por 72 horas e permite até 5 entradas.</p>
-              {#if groupInviteLink}<div class="invite-link-row"><input class="settings-input" readonly value={groupInviteLink} aria-label="Link do convite" /><button class="outline rounded-xl px-3 py-2 text-xs font-extrabold" type="button" on:click={copyGroupInvite}>Copiar</button></div>{/if}
-              <div class="invite-table-wrap"><table class="invite-table"><thead><tr><th>Link</th><th>Usos</th><th>Expiração</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>{#each activeGroupInvites as invite, index}<tr><td><code>telai.tv.br/convite/{index + 1}</code></td><td>{invite.uses}/{invite.maxUses}</td><td>{new Date(invite.expiresAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</td><td><button class="invite-delete-button" type="button" on:click={() => deleteGroupInvite(invite)} disabled={selectedGroup?.role !== "owner" || groupInviteBusyId === invite.tokenHash} aria-label="Revogar convite" title="Revogar convite">⌫</button></td></tr>{/each}{#if !activeGroupInvites.length}<tr><td class="invite-table-empty" colspan="4">Nenhum convite ativo no momento.</td></tr>{/if}</tbody></table></div>
-             </section>
-          {#if selectedGroup?.role === "owner"}<section class="settings-card join-requests-card"><div class="settings-card-heading"><div><p class="eyebrow">entrada no grupo</p><h2>Solicitações pendentes</h2><p class="muted">Aprove ou recuse quem pediu para entrar nesta comunidade.</p></div><span class="join-request-count">{groupJoinRequests.length}</span></div>{#if groupJoinRequests.length}<div class="join-request-list">{#each groupJoinRequests as joinRequest}<div class="join-request-row"><span class="member-avatar">{#if joinRequest.avatarData}<img src={joinRequest.avatarData} alt="" />{:else}{joinRequest.displayName?.slice(0, 1) || "M"}{/if}</span><span><strong>{joinRequest.displayName}</strong><small>@{joinRequest.username}</small></span><div class="join-request-actions"><button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={groupJoinActionId === joinRequest.id} on:click={() => respondToGroupJoinRequest(joinRequest, "rejected")}>Recusar</button><button class="primary rounded-lg px-3 py-2 text-xs font-extrabold" type="button" disabled={groupJoinActionId === joinRequest.id} on:click={() => respondToGroupJoinRequest(joinRequest, "approved")}>{groupJoinActionId === joinRequest.id ? "Salvando…" : "Aprovar"}</button></div></div>{/each}</div>{:else}<p class="muted settings-empty">Nenhuma solicitação pendente.</p>{/if}</section>{/if}
-          {#if selectedGroup?.role === "owner" && GroupAuditLogSettings}<svelte:component this={GroupAuditLogSettings} entries={groupAuditEntries} hasMore={false} loading={groupAuditLoading} {groupMembers} api={api} groupId={selectedGroupId} onModerationComplete={refreshGroupAfterModeration} />{/if}
-          {#if groupAdminError}<p class="settings-error" role="alert">{groupAdminError}</p>{/if}
+          <GroupAccessSettingsPanel
+            {selectedGroup}
+            {GroupChannelPermissionsSettings}
+            {GroupAuditLogSettings}
+            {rooms}
+            bind:selectedRoomPermissionId
+            {groupRoles}
+            {groupRoomPermissions}
+            {roomPermissionBusyKey}
+            {activeGroupInvites}
+            {groupInviteLink}
+            {groupInviteCreating}
+            {groupInviteBusyId}
+            {groupMembers}
+            {user}
+            {groupJoinRequests}
+            {groupJoinActionId}
+            {groupAuditEntries}
+            {groupAuditLoading}
+            {api}
+            {selectedGroupId}
+            {groupAdminError}
+            onLoadRoom={loadGroupRoomPermissions}
+            onUpdatePermission={updateGroupRoomPermission}
+            onResetPermission={resetGroupRoomPermission}
+            onCreateInvite={createGroupInvite}
+            onCopyInvite={copyGroupInvite}
+            onDeleteInvite={deleteGroupInvite}
+            onRespondJoinRequest={respondToGroupJoinRequest}
+            onModerationComplete={refreshGroupAfterModeration}
+          />
         {/if}
         </section>
       {:else if view === "multistream"}
