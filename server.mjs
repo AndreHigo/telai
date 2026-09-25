@@ -751,7 +751,8 @@ database.exec("CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_m
 const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
 const { directConversationForUser, directConversationPayload } = createDirectConversationRepository(database, { compactUserSummary });
 const sessionRepository = createSessionRepository(database, { hashSessionToken });
-const { createNotification } = createNotificationRepository(database);
+const notificationRepository = createNotificationRepository(database);
+const { createNotification } = notificationRepository;
 const { channelProfileForUser } = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
 const userPreferenceRepository = createUserPreferenceRepository(database, { normalizePreferenceVolume });
 
@@ -4002,42 +4003,7 @@ async function handleHttpRequest(request, response) {
     const now = new Date().toISOString();
     database.prepare("UPDATE group_user_invites SET status = 'expired' WHERE invited_user_id = ? AND status = 'pending' AND expires_at <= ?").run(user.id, now);
     syncNotificationsForUser(user.id);
-    const notifications = database.prepare(`
-      SELECT notifications.id, notifications.type, notifications.entity_id AS entityId,
-        notifications.group_id AS groupId, notifications.title, notifications.body,
-        notifications.created_at AS createdAt, notifications.read_at AS readAt,
-        groups.name AS groupName, group_user_invites.status AS inviteStatus,
-        group_user_invites.expires_at AS inviteExpiresAt,
-        group_join_requests.status AS joinRequestStatus,
-        streams.id AS streamId, streams.visibility AS streamVisibility,
-        streams.group_id AS streamGroupId, streams.created_by AS streamCreatedBy,
-        COALESCE(stream_channel_profiles.display_name, stream_users.display_name) AS streamChannelName,
-        stream_users.username AS streamChannelUsername,
-        stream_groups.name AS streamGroupName,
-        stream_groups.slug AS streamGroupSlug,
-        stream_voice_rooms.name AS streamVoiceRoomName,
-        stream_live_rooms.name AS streamLiveRoomName,
-        direct_messages.conversation_id AS directConversationId
-      FROM notifications
-      LEFT JOIN groups ON groups.id = notifications.group_id
-      LEFT JOIN group_user_invites ON notifications.type = 'group_invite' AND group_user_invites.id = notifications.entity_id
-      LEFT JOIN group_join_requests ON notifications.type IN ('group_join_request', 'group_join_decision') AND group_join_requests.id = notifications.entity_id
-      LEFT JOIN streams ON notifications.type = 'channel_live' AND streams.id = notifications.entity_id
-      LEFT JOIN users AS stream_users ON stream_users.id = streams.created_by
-      LEFT JOIN channel_profiles AS stream_channel_profiles ON stream_channel_profiles.user_id = streams.created_by
-      LEFT JOIN groups AS stream_groups ON stream_groups.id = streams.group_id
-      LEFT JOIN group_voice_rooms AS stream_voice_rooms ON stream_voice_rooms.id = streams.voice_room_id
-      LEFT JOIN group_rooms AS stream_live_rooms ON stream_live_rooms.id = streams.room_id
-      LEFT JOIN direct_messages ON notifications.type = 'direct_message' AND direct_messages.id = notifications.entity_id
-      WHERE notifications.user_id = ?
-        AND (
-          notifications.type <> 'group_invite'
-          OR (group_user_invites.status = 'pending' AND group_user_invites.expires_at > ?)
-          OR notifications.read_at IS NOT NULL
-        )
-      ORDER BY notifications.created_at DESC
-      LIMIT 100
-  `).all(user.id, now).map((notification) => {
+    const notifications = notificationRepository.listNotifications(user.id, now).map((notification) => {
       const presentation = liveNotificationPresentation(notification, user.id);
       const streamPath = notification.streamId && presentation.liveContext
         ? streamPublicPath({ visibility: notification.streamVisibility, channelName: notification.streamChannelName, channelUsername: notification.streamChannelUsername, groupSlug: notification.streamGroupSlug })
@@ -4059,7 +4025,7 @@ async function handleHttpRequest(request, response) {
   if (requestUrl.pathname === "/api/notifications/read-all" && request.method === "POST") {
     const user = requireUser(request, response);
     if (!user) return;
-    database.prepare("UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE user_id = ?").run(new Date().toISOString(), user.id);
+    notificationRepository.markAllRead(user.id, new Date().toISOString());
     return json(response, 200, { ok: true });
   }
   const notificationMatch = requestUrl.pathname.match(/^\/api\/notifications\/([\w-]{16,64})$/);
@@ -4067,9 +4033,8 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const notificationId = notificationMatch[1];
-    const notification = database.prepare("SELECT id FROM notifications WHERE id = ? AND user_id = ?").get(notificationId, user.id);
-    if (!notification) return json(response, 404, { error: "Notificação não encontrada." });
-    database.prepare("UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ?").run(new Date().toISOString(), notificationId);
+    if (!notificationRepository.hasNotification(user.id, notificationId)) return json(response, 404, { error: "Notificação não encontrada." });
+    notificationRepository.markRead(notificationId, new Date().toISOString());
     return json(response, 200, { ok: true });
   }
   const memberInviteActionMatch = requestUrl.pathname.match(/^\/api\/member-invites\/([\w-]{16,})\/(accept|decline)$/);
