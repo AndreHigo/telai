@@ -1290,11 +1290,7 @@ function streamPublicPath(stream) {
   return group ? `/${group}/${channel}` : `/${channel}`;
 }
 
-for (const group of database.prepare("SELECT id, owner_id AS ownerId FROM groups").all()) {
-  groupSetupRepository.ensureDefaultGroupRooms(group.id, group.ownerId);
-  groupSetupRepository.ensureDefaultGroupRoles(group.id, group.ownerId);
-  groupSetupRepository.ensureGroupRolePositions(group.id);
-}
+groupSetupRepository.initializeExistingGroups();
 
 function presenceKey(groupId, userId) { return `${groupId}:${userId}`; }
 

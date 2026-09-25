@@ -91,7 +91,15 @@ export function createGroupSetupRepository(database, { createId = randomUUID } =
     }
   }
 
-  return { ensureDefaultGroupRooms, migrateLegacyGroupMemberRoles, ensureDefaultGroupRoles, ensureGroupRolePositions };
+  function initializeExistingGroups() {
+    for (const group of database.prepare("SELECT id, owner_id AS ownerId FROM groups").all()) {
+      ensureDefaultGroupRooms(group.id, group.ownerId);
+      ensureDefaultGroupRoles(group.id, group.ownerId);
+      ensureGroupRolePositions(group.id);
+    }
+  }
+
+  return { ensureDefaultGroupRooms, migrateLegacyGroupMemberRoles, ensureDefaultGroupRoles, ensureGroupRolePositions, initializeExistingGroups };
 }
 
 async function withPostgresTransaction(database, callback, useProvidedClient = false) {
@@ -184,5 +192,14 @@ export function createPostgresGroupSetupRepository(database, { createId = random
     }, transactionClient);
   }
 
-  return { ensureDefaultGroupRooms, migrateLegacyGroupMemberRoles, ensureDefaultGroupRoles, ensureGroupRolePositions };
+  async function initializeExistingGroups() {
+    const result = await database.query('SELECT id, owner_id AS "ownerId" FROM groups');
+    for (const group of result.rows) {
+      await ensureDefaultGroupRooms(group.id, group.ownerId);
+      await ensureDefaultGroupRoles(group.id, group.ownerId);
+      await ensureGroupRolePositions(group.id);
+    }
+  }
+
+  return { ensureDefaultGroupRooms, migrateLegacyGroupMemberRoles, ensureDefaultGroupRoles, ensureGroupRolePositions, initializeExistingGroups };
 }

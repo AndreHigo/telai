@@ -139,6 +139,7 @@ try {
   await groupSetup.ensureDefaultGroupRooms(ids.group, ids.owner);
   const defaultRoleId = await groupSetup.ensureDefaultGroupRoles(ids.group, ids.owner);
   await groupSetup.ensureGroupRolePositions(ids.group);
+  await groupSetup.initializeExistingGroups();
   assert.equal((await client.query("SELECT id FROM group_rooms WHERE group_id = $1 AND slug = 'geral'", [ids.group])).rowCount, 1);
   assert.equal((await client.query("SELECT id FROM group_roles WHERE id = $1 AND is_default = 1", [defaultRoleId])).rowCount, 1);
   const pgGroups = createPostgresGroupRepository(client, { createId: randomUUID, groupSetupRepository: groupSetup, transactionClient: true });
