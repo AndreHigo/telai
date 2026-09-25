@@ -14,6 +14,7 @@ export function createApiClient({ reportError, fetchImpl = globalThis.fetch, tim
       if (!response.ok) {
         const error = new Error(body.error || "Não foi possível concluir a ação.");
         error.status = response.status;
+        error.code = body.code || "http_error";
         error.retryAfter = Number(body.retryAfter || response.headers.get("retry-after") || 0);
         throw error;
       }

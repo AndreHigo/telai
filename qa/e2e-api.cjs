@@ -88,7 +88,9 @@ async function main() {
     assert.equal((await request("/index.html")).response.status, 404);
   });
   await check("unauthenticated access", async () => {
-    assert.equal((await api(null, "/api/groups")).response.status, 401);
+    const protectedGroups = await api(null, "/api/groups");
+    assert.equal(protectedGroups.response.status, 401);
+    assert.equal(protectedGroups.body.code, "unauthorized");
     assert.equal((await api(null, "/api/auth/session")).response.status, 200);
     assert.equal((await api(null, "/api/auth/session")).body.user, null);
   });
