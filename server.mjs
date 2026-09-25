@@ -6,6 +6,7 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash, creat
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { createWebsocketGateway } from "./server/gateway/websocket.mjs";
+import { createGatewayPolicy } from "./server/gateway/policy.mjs";
 import { createBinaryMessageHandler } from "./server/gateway/binary-message.mjs";
 import { createVoiceMessageHandler } from "./server/gateway/voice-message-handler.mjs";
 import { createBroadcastMessageHandler } from "./server/gateway/broadcast-message-handler.mjs";
@@ -1037,6 +1038,20 @@ const handleGroupRuntimeRoutes = createGroupRuntimeRoutes({
 });
 const iceConfiguration = createIceConfiguration({ randomUUID, createHmac });
 const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, requireLogin, publicOriginForRequest });
+const {
+  allowRtcSignal,
+  allowVoiceSpeakingUpdate,
+  allowWebsocketControlMessage,
+  normalizeRtcSignalPayload,
+  reportVoiceSpeakingRateLimited,
+} = createGatewayPolicy({
+  rtcSignalPayloadMaxBytes,
+  rtcSignalRateWindowMs,
+  rtcSignalRateLimit,
+  voiceSpeakingRateWindowMs,
+  voiceSpeakingRateLimit,
+  warnLog,
+});
 const userProfileRepository = createUserProfileRepository(database);
 const handleUserSettingsRoutes = createUserSettingsRoutes({
   json,
@@ -1231,63 +1246,6 @@ function send(socket, message) {
   }
 }
 
-function normalizeRtcSignalPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const kind = payload.kind;
-  if (kind === "offer" || kind === "answer") {
-    const sdp = payload.sdp;
-    if (!sdp || typeof sdp !== "object" || Array.isArray(sdp)) return null;
-    if (sdp.type !== kind || typeof sdp.sdp !== "string" || !sdp.sdp || sdp.sdp.length > 48 * 1024) return null;
-    const normalized = { kind, sdp: { type: kind, sdp: sdp.sdp } };
-    return Buffer.byteLength(JSON.stringify(normalized)) <= rtcSignalPayloadMaxBytes ? normalized : null;
-  }
-  if (kind === "candidate") {
-    const candidate = payload.candidate;
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
-    if (typeof candidate.candidate !== "string" || candidate.candidate.length > 16 * 1024) return null;
-    if (candidate.sdpMid != null && (typeof candidate.sdpMid !== "string" || candidate.sdpMid.length > 256)) return null;
-    if (candidate.sdpMLineIndex != null && (!Number.isInteger(candidate.sdpMLineIndex) || candidate.sdpMLineIndex < 0 || candidate.sdpMLineIndex > 64)) return null;
-    if (candidate.usernameFragment != null && (typeof candidate.usernameFragment !== "string" || candidate.usernameFragment.length > 256)) return null;
-    const normalized = {
-      kind,
-      candidate: {
-        candidate: candidate.candidate,
-        sdpMid: candidate.sdpMid ?? null,
-        sdpMLineIndex: candidate.sdpMLineIndex ?? null,
-        ...(candidate.usernameFragment == null ? {} : { usernameFragment: candidate.usernameFragment }),
-      },
-    };
-    return Buffer.byteLength(JSON.stringify(normalized)) <= rtcSignalPayloadMaxBytes ? normalized : null;
-  }
-  return null;
-}
-
-function allowRtcSignal(socket) {
-  const now = Date.now();
-  socket.rtcSignalTimestamps = (socket.rtcSignalTimestamps || []).filter((timestamp) => now - timestamp < rtcSignalRateWindowMs);
-  if (socket.rtcSignalTimestamps.length >= rtcSignalRateLimit) return false;
-  socket.rtcSignalTimestamps.push(now);
-  return true;
-}
-
-function allowVoiceSpeakingUpdate(socket) {
-  const now = Date.now();
-  socket.voiceSpeakingTimestamps = (socket.voiceSpeakingTimestamps || []).filter((timestamp) => now - timestamp < voiceSpeakingRateWindowMs);
-  if (socket.voiceSpeakingTimestamps.length >= voiceSpeakingRateLimit) return false;
-  socket.voiceSpeakingTimestamps.push(now);
-  return true;
-}
-
-function reportVoiceSpeakingRateLimited(socket) {
-  const now = Date.now();
-  socket.voiceSpeakingRateLimitedCount = (socket.voiceSpeakingRateLimitedCount || 0) + 1;
-  if (now - (socket.voiceSpeakingRateLimitedLoggedAt || 0) < 5_000) return;
-  const dropped = socket.voiceSpeakingRateLimitedCount;
-  socket.voiceSpeakingRateLimitedCount = 0;
-  socket.voiceSpeakingRateLimitedLoggedAt = now;
-  warnLog("voice_speaking_rate_limited", { clientId: socket.clientId, voiceRoomId: socket.voiceRoomId, dropped });
-}
-
 function allowWebsocketConnection(request) {
   return consumeFixedWindow(websocketConnectionRate, `ws:${clientIp(request)}`, websocketConnectionRateLimit, websocketConnectionRateWindowMs);
 }
@@ -1304,14 +1262,6 @@ function removeWebsocketActive(ip) {
   const next = Math.max(0, websocketActiveCount(ip) - 1);
   if (next) websocketActiveByIp.set(ip, next);
   else websocketActiveByIp.delete(ip);
-}
-
-function allowWebsocketControlMessage(socket) {
-  const now = Date.now();
-  socket.controlMessageTimestamps = (socket.controlMessageTimestamps || []).filter((timestamp) => now - timestamp < 10_000);
-  if (socket.controlMessageTimestamps.length >= 240) return false;
-  socket.controlMessageTimestamps.push(now);
-  return true;
 }
 
 function publicOriginForRequest(request) {

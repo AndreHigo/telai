@@ -129,6 +129,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair o handler binário do relay de mídia para `server/gateway/binary-message.mjs`, mantendo limites e ressincronização.
 - [x] Extrair entrada, moderação, estado e sinalização das salas de voz para `server/gateway/voice-message-handler.mjs`.
 - [x] Extrair criação de salas, participantes, autorização, saída e substituição de sessões para `server/domain/voice/runtime.mjs`.
+- [x] Extrair validação de SDP/ICE e rate limits de sinalização, fala e mensagens de controle para `server/gateway/policy.mjs`.
 - [x] Extrair entrada, relay, sinalização, qualidade, chat e encerramento de transmissões para `server/gateway/broadcast-message-handler.mjs`.
 - [x] Extrair runtime de salas, reconexão do host, relay e presença para `server/gateway/broadcast-runtime.mjs`.
 - [x] Extrair a configuração ICE/STUN/TURN para `server/media/ice-configuration.mjs`, mantendo credenciais TURN temporárias.
