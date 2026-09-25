@@ -9,6 +9,7 @@ import { createPostgresChannelProfileRepository } from "../server/repositories/c
 import { createPostgresUserPreferenceRepository } from "../server/repositories/user-preferences.mjs";
 import { createPostgresNotificationRepository } from "../server/repositories/notifications.mjs";
 import { createPostgresNotificationSyncService } from "../server/services/postgres-notification-sync.mjs";
+import { createPostgresAuthRepository } from "../server/repositories/auth.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -36,6 +37,12 @@ try {
   const sessions = createPostgresSessionRepository(client, { hashSessionToken: (token) => `hash:${token}` });
   await sessions.create({ userId: ids.owner, token: "token", expiresAt: new Date(Date.now() + 60_000).toISOString(), createdAt: now });
   assert.equal((await sessions.findUserByToken("token"))?.id, ids.owner);
+
+  const auth = createPostgresAuthRepository(client, { legalPolicyVersion: "test-v1" });
+  await auth.recordLegalConsents(ids.owner, now);
+  await auth.recordLegalConsents(ids.owner, now);
+  assert.equal((await auth.legalConsentStatus(ids.owner)).required, false);
+  assert.equal((await auth.userWithLinkedAccounts({ id: ids.owner, username: "pg-owner", displayName: "PG Owner", avatarData: null })).linkedAccounts.length, 0);
 
   const groups = createPostgresGroupAccessRepository(client);
   assert.equal(await groups.isGroupMember(ids.member, ids.group), true);
@@ -75,7 +82,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["sessions", "groups", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

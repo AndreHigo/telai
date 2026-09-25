@@ -15,6 +15,7 @@ import { createUserPreferenceRepository } from "./server/repositories/user-prefe
 import { createNotificationSyncService } from "./server/services/notification-sync.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { createSessionRepository } from "./server/repositories/sessions.mjs";
+import { createAuthRepository } from "./server/repositories/auth.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -752,6 +753,11 @@ database.exec("CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_m
 const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
 const { directConversationForUser, directConversationPayload } = createDirectConversationRepository(database, { compactUserSummary });
 const sessionRepository = createSessionRepository(database, { hashSessionToken });
+const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents } = createAuthRepository(database, {
+  compactAvatarData,
+  legalPolicyVersion,
+  createId: randomUUID,
+});
 const notificationRepository = createNotificationRepository(database);
 const { createNotification } = notificationRepository;
 const { channelProfileForUser } = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
@@ -1023,35 +1029,6 @@ function upsertOAuthUser(providerName, identity) {
   database.prepare("INSERT INTO oauth_accounts (id, provider, provider_user_id, user_id, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .run(randomUUID(), providerName, identity.providerUserId, user.id, identity.email || null, now, now);
   return { id: user.id, username: user.username, displayName: user.displayName };
-}
-
-function userWithLinkedAccounts(user) {
-  if (!user) return null;
-  const linkedAccounts = database.prepare(`
-    SELECT provider, email, created_at AS linkedAt
-    FROM oauth_accounts WHERE user_id = ? ORDER BY provider
-  `).all(user.id);
-  return { ...user, avatarData: compactAvatarData(user.avatarData), linkedAccounts, legal: legalConsentStatus(user.id) };
-}
-
-function legalConsentStatus(userId) {
-  const records = database.prepare("SELECT consent_type AS consentType, accepted_at AS acceptedAt FROM user_consents WHERE user_id = ? AND policy_version = ?").all(userId, legalPolicyVersion);
-  const byType = new Map(records.map((record) => [record.consentType, record.acceptedAt]));
-  return {
-    policyVersion: legalPolicyVersion,
-    termsAcceptedAt: byType.get("terms") || null,
-    privacyAcceptedAt: byType.get("privacy") || null,
-    required: !byType.has("terms") || !byType.has("privacy"),
-  };
-}
-
-function recordLegalConsents(userId, acceptedAt = new Date().toISOString()) {
-  for (const consentType of ["terms", "privacy"]) {
-    database.prepare(`
-      INSERT OR IGNORE INTO user_consents (id, user_id, consent_type, policy_version, accepted_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(randomUUID(), userId, consentType, legalPolicyVersion, acceptedAt);
-  }
 }
 
 function userDataExport(userId) {
