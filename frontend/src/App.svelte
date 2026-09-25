@@ -29,6 +29,7 @@
   import LegalConsentGate from "./LegalConsentGate.svelte";
   import { createApiClient } from "./services/api.js";
   import { createGroupRoomReadController } from "./features/groups/room-read-controller.js";
+  import { createGroupStateStore } from "./features/groups/group-state.js";
   import { createGroupThreadRuntime } from "./features/groups/thread-runtime.js";
   import {
     createSelectedVoiceAudioConstraints,
@@ -128,7 +129,8 @@
 
   let loading = true;
   let user = null;
-  let groups = [];
+  const groupState = createGroupStateStore();
+  let groups = groupState.getState().groups;
   let streams = [];
   const navigationState = createNavigationStateStore();
   let view = navigationState.getState().view;
@@ -144,12 +146,12 @@
   let viewerRoomId = "";
   let viewerStreamPath = "";
   let viewerStream = null;
-  let selectedGroupId = null;
-  let groupOverview = null;
-  let knownGroupMessageIds = new Set();
-  let selectedRoomId = null;
-  let watchingGroupLiveStreamId = "";
-  let groupLoading = false;
+  let selectedGroupId = groupState.getState().selectedGroupId;
+  let groupOverview = groupState.getState().groupOverview;
+  let knownGroupMessageIds = groupState.getState().knownGroupMessageIds;
+  let selectedRoomId = groupState.getState().selectedRoomId;
+  let watchingGroupLiveStreamId = groupState.getState().watchingGroupLiveStreamId;
+  let groupLoading = groupState.getState().groupLoading;
   let followingOnly = false;
   let liveNotificationScope = "related";
   let liveNotificationScopes = ["related"];
@@ -413,9 +415,9 @@
         setThreadBusy: (value) => { groupThreadBusy = value; },
         setThreadError: (value) => { groupThreadError = value; },
         getKnownMessageIds: () => knownGroupMessageIds,
-        setKnownMessageIds: (value) => { knownGroupMessageIds = value; },
+        setKnownMessageIds: (value) => setGroupState({ knownGroupMessageIds: value }),
         getGroupOverview: () => groupOverview,
-        setGroupOverview: (value) => { groupOverview = value; },
+        setGroupOverview: (value) => setGroupState({ groupOverview: value }),
       })),
   });
 
@@ -825,8 +827,8 @@
   let notificationsError = "";
   let streamsRefreshInFlight = false;
   let notificationsRefreshInFlight = false;
-  let groupOverviewRefreshInFlight = false;
-  let groupPresenceRefreshInFlight = false;
+  let groupOverviewRefreshInFlight = groupState.getState().groupOverviewRefreshInFlight;
+  let groupPresenceRefreshInFlight = groupState.getState().groupPresenceRefreshInFlight;
   let maintenanceRefreshInFlight = false;
   let directConversations = [];
   let directConversationId = "";
@@ -849,8 +851,8 @@
   let socialError = "";
   let socialActionId = "";
   let socialRefreshInFlight = false;
-  let groupLoadSequence = 0;
-  let groupOverviewRetryAt = 0;
+  let groupLoadSequence = groupState.getState().groupLoadSequence;
+  let groupOverviewRetryAt = groupState.getState().groupOverviewRetryAt;
   const pendingGroupOverviewRequests = new Map();
   let lastAutoMarkedGroupRoomKey = "";
   const maxAvatarFileBytes = 5 * 1024 * 1024;
@@ -859,6 +861,24 @@
     dark: { button: "#5b5fea", input: "#0d1728", background: "#070b16" },
     light: { button: "#4256d6", input: "#ffffff", background: "#f7f8fc" },
   };
+
+  function setGroupState(next) {
+    groupState.setState(next);
+  }
+
+  const unsubscribeGroupState = groupState.subscribe((next) => {
+    groups = next.groups;
+    selectedGroupId = next.selectedGroupId;
+    groupOverview = next.groupOverview;
+    knownGroupMessageIds = next.knownGroupMessageIds;
+    selectedRoomId = next.selectedRoomId;
+    watchingGroupLiveStreamId = next.watchingGroupLiveStreamId;
+    groupLoading = next.groupLoading;
+    groupLoadSequence = next.groupLoadSequence;
+    groupOverviewRetryAt = next.groupOverviewRetryAt;
+    groupOverviewRefreshInFlight = next.groupOverviewRefreshInFlight;
+    groupPresenceRefreshInFlight = next.groupPresenceRefreshInFlight;
+  });
 
   const routeController = createRouteController({
     getState: () => ({ isViewer }),
@@ -1083,7 +1103,7 @@
     api,
     getSelectedGroupId: () => selectedGroupId,
     getGroupOverview: () => groupOverview,
-    setGroupOverview: (value) => { groupOverview = value; },
+    setGroupOverview: (value) => setGroupState({ groupOverview: value }),
     getUser: () => user,
   });
   const { markGroupRoomRead, messageBelongsToRoom, incrementGroupRoomUnread } = groupRoomReadController;
@@ -1196,7 +1216,7 @@
       .then(({ createGroupEventHandler }) => createGroupEventHandler({
         getSelectedGroupId: () => selectedGroupId,
         getGroupOverview: () => groupOverview,
-        setGroupOverview: (value) => { groupOverview = value; },
+        setGroupOverview: (value) => setGroupState({ groupOverview: value }),
         getUser: () => user,
         getRooms: () => rooms,
         getSelectedRoomId: () => selectedRoomId,
@@ -1205,7 +1225,7 @@
         getGroupThreadMessages: () => groupThreadMessages,
         setGroupThreadMessages: (value) => { groupThreadMessages = value; },
         getKnownGroupMessageIds: () => knownGroupMessageIds,
-        setKnownGroupMessageIds: (value) => { knownGroupMessageIds = value; },
+        setKnownGroupMessageIds: (value) => setGroupState({ knownGroupMessageIds: value }),
         shouldKeepGroupMessagesAtBottom,
         markGroupRoomRead,
         messageBelongsToRoom,
@@ -1296,21 +1316,23 @@
           watchingGroupLiveStreamId,
         }),
         setState: (next) => {
-          if ("groupLoadSequence" in next) groupLoadSequence = next.groupLoadSequence;
-          if ("groupLoading" in next) groupLoading = next.groupLoading;
-          if ("groupOverview" in next) groupOverview = next.groupOverview;
-          if ("groupOverviewRefreshInFlight" in next) groupOverviewRefreshInFlight = next.groupOverviewRefreshInFlight;
-          if ("groupOverviewRetryAt" in next) groupOverviewRetryAt = next.groupOverviewRetryAt;
-          if ("groupPresenceRefreshInFlight" in next) groupPresenceRefreshInFlight = next.groupPresenceRefreshInFlight;
-          if ("groups" in next) groups = next.groups;
-          if ("knownGroupMessageIds" in next) knownGroupMessageIds = next.knownGroupMessageIds;
-          if ("selectedGroupId" in next) selectedGroupId = next.selectedGroupId;
-          if ("selectedRoomId" in next) selectedRoomId = next.selectedRoomId;
+          const groupPatch = {};
+          if ("groupLoadSequence" in next) groupPatch.groupLoadSequence = next.groupLoadSequence;
+          if ("groupLoading" in next) groupPatch.groupLoading = next.groupLoading;
+          if ("groupOverview" in next) groupPatch.groupOverview = next.groupOverview;
+          if ("groupOverviewRefreshInFlight" in next) groupPatch.groupOverviewRefreshInFlight = next.groupOverviewRefreshInFlight;
+          if ("groupOverviewRetryAt" in next) groupPatch.groupOverviewRetryAt = next.groupOverviewRetryAt;
+          if ("groupPresenceRefreshInFlight" in next) groupPatch.groupPresenceRefreshInFlight = next.groupPresenceRefreshInFlight;
+          if ("groups" in next) groupPatch.groups = next.groups;
+          if ("knownGroupMessageIds" in next) groupPatch.knownGroupMessageIds = next.knownGroupMessageIds;
+          if ("selectedGroupId" in next) groupPatch.selectedGroupId = next.selectedGroupId;
+          if ("selectedRoomId" in next) groupPatch.selectedRoomId = next.selectedRoomId;
           if ("showGroupPicker" in next) showGroupPicker = next.showGroupPicker;
           if ("showMobileChannels" in next) setNavigationState({ showMobileChannels: next.showMobileChannels });
           if ("mentionSuggestions" in next) mentionSuggestions = next.mentionSuggestions;
           if ("mentionStartIndex" in next) mentionStartIndex = next.mentionStartIndex;
-          if ("watchingGroupLiveStreamId" in next) watchingGroupLiveStreamId = next.watchingGroupLiveStreamId;
+          if ("watchingGroupLiveStreamId" in next) groupPatch.watchingGroupLiveStreamId = next.watchingGroupLiveStreamId;
+          if (Object.keys(groupPatch).length) setGroupState(groupPatch);
         },
         mergeActiveVoicePresence,
         shouldKeepGroupMessagesAtBottom,
@@ -1424,7 +1446,7 @@
           if ("groupAuditEntries" in next) groupAuditEntries = next.groupAuditEntries;
           if ("groupInvites" in next) groupInvites = next.groupInvites;
           if ("groupJoinRequests" in next) groupJoinRequests = next.groupJoinRequests;
-          if ("groupOverview" in next) groupOverview = next.groupOverview;
+          if ("groupOverview" in next) setGroupState({ groupOverview: next.groupOverview });
           if ("groupRoles" in next) groupRoles = next.groupRoles;
           if ("groupRoomPermissions" in next) groupRoomPermissions = next.groupRoomPermissions;
           if ("notice" in next) notice = next.notice;
@@ -1482,9 +1504,9 @@
           if ("groupMessageSearchQuery" in next) groupMessageSearchQuery = next.groupMessageSearchQuery;
           if ("groupMessageSearchResults" in next) groupMessageSearchResults = next.groupMessageSearchResults;
           if ("showGroupMessageSearch" in next) showGroupMessageSearch = next.showGroupMessageSearch;
-          if ("groupOverview" in next) groupOverview = next.groupOverview;
+          if ("groupOverview" in next) setGroupState({ groupOverview: next.groupOverview });
           if ("groupThreadMessages" in next) groupThreadMessages = next.groupThreadMessages;
-          if ("knownGroupMessageIds" in next) knownGroupMessageIds = next.knownGroupMessageIds;
+          if ("knownGroupMessageIds" in next) setGroupState({ knownGroupMessageIds: next.knownGroupMessageIds });
           if ("messageAttachments" in next) messageAttachments = next.messageAttachments;
           if ("messageDraft" in next) messageDraft = next.messageDraft;
           if ("notice" in next) notice = next.notice;
@@ -2089,7 +2111,7 @@
     }
     if (!notification?.groupId) return;
     await markNotificationRead(notification);
-    selectedGroupId = notification.groupId;
+    setGroupState({ selectedGroupId: notification.groupId });
     if (notification.type === "group_join_decision" && notification.joinRequestStatus === "approved") {
       await loadGroups();
     }
@@ -2130,7 +2152,7 @@
       showGroupDialog = false;
       groupName = "";
       await loadGroups();
-      selectedGroupId = result.group.id;
+      setGroupState({ selectedGroupId: result.group.id });
       await loadGroup(result.group.id);
       setGroupsView();
       notice = "Grupo criado.";
@@ -2153,7 +2175,7 @@
       if (selectedGroupId !== groupId || groupOverview?.group?.id !== groupId) await loadGroup(groupId);
       const room = rooms.find((candidate) => candidate.id === pendingRoomRouteId && ["text", "voice"].includes(candidate.kind));
       if (room) {
-        selectedRoomId = room.id;
+        setGroupState({ selectedRoomId: room.id });
         setGroupsView();
       }
       pendingGroupRouteId = "";
@@ -2635,11 +2657,8 @@
       if (broadcastState === "live" || broadcastState === "starting") await stopBroadcast("logout");
       await api("/api/auth/logout", { method: "POST" });
       user = null;
-      groups = [];
+      setGroupState({ groups: [], groupOverview: null, selectedGroupId: null, selectedRoomId: null });
       streams = [];
-      groupOverview = null;
-      selectedGroupId = null;
-      selectedRoomId = null;
       setNavigationState({ view: "home" });
       replaceBrowserPath("/login", { preserveQuery: false });
       notice = "Você saiu da sua conta.";
@@ -2654,8 +2673,10 @@
     settingsError = "";
     try {
       const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}`, { method: "PATCH", body: JSON.stringify({ name: groupSettingsName.trim() }) });
-      groups = groups.map((group) => group.id === selectedGroupId ? { ...group, name: result.group.name, slug: result.group.slug } : group);
-      groupOverview = groupOverview ? { ...groupOverview, group: { ...groupOverview.group, ...result.group } } : groupOverview;
+      setGroupState({
+        groups: groups.map((group) => group.id === selectedGroupId ? { ...group, name: result.group.name, slug: result.group.slug } : group),
+        groupOverview: groupOverview ? { ...groupOverview, group: { ...groupOverview.group, ...result.group } } : groupOverview,
+      });
       notice = "Configurações do grupo salvas.";
     } catch (error) { settingsError = error.message; }
     finally { settingsBusy = false; }
@@ -2678,7 +2699,7 @@
     try {
       const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/members/${encodeURIComponent(member.id)}/role`, { method: "PATCH", body: JSON.stringify({ roleId }) });
       const assignedRole = groupRoles.find((role) => role.id === result.roleId);
-      groupOverview = { ...groupOverview, members: groupOverview.members.map((item) => item.id === member.id ? { ...item, roleId: result.roleId, roleName: assignedRole?.name || "Membro", roleColor: assignedRole?.color || "#5865f2", ...Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, Boolean(assignedRole?.[key])] )) } : item) };
+      setGroupState({ groupOverview: { ...groupOverview, members: groupOverview.members.map((item) => item.id === member.id ? { ...item, roleId: result.roleId, roleName: assignedRole?.name || "Membro", roleColor: assignedRole?.color || "#5865f2", ...Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, Boolean(assignedRole?.[key])] )) } : item) } });
       notice = `Cargo de ${member.displayName} atualizado.`;
     } catch (error) { groupAdminError = error.message; }
   }
@@ -2695,10 +2716,10 @@
       });
       const updatedRole = result.role;
       groupRoles = groupRoles.map((item) => item.id === role.id ? { ...item, ...updatedRole } : item);
-      groupOverview = {
+      setGroupState({ groupOverview: {
         ...groupOverview,
         members: groupOverview.members.map((member) => member.roleId === role.id ? { ...member, ...updatedRole } : member),
-      };
+      } });
       notice = `Permissão “${rolePermissionOptions.find((item) => item.key === permission)?.label || permission}” do cargo ${role.name} atualizada.`;
     } catch (error) {
       event.currentTarget.checked = Boolean(role[permission]);
@@ -2715,7 +2736,7 @@
       const fallbackRole = groupRoles.find((item) => item.id === result.fallbackRoleId) || groupRoles.find((item) => item.isDefault);
       groupRoles = groupRoles.filter((item) => item.id !== role.id);
       selectedRoleId = fallbackRole?.id || "";
-      groupOverview = {
+      setGroupState({ groupOverview: {
         ...groupOverview,
         members: groupOverview.members.map((member) => member.roleId === role.id
           ? {
@@ -2726,7 +2747,7 @@
               ...Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, Boolean(fallbackRole?.[key])])),
             }
           : member),
-      };
+      } });
       notice = `Cargo ${role.name} excluído.`;
     } catch (error) {
       groupAdminError = error.message;
@@ -2745,12 +2766,12 @@
       });
       const updatedRole = result.role;
       groupRoles = groupRoles.map((role) => role.id === updatedRole.id ? { ...role, ...updatedRole } : role);
-      groupOverview = {
+      setGroupState({ groupOverview: {
         ...groupOverview,
         members: groupOverview.members.map((member) => member.roleId === updatedRole.id
           ? { ...member, roleName: updatedRole.name, roleColor: updatedRole.color, ...permissions }
           : member),
-      };
+      } });
       roleEditName = updatedRole.name;
       roleEditColor = updatedRole.color;
       notice = `Cargo ${updatedRole.name} atualizado.`;
@@ -2774,7 +2795,7 @@
         body: JSON.stringify({ roleId }),
       });
       const assignedRole = groupRoles.find((item) => item.id === result.roleId) || defaultRole;
-      groupOverview = {
+      setGroupState({ groupOverview: {
         ...groupOverview,
         members: groupOverview.members.map((item) => item.id === member.id
           ? {
@@ -2785,7 +2806,7 @@
               ...Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, Boolean(assignedRole?.[key])])),
             }
           : item),
-      };
+      } });
       notice = checked ? `${member.displayName} entrou no cargo ${role.name}.` : `${member.displayName} voltou para ${assignedRole?.name || "Membro"}.`;
     } catch (error) {
       groupAdminError = error.message;
@@ -2923,7 +2944,7 @@
       closeRoomContextMenu();
       void selectRoom(room.id);
     } else if (action === "read") {
-      knownGroupMessageIds = new Set([...knownGroupMessageIds, ...(groupOverview?.messages || []).filter((message) => messageBelongsToRoom(message, room)).map((message) => message.id)]);
+      setGroupState({ knownGroupMessageIds: new Set([...knownGroupMessageIds, ...(groupOverview?.messages || []).filter((message) => messageBelongsToRoom(message, room)).map((message) => message.id)]) });
       if (room.kind === "text") void markGroupRoomRead(room);
       closeRoomContextMenu();
       notice = `#${room.name} marcado como lido.`;
@@ -2964,10 +2985,8 @@
     try {
       if (voiceState === "connected" && voiceRoomId && voiceRooms.some((room) => room.id === voiceRoomId)) leaveVoiceRoom({ silent: true });
       await api(`/api/groups/${encodeURIComponent(selectedGroupId)}`, { method: "DELETE" });
-      groups = groups.filter((group) => group.id !== selectedGroupId);
-      groupOverview = null;
-      selectedRoomId = null;
-      selectedGroupId = groups[0]?.id || null;
+      const nextGroups = groups.filter((group) => group.id !== selectedGroupId);
+      setGroupState({ groups: nextGroups, groupOverview: null, selectedRoomId: null, selectedGroupId: nextGroups[0]?.id || null });
       showDeleteGroupDialog = false;
       if (selectedGroupId) await loadGroup(selectedGroupId);
       else setNavigationState({ view: "home" });
@@ -3035,12 +3054,12 @@
 
   function updateVoiceRoomSnapshot(roomId, updater) {
     if (!roomId || !groupOverview?.rooms?.length) return;
-    groupOverview = {
+    setGroupState({ groupOverview: {
       ...groupOverview,
       rooms: groupOverview.rooms.map((room) => room.id === roomId
         ? { ...room, participants: updater(Array.isArray(room.participants) ? room.participants : []) }
         : room),
-    };
+    } });
   }
 
   function uniqueVoiceParticipants(participants) {
@@ -3601,7 +3620,7 @@
   async function mentionVoiceParticipant(participant) {
     const textRoom = textRooms[0];
     if (!textRoom) return;
-    selectedRoomId = textRoom.id;
+    setGroupState({ selectedRoomId: textRoom.id });
     messageDraft = `${messageDraft.trim()}${messageDraft.trim() ? " " : ""}@${participant.username || participant.displayName || "usuario"} `;
     closeVoiceContextMenu();
     await tick();
@@ -3856,7 +3875,7 @@
             removeVoiceRoomParticipant(message.previousRoomId, message.clientId, user?.id || null);
             voiceRoomId = message.voiceRoomId;
             voiceClientId = message.clientId;
-            selectedRoomId = message.voiceRoomId;
+            setGroupState({ selectedRoomId: message.voiceRoomId });
             voiceServerMuted = Boolean(message.serverMuted);
             const movedTrack = voiceLocalStream?.getAudioTracks?.()[0];
             if (movedTrack) movedTrack.enabled = !(voiceMuted || voiceServerMuted);
@@ -4001,8 +4020,7 @@
       await loadGroup(saved.groupId);
       const room = groupOverview?.rooms?.find((candidate) => candidate.id === saved.voiceRoomId && candidate.kind === "voice");
       if (!room) throw new Error("A sala de voz salva não está mais disponível neste grupo.");
-      selectedGroupId = saved.groupId;
-      selectedRoomId = room.id;
+      setGroupState({ selectedGroupId: saved.groupId, selectedRoomId: room.id });
       await tick();
       const joined = await joinVoiceRoom({ reconnecting: true });
       if (!joined) throw new Error(voiceError || "Não foi possível reconectar à sala de voz.");
@@ -4403,11 +4421,11 @@
   function watchSelectedRoomLive(streamId = selectedRoomLiveStream?.id) {
     const stream = selectedRoomLiveStreams.find((candidate) => candidate.id === streamId);
     if (!stream || stream.createdBy === user?.id) return;
-    watchingGroupLiveStreamId = stream.id;
+    setGroupState({ watchingGroupLiveStreamId: stream.id });
   }
 
   function closeSelectedRoomLive() {
-    watchingGroupLiveStreamId = "";
+    setGroupState({ watchingGroupLiveStreamId: "" });
   }
 
   function visibleVoiceParticipants(room) {
@@ -4676,10 +4694,8 @@
     try {
       if (voiceState === "connected") leaveVoiceRoom();
       await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/membership`, { method: "DELETE" });
-      groups = groups.filter((group) => group.id !== selectedGroupId);
-      groupOverview = null;
-      selectedRoomId = null;
-      selectedGroupId = groups[0]?.id || null;
+      const nextGroups = groups.filter((group) => group.id !== selectedGroupId);
+      setGroupState({ groups: nextGroups, groupOverview: null, selectedRoomId: null, selectedGroupId: nextGroups[0]?.id || null });
       showLeaveGroupDialog = false;
       if (selectedGroupId) await loadGroup(selectedGroupId);
       else setNavigationState({ view: "home" });
@@ -5211,7 +5227,7 @@
       await loadStreams();
       if (visibility === "private" && groupId) {
         await loadGroup(groupId);
-        selectedRoomId = voiceRoomId || selectedRoomId;
+        setGroupState({ selectedRoomId: voiceRoomId || selectedRoomId });
       }
     } catch (error) {
       reportClientError("broadcast_start_error", error, { sourceType, visibility, mediaMode });
@@ -5594,6 +5610,7 @@
   clientPollingController.start();
   onDestroy(() => {
     unsubscribeNavigationState();
+    unsubscribeGroupState();
     clearBroadcastCaptureRecoveryTimer();
     clearVoiceSpeakingPublishTimer();
     stopVoiceTest();
@@ -5742,7 +5759,7 @@
           onOpenLive={() => selectView("live")}
           onOpenGroups={() => selectView("groups")}
           onOpenStream={openStreamViewer}
-          onOpenGroup={(group) => { selectedGroupId = group.id; loadGroup(group.id); setGroupsView(); }}
+          onOpenGroup={(group) => { setGroupState({ selectedGroupId: group.id }); loadGroup(group.id); setGroupsView(); }}
         />
       {:else if view === "notifications"}
         <NotificationsPage

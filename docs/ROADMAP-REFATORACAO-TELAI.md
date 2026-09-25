@@ -181,6 +181,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair submissão de login/cadastro e início de OAuth para `frontend/src/features/auth/controller.js`, preservando payloads e navegação existentes.
     - [x] Extrair abertura e navegação da tela de configurações para `frontend/src/features/settings/navigation-controller.js`, preservando bindings e carregamentos existentes.
     - [x] Extrair o pós-carregamento, seleção de salas e inscrição em eventos para `frontend/src/features/groups/controller.js`.
+    - [x] Centralizar grupos, overview, sala selecionada e flags de carregamento em `frontend/src/features/groups/group-state.js`, preservando os contratos do shell.
     - [x] Extrair leitura persistente, deduplicação de requests e contagem de não lidas para `frontend/src/features/groups/room-read-controller.js`.
     - [x] Extrair o ciclo de vida do gateway de eventos de grupos e o carregamento do handler para `frontend/src/features/groups/event-runtime.js`.
     - [x] Extrair o carregamento lazy e os wrappers da feature de threads para `frontend/src/features/groups/thread-runtime.js`.
