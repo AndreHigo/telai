@@ -83,6 +83,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Criar implementações PostgreSQL assíncronas para os repositórios já extraídos e testá-las com rollback.
 - [x] Extrair o repositório de autenticação, contas vinculadas e consentimentos sem alterar o fluxo existente.
 - [x] Extrair criação e vínculo de contas OAuth, mantendo a mesclagem de contas como operação transacional separada.
+- [x] Extrair exportação, exclusão e mesclagem de contas com transações e rollback explícitos.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.

@@ -11,6 +11,7 @@ import { createPostgresNotificationRepository } from "../server/repositories/not
 import { createPostgresNotificationSyncService } from "../server/services/postgres-notification-sync.mjs";
 import { createPostgresAuthRepository } from "../server/repositories/auth.mjs";
 import { createPostgresOAuthRepository } from "../server/repositories/oauth.mjs";
+import { createPostgresAccountRepository } from "../server/repositories/accounts.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -65,6 +66,17 @@ try {
     displayName: "Updated Name",
     usernameHint: "updated",
   })).id, oauthUser.id);
+
+  const accounts = createPostgresAccountRepository(client, { legalPolicyVersion: "test-v1", transactionClient: true });
+  const exported = await accounts.userDataExport(ids.owner);
+  assert.equal(exported.exportVersion, "1");
+  await accounts.mergeUsers(ids.owner, oauthUser.id);
+  assert.equal((await client.query("SELECT id FROM users WHERE id = $1", [oauthUser.id])).rowCount, 0);
+  assert.equal((await client.query("SELECT user_id FROM oauth_accounts WHERE provider = 'test' AND provider_user_id = $1", [`provider-${ids.owner}`])).rows[0].user_id, ids.owner);
+  const deleteUserId = randomUUID();
+  await client.query("INSERT INTO users (id, username, display_name, password_hash, created_at) VALUES ($1, 'pg-delete', 'PG Delete', 'test', $2)", [deleteUserId, now]);
+  await accounts.deleteUserAccount(deleteUserId);
+  assert.equal((await client.query("SELECT id FROM users WHERE id = $1", [deleteUserId])).rowCount, 0);
 
   const groups = createPostgresGroupAccessRepository(client);
   assert.equal(await groups.isGroupMember(ids.member, ids.group), true);
