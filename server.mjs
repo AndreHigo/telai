@@ -48,6 +48,7 @@ import { createGroupRoleRoutes } from "./server/http/group-role-routes.mjs";
 import { createGroupRoomRoutes } from "./server/http/group-room-routes.mjs";
 import { createGroupContentRoutes } from "./server/http/group-content-routes.mjs";
 import { createGroupInviteRoutes } from "./server/http/group-invite-routes.mjs";
+import { createMediaRoutes } from "./server/http/media-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -875,6 +876,7 @@ const handleGroupInviteRoutes = createGroupInviteRoutes({
   compactUserSummary,
   randomBytes,
 });
+const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, requireLogin, publicOriginForRequest });
 const userProfileRepository = createUserProfileRepository(database);
 const handleUserSettingsRoutes = createUserSettingsRoutes({
   json,
@@ -2584,25 +2586,7 @@ async function handleHttpRequest(request, response) {
     streamRepository.follow(user.id, stream.createdBy, false);
     return json(response, 200, { ok: true, following: false });
   }
-  if (requestUrl.pathname === "/ice-config") {
-    iceConfiguration().then((config) => {
-      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify(config));
-    }).catch(() => response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify({ iceServers: [] })));
-    return;
-  }
-  if (requestUrl.pathname === "/healthz") {
-    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify({ ok: true, mediaMode, requireLogin }));
-    return;
-  }
-  if (requestUrl.pathname === "/runtime-config") {
-    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify({
-      publicBaseUrl: publicOriginForRequest(request),
-      mediaMode,
-      requireLogin,
-      internalAuth: true,
-    }));
-    return;
-  }
+  if (await handleMediaRoutes(request, response, requestUrl)) return;
   const seoPages = {
     "/": "seo/index.html",
     "/compartilhar-tela": "seo/compartilhar-tela.html",
