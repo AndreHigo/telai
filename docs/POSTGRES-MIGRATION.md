@@ -16,6 +16,7 @@ etapa.
 - SSL exige validação de certificado por padrão; a exceção local deve ser explícita.
 - A migration baseline e o importador SQLite → PostgreSQL já existem.
 - O comando `pnpm run db:import:postgres -- --plan` inspeciona o SQLite sem conectar no PostgreSQL.
+- O importador é idempotente e o relatório conta somente linhas realmente inseridas; `pnpm run db:test:postgres-import` valida uma fonte SQLite temporária em duas execuções e remove o fixture ao final.
 - A migration baseline já foi executada e validada no PostgreSQL local via Docker; o cutover continua adiado e SQLite permanece sendo o driver ativo.
 - O runtime HTTP falha explicitamente se `TELAI_DATABASE_DRIVER=postgres` for configurado antes do cutover; isso evita que uma configuração PostgreSQL seja ignorada e o processo use SQLite sem aviso.
 - Os repositórios já extraídos, incluindo autenticação, consentimentos, OAuth, contas, perfil local, administração, manutenção, social, descoberta/criação, configuração e exclusão de grupos, setup, cargos, salas, permissões, membros, streams, chat da transmissão, convites, solicitações de entrada, mensagens de grupo e conversas diretas, agora possuem implementações PostgreSQL assíncronas paralelas, validadas em uma transação com rollback; elas ainda não foram ligadas ao runtime HTTP.
@@ -62,4 +63,10 @@ Para validar os contratos dos repositórios contra o PostgreSQL local:
 
 ```powershell
 pnpm run db:test:postgres-repositories
+```
+
+Para validar a importação idempotente com um fixture descartável:
+
+```powershell
+pnpm run db:test:postgres-import
 ```

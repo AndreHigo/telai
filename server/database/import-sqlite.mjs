@@ -66,8 +66,8 @@ export async function importSqliteToPostgres({ sqlitePath, pool, migrationsDir }
           const values = sourceColumns.map((column) => row[column] ?? null);
           const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
           const columns = sourceColumns.map(quoteIdentifier).join(", ");
-          await client.query(`INSERT INTO ${quoteIdentifier(table)} (${columns}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`, values);
-          importedRows += 1;
+          const result = await client.query(`INSERT INTO ${quoteIdentifier(table)} (${columns}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`, values);
+          importedRows += result.rowCount || 0;
         }
         await client.query("COMMIT");
       } catch (error) {
