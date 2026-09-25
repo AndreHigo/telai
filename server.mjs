@@ -43,6 +43,7 @@ import { createAdminRoutes } from "./server/http/admin-routes.mjs";
 import { createAuthRoutes } from "./server/http/auth-routes.mjs";
 import { createObservabilityRoutes } from "./server/http/observability-routes.mjs";
 import { createGroupDiscoveryRoutes } from "./server/http/group-discovery-routes.mjs";
+import { createGroupManagementRoutes } from "./server/http/group-management-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -817,6 +818,20 @@ const handleGroupDiscoveryRoutes = createGroupDiscoveryRoutes({
   groupRepository,
   groupSettingsRepository,
   groupMemberRepository,
+  slugFor,
+});
+const handleGroupManagementRoutes = createGroupManagementRoutes({
+  json,
+  readJson,
+  requireUser,
+  groupJoinRequestRepository,
+  groupSettingsRepository,
+  groupPermissionRepository,
+  groupSetupRepository,
+  groupRoleRepository,
+  groupInviteRepository,
+  isGroupMember,
+  createNotification,
   slugFor,
 });
 const userProfileRepository = createUserProfileRepository(database);
@@ -2352,87 +2367,7 @@ async function handleHttpRequest(request, response) {
     groupSettingsRepository.deleteGroup(groupId);
     return json(response, 200, { ok: true, group: { id: group.id, name: group.name } });
   }
-  const groupJoinRequestMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/join-requests$/);
-  if (groupJoinRequestMatch && ["POST", "GET"].includes(request.method)) {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = groupJoinRequestMatch[1];
-    const group = groupJoinRequestRepository.findGroup(groupId);
-    if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    if (request.method === "GET") {
-      if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o administrador pode ver as solicitações." });
-      const requests = groupJoinRequestRepository.listPending(groupId);
-      return json(response, 200, { requests });
-    }
-    if (isGroupMember(user.id, groupId)) return json(response, 409, { error: "Você já participa deste grupo." });
-    const now = new Date().toISOString();
-    const existing = groupJoinRequestRepository.findForUser(groupId, user.id);
-    if (existing?.status === "pending") return json(response, 409, { error: "Sua solicitação já está pendente." });
-    if (existing) {
-      groupJoinRequestRepository.reopen(existing.id, groupId, now);
-      createNotification({ userId: group.ownerId, type: "group_join_request", entityId: existing.id, groupId, title: `Solicitação para ${group.name}`, body: `${user.displayName} pediu para entrar no grupo.`, createdAt: now });
-      return json(response, 200, { request: { id: existing.id, groupId, status: "pending", createdAt: now, updatedAt: now } });
-    }
-    const joinRequest = groupJoinRequestRepository.create({ groupId, userId: user.id, createdAt: now });
-    createNotification({ userId: group.ownerId, type: "group_join_request", entityId: joinRequest.id, groupId, title: `Solicitação para ${group.name}`, body: `${user.displayName} pediu para entrar no grupo.`, createdAt: now });
-    return json(response, 201, { request: joinRequest });
-  }
-  const groupJoinRequestActionMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/join-requests\/([\w-]{16,64})$/);
-  if (groupJoinRequestActionMatch && request.method === "PATCH") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const [, groupId, requestId] = groupJoinRequestActionMatch;
-    const group = groupJoinRequestRepository.findGroup(groupId);
-    if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o administrador pode responder solicitações." });
-    readJson(request).then((body) => {
-      const status = body.status === "approved" ? "approved" : body.status === "rejected" ? "rejected" : "";
-      if (!status) return json(response, 400, { error: "Escolha aprovar ou recusar a solicitação." });
-      const joinRequest = groupJoinRequestRepository.find(requestId, groupId);
-      if (!joinRequest) return json(response, 404, { error: "Solicitação não encontrada." });
-      if (joinRequest.status !== "pending") return json(response, 409, { error: "Essa solicitação já foi respondida." });
-      const now = new Date().toISOString();
-      try {
-        const result = groupJoinRequestRepository.decide({ groupId, requestId, decidedBy: user.id, status, groupOwnerId: group.ownerId, now, createNotification });
-        if (result.kind === "already-answered") return json(response, 409, { error: "Essa solicitação já foi respondida." });
-        return json(response, 200, { request: result.request });
-      } catch (error) {
-        return json(response, 400, { error: status === "approved" ? "Não foi possível aprovar a entrada." : "Não foi possível recusar a solicitação." });
-      }
-    }).catch(() => json(response, 400, { error: "Não foi possível responder a solicitação." }));
-    return;
-  }
-  const groupSettingsMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})$/);
-  if (groupSettingsMatch && request.method === "PATCH") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = groupSettingsMatch[1];
-    const owner = groupPermissionRepository.member(groupId, user.id);
-    if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode alterar as configurações do grupo." });
-    readJson(request).then((body) => {
-      const name = String(body.name || "").trim().slice(0, 64);
-      const slug = slugFor(body.slug || name);
-      if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para o grupo." });
-      const duplicate = groupSettingsRepository.findDuplicateSlug(slug, groupId);
-      if (duplicate) return json(response, 409, { error: "Já existe um grupo com esse nome." });
-      return json(response, 200, { group: groupSettingsRepository.updateGroup(groupId, name, slug) });
-    }).catch(() => json(response, 400, { error: "Não foi possível salvar as configurações do grupo." }));
-    return;
-  }
-  const groupAdminMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/admin$/);
-  if (groupAdminMatch && request.method === "GET") {
-    const user = requireUser(request, response);
-    if (!user) return;
-    const groupId = groupAdminMatch[1];
-    if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
-    const group = groupSettingsRepository.findGroup(groupId);
-    if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    groupSetupRepository.ensureDefaultGroupRoles(groupId, group.ownerId);
-    const roles = groupRoleRepository.listRoles(groupId);
-    const invites = groupInviteRepository.listGroupInvites(groupId);
-    const joinRequests = group.ownerId === user.id ? groupJoinRequestRepository.listPending(groupId) : [];
-    return json(response, 200, { group, roles, invites, joinRequests });
-  }
+  if (await handleGroupManagementRoutes(request, response, requestUrl)) return;
   const groupRoleCreateMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/roles$/);
   if (groupRoleCreateMatch && request.method === "POST") {
     const user = requireUser(request, response);
