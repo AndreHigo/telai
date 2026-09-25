@@ -298,6 +298,7 @@ enviada ao GitHub nem publicada em produção.
    - [x] Publicar mensagens autenticadas por token e propagar o evento pelo gateway.
    - [x] Adicionar gerenciamento visual de aplicações, tokens, comandos e instalação de bots na área de configurações existente.
    - [x] Separar rotas de gerenciamento do proprietário das rotas de bot e interações em módulos HTTP independentes, preservando os contratos existentes.
+   - [x] Adicionar escopos persistentes por instalação para comandos, mensagens e interações, mantendo todos habilitados por compatibilidade.
    - [ ] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
 - [ ] Comandos, componentes e modais.
   - [x] Registrar comandos por aplicação com validação de nome, descrição e opções em SQLite/PostgreSQL.

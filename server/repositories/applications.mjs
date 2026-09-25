@@ -28,10 +28,24 @@ function publicToken(row) {
 }
 
 function publicInstallation(row) {
+  if (!row) return null;
   return {
     applicationId: row.applicationId,
     groupId: row.groupId,
     createdAt: row.createdAt,
+    permissions: {
+      commands: Boolean(row.allowCommands ?? row.allow_commands ?? 1),
+      messages: Boolean(row.allowMessages ?? row.allow_messages ?? 1),
+      interactions: Boolean(row.allowInteractions ?? row.allow_interactions ?? 1),
+    },
+  };
+}
+
+function installationPermissionValues(permissions = {}) {
+  return {
+    allowCommands: permissions.commands !== false ? 1 : 0,
+    allowMessages: permissions.messages !== false ? 1 : 0,
+    allowInteractions: permissions.interactions !== false ? 1 : 0,
   };
 }
 
@@ -166,7 +180,7 @@ export function createApplicationRepository(database, { createId = randomUUID } 
       JOIN applications ON applications.id = application_group_installations.application_id
       JOIN users ON users.id = applications.bot_user_id
       JOIN application_commands ON application_commands.application_id = applications.id
-      WHERE application_group_installations.group_id = ?
+      WHERE application_group_installations.group_id = ? AND application_group_installations.allow_commands = 1
       ORDER BY applications.name COLLATE NOCASE, application_commands.name COLLATE NOCASE
     `).all(groupId);
     return groupInstalledCommands(rows);
@@ -202,7 +216,7 @@ export function createApplicationRepository(database, { createId = randomUUID } 
         application_commands.options_json AS optionsJson
       FROM application_commands
       JOIN application_group_installations ON application_group_installations.application_id = application_commands.application_id
-      WHERE application_commands.application_id = ? AND application_group_installations.group_id = ? AND application_commands.name = ?
+      WHERE application_commands.application_id = ? AND application_group_installations.group_id = ? AND application_group_installations.allow_commands = 1 AND application_group_installations.allow_interactions = 1 AND application_commands.name = ?
     `).get(applicationId, groupId, name));
   }
 
@@ -228,15 +242,16 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     return result.changes > 0;
   }
 
-  function installGroup({ applicationId, groupId, installedBy, createdAt = new Date().toISOString() }) {
+  function installGroup({ applicationId, groupId, installedBy, permissions = {}, createdAt = new Date().toISOString() }) {
     const application = database.prepare("SELECT bot_user_id AS botUserId FROM applications WHERE id = ?").get(applicationId);
     if (!application) return null;
+    const values = installationPermissionValues(permissions);
     try {
       database.exec("BEGIN IMMEDIATE");
       database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, created_at) VALUES (?, ?, 'member', ?)")
         .run(groupId, application.botUserId, createdAt);
-      database.prepare("INSERT OR IGNORE INTO application_group_installations (application_id, group_id, installed_by, created_at) VALUES (?, ?, ?, ?)")
-        .run(applicationId, groupId, installedBy, createdAt);
+      database.prepare("INSERT OR IGNORE INTO application_group_installations (application_id, group_id, installed_by, created_at, allow_commands, allow_messages, allow_interactions) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(applicationId, groupId, installedBy, createdAt, values.allowCommands, values.allowMessages, values.allowInteractions);
       database.exec("COMMIT");
       return findInstallation(applicationId, groupId);
     } catch (error) {
@@ -247,16 +262,28 @@ export function createApplicationRepository(database, { createId = randomUUID } 
 
   function findInstallation(applicationId, groupId) {
     return publicInstallation(database.prepare(`
-      SELECT application_id AS applicationId, group_id AS groupId, created_at AS createdAt
+      SELECT application_id AS applicationId, group_id AS groupId, created_at AS createdAt,
+        allow_commands AS allowCommands, allow_messages AS allowMessages, allow_interactions AS allowInteractions
       FROM application_group_installations WHERE application_id = ? AND group_id = ?
     `).get(applicationId, groupId));
   }
 
   function listInstallations(applicationId) {
     return database.prepare(`
-      SELECT application_id AS applicationId, group_id AS groupId, created_at AS createdAt
+      SELECT application_id AS applicationId, group_id AS groupId, created_at AS createdAt,
+        allow_commands AS allowCommands, allow_messages AS allowMessages, allow_interactions AS allowInteractions
       FROM application_group_installations WHERE application_id = ? ORDER BY created_at DESC
     `).all(applicationId).map(publicInstallation);
+  }
+
+  function updateInstallation({ applicationId, groupId, permissions = {} }) {
+    const values = installationPermissionValues(permissions);
+    const result = database.prepare(`
+      UPDATE application_group_installations
+      SET allow_commands = ?, allow_messages = ?, allow_interactions = ?
+      WHERE application_id = ? AND group_id = ?
+    `).run(values.allowCommands, values.allowMessages, values.allowInteractions, applicationId, groupId);
+    return result.changes ? findInstallation(applicationId, groupId) : null;
   }
 
   function uninstallGroup(applicationId, groupId) {
@@ -289,7 +316,7 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     }
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }
 
 async function withPostgresTransaction(database, callback) {
@@ -370,7 +397,7 @@ export function createPostgresApplicationRepository(database, { createId = rando
       JOIN applications ON applications.id = application_group_installations.application_id
       JOIN users ON users.id = applications.bot_user_id
       JOIN application_commands ON application_commands.application_id = applications.id
-      WHERE application_group_installations.group_id = $1
+      WHERE application_group_installations.group_id = $1 AND application_group_installations.allow_commands = TRUE
       ORDER BY LOWER(applications.name), LOWER(application_commands.name)
     `, [groupId]);
     return groupInstalledCommands(result.rows);
@@ -406,7 +433,7 @@ export function createPostgresApplicationRepository(database, { createId = rando
         application_commands.options_json AS "optionsJson"
       FROM application_commands
       JOIN application_group_installations ON application_group_installations.application_id = application_commands.application_id
-      WHERE application_commands.application_id = $1 AND application_group_installations.group_id = $2 AND application_commands.name = $3
+      WHERE application_commands.application_id = $1 AND application_group_installations.group_id = $2 AND application_group_installations.allow_commands = TRUE AND application_group_installations.allow_interactions = TRUE AND application_commands.name = $3
     `, [applicationId, groupId, name]);
     return publicCommand(result.rows[0]);
   }
@@ -433,25 +460,32 @@ export function createPostgresApplicationRepository(database, { createId = rando
     return result.rowCount > 0;
   }
 
-  async function installGroup({ applicationId, groupId, installedBy, createdAt = new Date().toISOString() }) {
+  async function installGroup({ applicationId, groupId, installedBy, permissions = {}, createdAt = new Date().toISOString() }) {
     const result = await database.query("SELECT bot_user_id AS \"botUserId\" FROM applications WHERE id = $1", [applicationId]);
     const application = result.rows[0];
     if (!application) return null;
+    const values = installationPermissionValues(permissions);
     return withPostgresTransaction(database, async (client) => {
       await client.query("INSERT INTO group_members (group_id, user_id, role, created_at) VALUES ($1, $2, 'member', $3) ON CONFLICT DO NOTHING", [groupId, application.botUserId, createdAt]);
-      await client.query("INSERT INTO application_group_installations (application_id, group_id, installed_by, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING", [applicationId, groupId, installedBy, createdAt]);
+      await client.query("INSERT INTO application_group_installations (application_id, group_id, installed_by, created_at, allow_commands, allow_messages, allow_interactions) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING", [applicationId, groupId, installedBy, createdAt, values.allowCommands, values.allowMessages, values.allowInteractions]);
       return findInstallation(applicationId, groupId, client);
     });
   }
 
   async function findInstallation(applicationId, groupId, client = database) {
-    const result = await client.query('SELECT application_id AS "applicationId", group_id AS "groupId", created_at AS "createdAt" FROM application_group_installations WHERE application_id = $1 AND group_id = $2', [applicationId, groupId]);
+    const result = await client.query('SELECT application_id AS "applicationId", group_id AS "groupId", created_at AS "createdAt", allow_commands AS "allowCommands", allow_messages AS "allowMessages", allow_interactions AS "allowInteractions" FROM application_group_installations WHERE application_id = $1 AND group_id = $2', [applicationId, groupId]);
     return publicInstallation(result.rows[0]);
   }
 
   async function listInstallations(applicationId) {
-    const result = await database.query('SELECT application_id AS "applicationId", group_id AS "groupId", created_at AS "createdAt" FROM application_group_installations WHERE application_id = $1 ORDER BY created_at DESC', [applicationId]);
+    const result = await database.query('SELECT application_id AS "applicationId", group_id AS "groupId", created_at AS "createdAt", allow_commands AS "allowCommands", allow_messages AS "allowMessages", allow_interactions AS "allowInteractions" FROM application_group_installations WHERE application_id = $1 ORDER BY created_at DESC', [applicationId]);
     return result.rows.map(publicInstallation);
+  }
+
+  async function updateInstallation({ applicationId, groupId, permissions = {} }) {
+    const values = installationPermissionValues(permissions);
+    const result = await database.query("UPDATE application_group_installations SET allow_commands = $1, allow_messages = $2, allow_interactions = $3 WHERE application_id = $4 AND group_id = $5", [values.allowCommands, values.allowMessages, values.allowInteractions, applicationId, groupId]);
+    return result.rowCount ? findInstallation(applicationId, groupId) : null;
   }
 
   async function uninstallGroup(applicationId, groupId) {
@@ -476,5 +510,5 @@ export function createPostgresApplicationRepository(database, { createId = rando
     });
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }

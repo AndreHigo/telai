@@ -23,6 +23,11 @@
   let commandDescription = "";
   let commandOptions = "";
   let installGroupId = "";
+  const installationPermissionOptions = [
+    { key: "commands", label: "Comandos" },
+    { key: "messages", label: "Mensagens" },
+    { key: "interactions", label: "Interações" },
+  ];
 
   $: selectedApplication = applications.find((application) => application.id === selectedApplicationId) || null;
   $: installedGroupIds = new Set(installations.map((installation) => installation.groupId));
@@ -219,6 +224,31 @@
     }
   }
 
+  async function updateInstallationPermission(installation, permission, enabled) {
+    if (busy || !selectedApplicationId) return;
+    busy = true;
+    error = "";
+    notice = "";
+    const permissions = {
+      commands: installation.permissions?.commands !== false,
+      messages: installation.permissions?.messages !== false,
+      interactions: installation.permissions?.interactions !== false,
+      [permission]: enabled,
+    };
+    try {
+      const result = await api(`/api/applications/${encodeURIComponent(selectedApplicationId)}/groups/${encodeURIComponent(installation.groupId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ permissions }),
+      });
+      installations = installations.map((item) => item.groupId === installation.groupId ? result.installation : item);
+      notice = "Permissões da instalação atualizadas.";
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      busy = false;
+    }
+  }
+
   async function deleteApplication() {
     if (busy || !selectedApplicationId || !window.confirm("Excluir esta aplicação e revogar seus tokens?")) return;
     busy = true;
@@ -288,7 +318,7 @@
           <section class="settings-card"><div class="settings-card-heading"><div><h3>Comandos</h3><p class="muted">Registre a superfície que o bot anuncia aos clientes.</p></div></div><form class="application-form" on:submit|preventDefault={createCommand}><label class="modal-field">Nome<input class="settings-input" bind:value={commandName} maxlength="32" pattern="[A-Za-z0-9_-]+" required placeholder="status" /></label><label class="modal-field">Descrição<input class="settings-input" bind:value={commandDescription} maxlength="100" required placeholder="Mostra o status do serviço" /></label><label class="modal-field">Opções JSON <textarea class="settings-input" bind:value={commandOptions} rows="3" placeholder="Lista JSON opcional de opções"></textarea></label><button class="primary" type="submit" disabled={busy || !commandName.trim() || !commandDescription.trim()}>Registrar comando</button></form><div class="application-token-list">{#each commands as command}<div class="application-row"><span><strong>/{command.name}</strong><small>{command.description} · {command.options?.length || 0} opção(ões)</small></span><button class="outline" type="button" disabled={busy} on:click={() => deleteCommand(command)}>Remover</button></div>{/each}{#if !commands.length}<p class="muted">Nenhum comando registrado.</p>{/if}</div></section>
         </div>
 
-        <section class="settings-card"><div class="settings-card-heading"><div><h3>Instalação em grupos</h3><p class="muted">Escolha grupos em que o bot poderá responder e publicar mensagens.</p></div></div>{#if availableGroups.length}<form class="inline-settings-form" on:submit|preventDefault={installBot}><select class="settings-input" bind:value={installGroupId} aria-label="Grupo para instalar o bot"><option value="">Escolha um grupo</option>{#each availableGroups as group}<option value={group.id}>{group.name}</option>{/each}</select><button class="primary" type="submit" disabled={busy || !installGroupId}>Instalar bot</button></form>{:else}<p class="muted">Todos os seus grupos já estão instalados ou você ainda não participa de nenhum.</p>{/if}<div class="application-token-list">{#each installations as installation}<div class="application-row"><span><strong>{groups.find((group) => group.id === installation.groupId)?.name || installation.groupId}</strong><small>Instalado em {new Date(installation.createdAt).toLocaleDateString()}</small></span><button class="outline" type="button" disabled={busy} on:click={() => uninstallBot(installation)}>Remover</button></div>{/each}{#if !installations.length}<p class="muted">Este bot ainda não está instalado em nenhum grupo.</p>{/if}</div></section>
+        <section class="settings-card"><div class="settings-card-heading"><div><h3>Instalação em grupos</h3><p class="muted">Escolha grupos em que o bot poderá responder e publicar mensagens.</p></div></div>{#if availableGroups.length}<form class="inline-settings-form" on:submit|preventDefault={installBot}><select class="settings-input" bind:value={installGroupId} aria-label="Grupo para instalar o bot"><option value="">Escolha um grupo</option>{#each availableGroups as group}<option value={group.id}>{group.name}</option>{/each}</select><button class="primary" type="submit" disabled={busy || !installGroupId}>Instalar bot</button></form>{:else}<p class="muted">Todos os seus grupos já estão instalados ou você ainda não participa de nenhum.</p>{/if}<div class="application-token-list">{#each installations as installation}<div class="application-row application-installation-row"><span class="application-installation-meta"><strong>{groups.find((group) => group.id === installation.groupId)?.name || installation.groupId}</strong><small>Instalado em {new Date(installation.createdAt).toLocaleDateString()}</small></span><div class="application-permission-list" role="group" aria-label="Permissões da instalação">{#each installationPermissionOptions as permission}<label class="application-permission-toggle"><input type="checkbox" checked={installation.permissions?.[permission.key] !== false} disabled={busy} on:change={(event) => updateInstallationPermission(installation, permission.key, event.currentTarget.checked)} /><span>{permission.label}</span></label>{/each}</div><button class="outline" type="button" disabled={busy} on:click={() => uninstallBot(installation)}>Remover</button></div>{/each}{#if !installations.length}<p class="muted">Este bot ainda não está instalado em nenhum grupo.</p>{/if}</div></section>
       </div>
     {:else if !loading}
       <div class="settings-card application-empty-state"><HugeiconsIcon icon={iconFor("appWindow")} size={28} strokeWidth={1.6} /><h2>Crie sua primeira aplicação</h2><p class="muted">O painel de detalhes aparecerá aqui, sem abrir uma nova tela.</p></div>

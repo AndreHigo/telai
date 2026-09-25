@@ -1205,6 +1205,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .application-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 9px 0; border-bottom: 1px solid rgba(47, 70, 108, .58); }
 .application-row:last-child { border-bottom: 0; }
 .application-row > button { flex: 0 0 auto; padding: 6px 9px; font-size: 9px; }
+.application-installation-row { align-items: flex-start; flex-wrap: wrap; }
+.application-installation-meta { display: grid; min-width: 150px; flex: 1 1 150px; }
+.application-permission-list { display: flex; flex: 1 1 260px; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.application-permission-toggle { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #304a73; border-radius: 8px; padding: 6px 8px; color: #aab9d7; background: #142442; font-size: 9px; font-weight: 800; cursor: pointer; }
+.application-permission-toggle:hover { border-color: #7180f4; background: #1b2d4f; }
+.application-permission-toggle input { width: 13px; height: 13px; margin: 0; accent-color: #6366f1; }
+.application-permission-toggle input:disabled { cursor: not-allowed; }
+.mirante-shell.light .application-permission-toggle { border-color: #c3d0e3; color: #526581; background: #f7f9fc; }
+.mirante-shell.light .application-permission-toggle:hover { border-color: #7180e8; background: #eef1ff; }
 .application-empty-state { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
 .applications-intro .settings-success { margin: 14px 0 0; border: 1px solid rgba(91, 220, 138, .3); border-radius: 10px; padding: 10px 12px; color: #9df0b7; background: rgba(50, 157, 91, .12); }
 .application-token-reveal { box-shadow: 0 8px 20px rgba(114, 75, 13, .12); }

@@ -37,6 +37,9 @@ export function ensureCompatibilityColumns(database) {
   ensureColumn(database, "user_preferences", "voice_output_volume", "REAL NOT NULL DEFAULT 1");
   ensureColumn(database, "user_preferences", "preferred_input_device_id", "TEXT");
   ensureColumn(database, "user_preferences", "preferred_output_device_id", "TEXT");
+  ensureColumn(database, "application_group_installations", "allow_commands", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(database, "application_group_installations", "allow_messages", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(database, "application_group_installations", "allow_interactions", "INTEGER NOT NULL DEFAULT 1");
   database.exec(`
     CREATE TABLE IF NOT EXISTS group_room_reads (
       group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -126,6 +129,9 @@ export function ensureCompatibilityColumns(database) {
       group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
       installed_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       created_at TEXT NOT NULL,
+      allow_commands INTEGER NOT NULL DEFAULT 1,
+      allow_messages INTEGER NOT NULL DEFAULT 1,
+      allow_interactions INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (application_id, group_id)
     );
     CREATE INDEX IF NOT EXISTS application_group_installations_group_idx ON application_group_installations(group_id, created_at DESC);

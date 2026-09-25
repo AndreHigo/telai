@@ -48,6 +48,17 @@ export function normalizeCustomId(value) {
   return /^[A-Za-z0-9:_-]{1,100}$/.test(customId) ? customId : null;
 }
 
+export function normalizeApplicationInstallationPermissions(value, fallback = { commands: true, messages: true, interactions: true }) {
+  if (value === undefined) return { ...fallback };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const permissions = {};
+  for (const key of ["commands", "messages", "interactions"]) {
+    if (value[key] !== undefined && typeof value[key] !== "boolean") return null;
+    permissions[key] = value[key] === undefined ? Boolean(fallback[key]) : value[key];
+  }
+  return permissions;
+}
+
 export function normalizeComponents(value) {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 25) return null;

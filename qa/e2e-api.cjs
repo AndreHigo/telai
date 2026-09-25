@@ -398,12 +398,23 @@ async function main() {
     assert.equal((await api(owner, `/api/applications/${applicationId}/commands/${commandCreation.body.command.id}`, "DELETE")).response.status, 404);
     const install = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "POST");
     assert.equal(install.response.status, 201, JSON.stringify(install.body));
+    assert.deepEqual(install.body.installation.permissions, { commands: true, messages: true, interactions: true });
+    const disabledInstallation = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "PATCH", { permissions: { commands: false, messages: false, interactions: false } });
+    assert.equal(disabledInstallation.response.status, 200, JSON.stringify(disabledInstallation.body));
+    assert.deepEqual(disabledInstallation.body.installation.permissions, { commands: false, messages: false, interactions: false });
     const interactionCommand = await api(owner, `/api/applications/${applicationId}/commands`, "POST", { name: "ping", description: "Responde ao ping" });
     assert.equal(interactionCommand.response.status, 201, JSON.stringify(interactionCommand.body));
     const groupCommandCatalog = await api(owner, `/api/groups/${groupId}/applications/commands`);
     assert.equal(groupCommandCatalog.response.status, 200, JSON.stringify(groupCommandCatalog.body));
-    assert.equal(groupCommandCatalog.body.applications[0].applicationId, applicationId);
-    assert.equal(groupCommandCatalog.body.applications[0].commands[0].name, "ping");
+    assert.equal(groupCommandCatalog.body.applications.length, 0);
+    const blockedInteraction = await api(owner, `/api/groups/${groupId}/applications/${applicationId}/interactions`, "POST", { roomId: group.textRoomId, commandName: "ping" });
+    assert.equal(blockedInteraction.response.status, 404);
+    const enabledInstallation = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "PATCH", { permissions: { commands: true, messages: true, interactions: true } });
+    assert.equal(enabledInstallation.response.status, 200, JSON.stringify(enabledInstallation.body));
+    const enabledGroupCommandCatalog = await api(owner, `/api/groups/${groupId}/applications/commands`);
+    assert.equal(enabledGroupCommandCatalog.response.status, 200, JSON.stringify(enabledGroupCommandCatalog.body));
+    assert.equal(enabledGroupCommandCatalog.body.applications[0].applicationId, applicationId);
+    assert.equal(enabledGroupCommandCatalog.body.applications[0].commands[0].name, "ping");
     const createdInteraction = await api(owner, `/api/groups/${groupId}/applications/${applicationId}/interactions`, "POST", { roomId: group.textRoomId, commandName: "ping" });
     assert.equal(createdInteraction.response.status, 202, JSON.stringify(createdInteraction.body));
     assert.equal(createdInteraction.body.interaction.kind, "command");
@@ -440,6 +451,16 @@ async function main() {
     const childPoll = await request("/api/bot/interactions?limit=5", { headers: { authorization: `Bot ${tokenCreation.body.token}` } });
     assert.equal(childPoll.response.status, 200);
     assert.equal(childPoll.body.interactions.filter((item) => [componentInteraction.body.interaction.id, modalInteraction.body.interaction.id].includes(item.id)).length, 2);
+    const messagesDisabled = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "PATCH", { permissions: { commands: true, messages: false, interactions: true } });
+    assert.equal(messagesDisabled.response.status, 200, JSON.stringify(messagesDisabled.body));
+    const blockedBotMessage = await request(`/api/bot/groups/${groupId}/messages`, {
+      method: "POST",
+      headers: { authorization: `Bot ${tokenCreation.body.token}` },
+      body: JSON.stringify({ roomId: group.textRoomId, content: "não deve publicar com mensagens desativadas" }),
+    });
+    assert.equal(blockedBotMessage.response.status, 403);
+    const messagesEnabled = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "PATCH", { permissions: { commands: true, messages: true, interactions: true } });
+    assert.equal(messagesEnabled.response.status, 200, JSON.stringify(messagesEnabled.body));
     assert.equal((await api(owner, `/api/applications/${applicationId}/commands/${interactionCommand.body.command.id}`, "DELETE")).response.status, 200);
     const botMessage = await request(`/api/bot/groups/${groupId}/messages`, {
       method: "POST",

@@ -111,6 +111,11 @@ export function createApplicationBotRoutes({
       json(response, 403, { error: "Você não participa deste grupo." });
       return true;
     }
+    const installation = await applicationRepository.findInstallation(parent.applicationId, parent.groupId);
+    if (!installation?.permissions?.interactions) {
+      json(response, 403, { error: "As interações deste bot estão desativadas neste grupo." });
+      return true;
+    }
     try {
       const body = await readJson(request, 32 * 1024);
       const customId = normalizeCustomId(body.customId);
@@ -170,6 +175,12 @@ export function createApplicationBotRoutes({
         return true;
       }
       try {
+        const parentInteraction = await applicationInteractionRepository.findById(responseMatch[1]);
+        const installation = parentInteraction ? await applicationRepository.findInstallation(identity.applicationId, parentInteraction.groupId) : null;
+        if (!installation?.permissions?.interactions) {
+          json(response, 403, { error: "As interações deste bot estão desativadas neste grupo." });
+          return true;
+        }
         const body = await readJson(request, 32 * 1024);
         const botResponse = normalizeBotResponse(body);
         if (!botResponse) {
@@ -236,7 +247,8 @@ export function createApplicationBotRoutes({
       return true;
     }
     const groupId = match[1];
-    if (!await applicationRepository.findInstallation(identity.applicationId, groupId) || !await isGroupMember(identity.botUserId, groupId)) {
+    const installation = await applicationRepository.findInstallation(identity.applicationId, groupId);
+    if (!installation?.permissions?.messages || !await isGroupMember(identity.botUserId, groupId)) {
       json(response, 403, { error: "Este bot não está instalado neste grupo." });
       return true;
     }

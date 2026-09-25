@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   applicationPayload,
+  normalizeApplicationInstallationPermissions,
   normalizeCommandName,
   normalizeCommandOptions,
   normalizeText,
@@ -166,7 +167,7 @@ export function createApplicationOwnerRoutes({
         json(response, 200, { installations: await applicationRepository.listInstallations(applicationId) });
         return true;
       }
-      if (childId && ["POST", "DELETE"].includes(request.method)) {
+      if (childId && ["POST", "PATCH", "DELETE"].includes(request.method)) {
         const group = await groupSettingsRepository.findGroup(childId);
         if (!group) {
           json(response, 404, { error: "Grupo não encontrado." });
@@ -179,6 +180,23 @@ export function createApplicationOwnerRoutes({
         if (request.method === "POST") {
           const installation = await applicationRepository.installGroup({ applicationId, groupId: childId, installedBy: context.user.id });
           json(response, 201, { installation });
+        } else if (request.method === "PATCH") {
+          try {
+            const body = await readJson(request, 8 * 1024);
+            const permissions = normalizeApplicationInstallationPermissions(body.permissions);
+            if (!permissions) {
+              json(response, 400, { error: "As permissões da instalação precisam ser booleanas." });
+              return true;
+            }
+            const installation = await applicationRepository.updateInstallation({ applicationId, groupId: childId, permissions });
+            if (!installation) {
+              json(response, 404, { error: "Instalação não encontrada." });
+              return true;
+            }
+            json(response, 200, { installation });
+          } catch {
+            json(response, 400, { error: "Não foi possível atualizar as permissões da instalação." });
+          }
         } else {
           json(response, 200, { ok: await applicationRepository.uninstallGroup(applicationId, childId), groupId: childId });
         }

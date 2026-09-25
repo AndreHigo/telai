@@ -90,6 +90,7 @@ const paths = {
   }),
   "/applications/{applicationId}/groups/{groupId}": pathItem("Aplicações", {
     post: ["installApplicationBot", "Instala o bot em um grupo", { methods: ["201"] }],
+    patch: ["updateApplicationInstallationPermissions", "Atualiza permissões do bot neste grupo"],
     delete: ["uninstallApplicationBot", "Remove o bot de um grupo"],
   }),
   "/groups/{groupId}/applications/{applicationId}/interactions": pathItem("Aplicações", {

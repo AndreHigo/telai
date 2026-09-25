@@ -24,6 +24,7 @@ etapa.
 - A migration incremental `006_role_moderation_permission.sql` adiciona a permissão de moderação por cargo; a hierarquia usa a ordenação persistente já existente e foi validada com moderação delegada.
 - A migration incremental `007_group_message_attachments.sql` adiciona metadados de anexos de mensagens; o repositório PostgreSQL foi validado com rollback e o conteúdo continua fora do banco, no storage local controlado.
 - A migration incremental `008_group_room_reads.sql` adiciona cursores persistentes de leitura por membro/canal; a contagem de não lidas usa a data de entrada no grupo como fallback inicial.
+- A migration incremental `016_application_installation_permissions.sql` adiciona escopos persistentes de comandos, mensagens e interações por instalação de bot, mantendo os três habilitados por padrão.
 - O runtime seleciona explicitamente os repositórios conforme `TELAI_DATABASE_DRIVER`; `postgres` não cai silenciosamente para SQLite. A ausência da variável mantém SQLite como padrão.
 - O executor de migrations usa um advisory lock PostgreSQL para serializar inicializações concorrentes; duas instâncias podem iniciar juntas sem aplicar a mesma migration duas vezes.
 - O endpoint público `/healthz` informa o driver efetivamente selecionado (`sqlite` ou `postgres`), sem expor URL, credenciais ou detalhes do pool; isso permite confirmar o runtime local antes de qualquer cutover.
