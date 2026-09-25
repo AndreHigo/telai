@@ -189,6 +189,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair o painel de áudio, dispositivos, PTT, filtros WebRTC, sons e sensibilidade para `frontend/src/features/settings/VoiceSettingsPanel.svelte`, sem alterar o pipeline de mídia.
     - [x] Extrair preferências, `AudioContext`, efeitos sonoros e sons pendentes de interação para `frontend/src/features/voice/sound-controller.js`, mantendo o estado visual no shell.
     - [x] Extrair o teste de microfone, medidor de nível e teste de alto-falante para `frontend/src/features/voice/audio-test-controller.js`, mantendo o estado visual e o pipeline de captura no shell.
+    - [x] Extrair criação, retry, autoplay, volume e saída selecionada dos áudios remotos para `frontend/src/features/voice/remote-playback-controller.js`, mantendo o estado visual e o ciclo de peers no shell.
     - [x] Extrair notas de atualização e seu estado de leitura para `frontend/src/features/shell/release-notes-controller.js` em chunk lazy.
     - [x] Extrair atualização, inicialização com o sistema, aceleração gráfica e seletores de captura Electron para `frontend/src/features/shell/desktop-controller.js` em chunk lazy.
     - [x] Extrair transporte WebSocket, pares WebRTC, ICE, renegociação e chat do host para `frontend/src/features/broadcast/transport-controller.js` em chunk lazy.

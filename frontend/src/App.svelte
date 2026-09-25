@@ -42,6 +42,7 @@
   import { createVoicePeerHealthController } from "./features/voice/peer-health-controller.js";
   import { createVoicePeerRecoveryController } from "./features/voice/peer-recovery-controller.js";
   import { createVoiceAudioTestController } from "./features/voice/audio-test-controller.js";
+  import { createVoiceRemotePlaybackController } from "./features/voice/remote-playback-controller.js";
   import { createVoiceSoundController, readSoundPreferences, SOUND_PREFERENCE_DEFAULTS } from "./features/voice/sound-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
@@ -1011,6 +1012,23 @@
       voiceTestStatus = next.status;
       voiceTestSpeakerStatus = next.speakerStatus;
     },
+  });
+  const voiceRemotePlaybackController = createVoiceRemotePlaybackController({
+    audioByParticipant: voiceRemoteAudio,
+    bindingsByParticipant: voiceRemoteAudioBindings,
+    playbackTimersByParticipant: voiceRemotePlaybackTimers,
+    isConnected: () => voiceState === "connected",
+    isDeafened: () => voiceDeafened,
+    isLocallyMuted: (participantId) => voiceLocallyMutedParticipants.has(voicePreferenceTargetId(participantId)),
+    getOutputDeviceId: () => selectedOutputDeviceId,
+    setOutputDeviceFallback: () => {
+      selectedOutputDeviceId = "";
+      try { localStorage.removeItem("mirante-voice-output"); } catch (error) { reportClientError("voice_output_device_persist_error", error); }
+    },
+    getEffectiveVolume: (participantId) => effectiveVoiceOutputVolume(participantId),
+    setPlaybackBlocked: (value) => { voicePlaybackBlocked = value; },
+    setVoiceError: (value) => { voiceError = value; },
+    reportClientError,
   });
   const groupRoomReadController = createGroupRoomReadController({
     api,
@@ -3137,9 +3155,7 @@
     if (audioTrackTimer) clearTimeout(audioTrackTimer);
     voicePeerAudioTrackTimers.delete(participantId);
     voicePeerNegotiationInFlight.delete(participantId);
-    const playbackTimer = voiceRemotePlaybackTimers.get(participantId);
-    if (playbackTimer) clearTimeout(playbackTimer);
-    voiceRemotePlaybackTimers.delete(participantId);
+    voiceRemotePlaybackController.remove(participantId);
     voicePeerConnections.get(participantId)?.close();
     voicePeerConnections.delete(participantId);
     voicePendingCandidates.delete(participantId);
@@ -3154,73 +3170,12 @@
       try { remoteStream.removeTrack(track); } catch {}
     });
     voiceRemoteStreams.delete(participantId);
-    const audioBinding = voiceRemoteAudioBindings.get(participantId);
-    if (audioBinding) {
-      for (const [eventName, handler] of Object.entries(audioBinding).filter(([eventName]) => eventName !== "audio")) {
-        audioBinding.audio?.removeEventListener(eventName, handler);
-      }
-    }
-    voiceRemoteAudioBindings.delete(participantId);
-    const audio = voiceRemoteAudio.get(participantId);
-    if (audio) audio.srcObject = null;
-    audio?.remove();
-    voiceRemoteAudio.delete(participantId);
-    if (!voiceRemoteAudio.size) voicePlaybackBlocked = false;
     if (!voicePeerAudioHealth.size) stopVoicePeerHealthTimer();
   }
 
-  function updateVoicePlaybackState() {
-    voicePlaybackBlocked = [...voiceRemoteAudio.values()].some((audio) => audio.paused && !audio.ended);
-  }
-
-  function scheduleVoiceRemotePlayback(participantId, delayMs = VOICE_REMOTE_PLAYBACK_RETRY_MS) {
-    if (voiceDeafened || voiceState !== "connected" || voiceRemotePlaybackTimers.has(participantId)) return;
-    const audio = voiceRemoteAudio.get(participantId);
-    if (!audio?.srcObject || !audio.paused || audio.ended) return;
-    const timer = window.setTimeout(() => {
-      voiceRemotePlaybackTimers.delete(participantId);
-      const currentAudio = voiceRemoteAudio.get(participantId);
-      if (!currentAudio || currentAudio !== audio || voiceDeafened || voiceState !== "connected" || !currentAudio.paused || currentAudio.ended) return;
-      void playVoiceRemoteAudio(participantId, currentAudio).catch((error) => {
-        if (error?.name !== "NotAllowedError") scheduleVoiceRemotePlayback(participantId);
-      });
-    }, Math.max(100, delayMs));
-    voiceRemotePlaybackTimers.set(participantId, timer);
-  }
-
-  function ensureVoiceRemoteAudio(participantId) {
-    const current = voiceRemoteAudio.get(participantId);
-    if (current) return current;
-    const audio = document.createElement("audio");
-    audio.className = "voice-remote-audio";
-    audio.autoplay = true;
-    audio.playsInline = true;
-    audio.preload = "auto";
-    audio.setAttribute("autoplay", "true");
-    audio.setAttribute("playsinline", "true");
-    audio.setAttribute("aria-hidden", "true");
-    const updatePlayback = () => updateVoicePlaybackState();
-    const retryPlayback = () => {
-      updateVoicePlaybackState();
-      scheduleVoiceRemotePlayback(participantId);
-    };
-    audio.addEventListener("playing", updatePlayback);
-    audio.addEventListener("pause", retryPlayback);
-    audio.addEventListener("stalled", retryPlayback);
-    audio.addEventListener("waiting", retryPlayback);
-    audio.addEventListener("error", retryPlayback);
-    voiceRemoteAudioBindings.set(participantId, {
-      audio,
-      playing: updatePlayback,
-      pause: retryPlayback,
-      stalled: retryPlayback,
-      waiting: retryPlayback,
-      error: retryPlayback,
-    });
-    document.body.appendChild(audio);
-    voiceRemoteAudio.set(participantId, audio);
-    return audio;
-  }
+  const updateVoicePlaybackState = () => voiceRemotePlaybackController.updatePlaybackState();
+  const scheduleVoiceRemotePlayback = (participantId, delayMs = VOICE_REMOTE_PLAYBACK_RETRY_MS) => voiceRemotePlaybackController.schedule(participantId, delayMs);
+  const ensureVoiceRemoteAudio = (participantId) => voiceRemotePlaybackController.ensure(participantId);
 
   function ensureVoiceRemoteStream(participantId) {
     const current = voiceRemoteStreams.get(participantId);
@@ -3230,48 +3185,9 @@
     return stream;
   }
 
-  async function playVoiceRemoteAudio(participantId, audio) {
-    if (!audio) return;
-    audio.muted = voiceDeafened || voiceLocallyMutedParticipants.has(voicePreferenceTargetId(participantId));
-    audio.volume = effectiveVoiceOutputVolume(participantId);
-    if (selectedOutputDeviceId && typeof audio.setSinkId === "function") {
-      try {
-        await audio.setSinkId(selectedOutputDeviceId);
-      } catch (error) {
-        reportClientError("voice_output_device_fallback", error, { participantId, deviceSelected: true });
-        selectedOutputDeviceId = "";
-        localStorage.removeItem("mirante-voice-output");
-        await audio.setSinkId("default").catch(() => {});
-      }
-    }
-    try {
-      await audio.play();
-      const playbackTimer = voiceRemotePlaybackTimers.get(participantId);
-      if (playbackTimer) clearTimeout(playbackTimer);
-      voiceRemotePlaybackTimers.delete(participantId);
-      updateVoicePlaybackState();
-    } catch (error) {
-      if (error?.name === "NotAllowedError") {
-        voicePlaybackBlocked = true;
-        voiceError = "O navegador bloqueou o áudio automático. Clique em “Ativar áudio da sala”.";
-      } else {
-        scheduleVoiceRemotePlayback(participantId);
-      }
-      throw error;
-    }
-  }
+  const playVoiceRemoteAudio = (participantId, audio) => voiceRemotePlaybackController.play(participantId, audio);
 
-  function resumeVoiceRemoteAudio() {
-    if (voiceDeafened) return;
-    for (const [participantId, audio] of voiceRemoteAudio) {
-      if (!audio.paused) continue;
-      void playVoiceRemoteAudio(participantId, audio).catch((error) => {
-        reportClientError("voice_remote_audio_play_error", error, { participantId, deviceSelected: Boolean(selectedOutputDeviceId) });
-        if (error?.name !== "NotAllowedError") voiceError = "O áudio remoto não conseguiu iniciar. Verifique a saída de áudio selecionada.";
-      });
-    }
-    window.setTimeout(updateVoicePlaybackState, 0);
-  }
+  const resumeVoiceRemoteAudio = () => voiceRemotePlaybackController.resume();
 
   function handleVoicePlaybackInteraction() {
     if (voiceRemoteAudio.size) resumeVoiceRemoteAudio();
