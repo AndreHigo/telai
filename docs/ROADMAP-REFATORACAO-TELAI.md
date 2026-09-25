@@ -106,6 +106,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair listagem, leitura e sincronização de notificações para `server/http/notification-routes.mjs`.
 - [x] Extrair criação, leitura e envio de conversas diretas para `server/http/direct-routes.mjs`.
 - [x] Extrair convites de membro e resgate de convites para `server/http/member-invite-routes.mjs`.
+- [x] Extrair manutenção e API administrativa para `server/http/admin-routes.mjs`, mantendo a página `/admin` no servidor principal.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.
