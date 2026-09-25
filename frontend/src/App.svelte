@@ -56,6 +56,17 @@
 
   const APP_VERSION = typeof __MIRANTE_VERSION__ === "string" ? __MIRANTE_VERSION__ : "desconhecida";
   const WEB_VERSION = typeof __MIRANTE_WEB_VERSION__ === "string" ? __MIRANTE_WEB_VERSION__ : "desconhecida";
+  const gatewaySequenceBySocket = new WeakMap();
+
+  function acceptGatewayMessage(socket, message) {
+    const sequence = Number(message?.sequence);
+    if (!Number.isSafeInteger(sequence) || sequence < 1) return true;
+    const previous = gatewaySequenceBySocket.get(socket) || 0;
+    if (sequence <= previous) return false;
+    gatewaySequenceBySocket.set(socket, sequence);
+    return true;
+  }
+
   const RELEASE_NOTES_CONTENT = {
       title: "Notas da atualização",
       summary: "Uma rodada de melhorias para deixar o Telai mais claro, compacto e confiável durante transmissões e chamadas.",
@@ -3764,6 +3775,7 @@
         if (typeof event.data !== "string") return;
         try {
           const message = JSON.parse(event.data);
+          if (!acceptGatewayMessage(socket, message)) return;
           if (message.type === "voice-joined") {
             voiceClientId = message.clientId;
             const localHasTrack = Boolean(voiceLocalStream?.getAudioTracks?.().find((track) => track.readyState === "live"));
@@ -4605,6 +4617,7 @@
           } catch {
             return;
           }
+          if (!acceptGatewayMessage(socket, message)) return;
           if (message.type === "viewer-joined" && mediaMode === "p2p") {
             await negotiateBroadcastPeer(message.viewerId);
           } else if (message.type === "viewer-left") {

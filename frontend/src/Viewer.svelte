@@ -41,6 +41,7 @@
   let status = "conectando…";
   let error = "";
   let socket = null;
+  let lastGatewaySequence = 0;
   let remoteVideo;
   let viewerFrame;
   let chatList;
@@ -621,7 +622,15 @@
       socket.addEventListener("error", () => { const caught = new Error("Não foi possível conectar ao servidor de transmissão."); reportViewerError("viewer_socket_error", caught, { roomId }); rejectConnection(caught); }, { once: true });
       socket.addEventListener("message", (event) => {
         if (typeof event.data !== "string") { receiveRelayChunk(event.data); return; }
-        try { receiveMessage(JSON.parse(event.data)); } catch { setStatus("mensagem inválida do servidor"); }
+        try {
+          const message = JSON.parse(event.data);
+          const sequence = Number(message?.sequence);
+          if (Number.isSafeInteger(sequence) && sequence >= 1) {
+            if (sequence <= lastGatewaySequence) return;
+            lastGatewaySequence = sequence;
+          }
+          receiveMessage(message);
+        } catch { setStatus("mensagem inválida do servidor"); }
       });
       socket.addEventListener("close", () => {
         if (!settled) rejectConnection(new Error("A conexão da transmissão foi encerrada antes de conectar."));

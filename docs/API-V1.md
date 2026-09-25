@@ -19,3 +19,7 @@ ao runtime.
 O namespace ainda não representa uma promessa de compatibilidade eterna para
 cada campo de resposta. Antes de remover ou alterar contratos, novas mudanças
 incompatíveis devem ser introduzidas em outra versão e documentadas aqui.
+
+As mensagens de controle do WebSocket incluem `sequence` monotônica por
+conexão. O cliente descarta sequências repetidas ou antigas; mensagens
+binárias de relay continuam fora desse envelope.

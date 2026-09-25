@@ -349,7 +349,8 @@ async function main() {
     const viewer = await openSocket(null);
     const ownViewer = await openSocket(owner);
     send(host, { type: "join", roomId: publicRoom, role: "host" });
-    await waitFor(host, (item) => item.type === "joined" && item.role === "host");
+    const hostJoined = await waitFor(host, (item) => item.type === "joined" && item.role === "host");
+    assert.ok(Number.isSafeInteger(hostJoined.sequence), "evento WebSocket não recebeu sequência");
     send(ownViewer, { type: "join", roomId: publicRoom, role: "viewer" });
     await waitFor(ownViewer, (item) => item.type === "error" && item.message.includes("já está transmitindo"));
     send(viewer, { type: "join", roomId: publicRoom, role: "viewer" });
@@ -424,6 +425,7 @@ async function main() {
     const second = await openSocket(member);
     send(first, { type: "voice-join", groupId, voiceRoomId: group.voiceOneId });
     const firstJoined = await waitFor(first, (item) => item.type === "voice-joined");
+    assert.ok(Number.isSafeInteger(firstJoined.sequence), "evento de voz não recebeu sequência");
     send(second, { type: "voice-join", groupId, voiceRoomId: group.voiceOneId });
     await waitFor(second, (item) => item.type === "voice-joined");
     const memberJoined = await waitFor(first, (item) => item.type === "voice-user-joined" && item.participant.userId === member.user.id);

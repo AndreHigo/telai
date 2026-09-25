@@ -871,7 +871,13 @@ groupSetupRepository.initializeExistingGroups();
 function send(socket, message) {
   if (socket?.readyState !== 1) return false;
   try {
-    socket.send(JSON.stringify(message));
+    const sequence = (socket.gatewaySequence || 0) + 1;
+    socket.gatewaySequence = sequence;
+    socket.send(JSON.stringify(
+      message && typeof message === "object" && !Buffer.isBuffer(message)
+        ? { ...message, sequence }
+        : message,
+    ));
     return true;
   } catch (error) {
     errorLog("ws_send_error", { clientId: socket.clientId, type: message?.type, error: error.message });
