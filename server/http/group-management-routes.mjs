@@ -17,7 +17,7 @@ export function createGroupManagementRoutes({
   return async function handleGroupManagementRoutes(request, response, requestUrl) {
     const groupJoinRequestMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/join-requests$/);
     if (groupJoinRequestMatch && ["POST", "GET"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupJoinRequestMatch[1];
       const group = await groupJoinRequestRepository.findGroup(groupId);
@@ -61,7 +61,7 @@ export function createGroupManagementRoutes({
 
     const groupJoinRequestActionMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/join-requests\/([\w-]{16,64})$/);
     if (groupJoinRequestActionMatch && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, requestId] = groupJoinRequestActionMatch;
       const group = await groupJoinRequestRepository.findGroup(groupId);
@@ -96,7 +96,7 @@ export function createGroupManagementRoutes({
 
     const groupSettingsMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})$/);
     if (groupSettingsMatch && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupSettingsMatch[1];
       const owner = await groupPermissionRepository.member(groupId, user.id);
@@ -122,7 +122,7 @@ export function createGroupManagementRoutes({
 
     const groupAdminMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/admin$/);
     if (groupAdminMatch && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupAdminMatch[1];
       if (!await isGroupMember(user.id, groupId)) {

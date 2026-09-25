@@ -88,7 +88,7 @@ export function createStreamRoutes({
     }
 
     if (requestUrl.pathname === "/api/streams" && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       try {
         const body = await readJson(request);
@@ -152,7 +152,7 @@ export function createStreamRoutes({
 
     const streamActionMatch = requestUrl.pathname.match(/^\/api\/streams\/([\w-]{1,64})\/(end|follow)$/);
     if (streamActionMatch && ["POST", "DELETE"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const stream = await streamRepository.findById(streamActionMatch[1]);
       if (!stream) {

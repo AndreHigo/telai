@@ -14,7 +14,7 @@ export function createGroupModerationRoutes({
   return async function handleGroupModerationRoutes(request, response, requestUrl) {
     const match = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/moderation$/);
     if (!match || request.method !== "POST") return false;
-    const user = requireUser(request, response);
+    const user = await requireUser(request, response);
     if (!user) return true;
     const groupId = match[1];
     const actor = await groupMemberRepository.find(groupId, user.id);

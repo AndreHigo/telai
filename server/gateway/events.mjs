@@ -139,9 +139,10 @@ export function createEventGateway({
   }
 
   eventServer.on("connection", (socket, request) => {
+    Promise.resolve().then(async () => {
     socket.clientId = randomUUID();
     socket.clientIpAddress = clientIp(request);
-    socket.user = currentUser(request);
+    socket.user = await currentUser(request);
     socket.eventGroups = new Set();
     addWebsocketActive(socket.clientIpAddress);
     clients.add(socket);
@@ -176,6 +177,10 @@ export function createEventGateway({
         warnLog("events_invalid_message", { clientId: socket.clientId, error: error.message });
         send(socket, { type: "events-error", code: "invalid_message", message: "Mensagem inválida." });
       }
+    });
+    }).catch((error) => {
+      errorLog("events_authentication_error", { clientId: socket.clientId, error: error.message });
+      try { socket.close(1011, "authentication unavailable"); } catch {}
     });
   });
 

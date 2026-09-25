@@ -1,7 +1,7 @@
 export function createMemberInviteRoutes({ json, requireUser, groupInviteRepository }) {
   return async function handleMemberInviteRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/api/member-invites/pending" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const now = new Date().toISOString();
       await groupInviteRepository.expireMemberInvites(user.id, now);
@@ -12,7 +12,7 @@ export function createMemberInviteRoutes({ json, requireUser, groupInviteReposit
 
     const memberInviteActionMatch = requestUrl.pathname.match(/^\/api\/member-invites\/([\w-]{16,})\/(accept|decline)$/);
     if (memberInviteActionMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, inviteId, action] = memberInviteActionMatch;
       const invite = await groupInviteRepository.findMemberInvite(inviteId, user.id);
@@ -49,7 +49,7 @@ export function createMemberInviteRoutes({ json, requireUser, groupInviteReposit
 
     const redeemMatch = requestUrl.pathname.match(/^\/api\/invites\/([\w-]{16,})\/redeem$/);
     if (redeemMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const result = await groupInviteRepository.redeemGroupInvite(redeemMatch[1], user.id);
       if (result.kind === "banned") {

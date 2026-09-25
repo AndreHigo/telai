@@ -19,7 +19,7 @@ export function createGroupContentRoutes({
   return async function handleGroupContentRoutes(request, response, requestUrl) {
     const groupAttachmentMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/attachments\/([\w-]{16,64})$/);
     if (groupAttachmentMatch && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, attachmentId] = groupAttachmentMatch;
       if (!await isGroupMember(user.id, groupId)) {
@@ -48,7 +48,7 @@ export function createGroupContentRoutes({
 
     const groupMessageMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages$/);
     if (groupMessageMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupMessageMatch[1];
       if (!await isGroupMember(user.id, groupId)) {
@@ -120,7 +120,7 @@ export function createGroupContentRoutes({
 
     const groupMessageMutationMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages\/([\w-]{1,128})$/);
     if (groupMessageMutationMatch && ["PATCH", "DELETE"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupMessageMutationMatch[1];
       const messageId = groupMessageMutationMatch[2];
@@ -174,7 +174,7 @@ export function createGroupContentRoutes({
 
     const groupPermissionsMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/permissions$/);
     if (groupPermissionsMatch && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupPermissionsMatch[1];
       const owner = await groupPermissionRepository.member(groupId, user.id);

@@ -2,7 +2,7 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
   return async function handleGroupRoleRoutes(request, response, requestUrl) {
     const groupRoleCreateMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/roles$/);
     if (groupRoleCreateMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupRoleCreateMatch[1];
       const owner = await groupPermissionRepository.member(groupId, user.id);
@@ -38,7 +38,7 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
 
     const groupRoleOrderMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/roles\/order$/);
     if (groupRoleOrderMatch && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupRoleOrderMatch[1];
       const owner = await groupPermissionRepository.member(groupId, user.id);
@@ -64,7 +64,7 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
 
     const groupRoleMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/roles\/([\w-]{1,64})$/);
     if (groupRoleMatch && ["PATCH", "DELETE"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, roleId] = groupRoleMatch;
       const owner = await groupPermissionRepository.member(groupId, user.id);
@@ -119,7 +119,7 @@ export function createGroupRoleRoutes({ json, readJson, requireUser, groupRoleRe
 
     const groupMemberRoleMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/members\/([\w-]{1,64})\/role$/);
     if (groupMemberRoleMatch && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, memberId] = groupMemberRoleMatch;
       const owner = await groupPermissionRepository.member(groupId, user.id);

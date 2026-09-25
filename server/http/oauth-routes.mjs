@@ -27,7 +27,7 @@ export function createOAuthRoutes({
         return true;
       }
       const linkMode = requestUrl.searchParams.get("mode") === "link";
-      const linkingUser = linkMode ? currentUser(request) : null;
+      const linkingUser = linkMode ? await currentUser(request) : null;
       if (linkMode && !linkingUser) {
         response.writeHead(302, { Location: "/login?auth_error=login-required" }).end();
         return true;
@@ -85,18 +85,18 @@ export function createOAuthRoutes({
       try {
         const identity = await fetchOAuthIdentity(providerName, code, stateData.verifier, request);
         if (stateData.mode === "link") {
-          const linkingUser = currentUser(request);
+          const linkingUser = await currentUser(request);
           if (!linkingUser || linkingUser.id !== stateData.userId) throw new Error("oauth-link-session-invalid");
-          const linkResult = linkOAuthAccount(providerName, identity, linkingUser.id);
+          const linkResult = await linkOAuthAccount(providerName, identity, linkingUser.id);
           const linkQuery = new URLSearchParams({ account: "1", linked: providerName });
           if (linkResult.suggestedDisplayName && linkResult.suggestedDisplayName !== linkResult.currentDisplayName) linkQuery.set("name", linkResult.suggestedDisplayName);
           response.writeHead(302, { Location: `/?${linkQuery.toString()}` }).end();
           return true;
         }
-        const user = upsertOAuthUser(providerName, identity);
+        const user = await upsertOAuthUser(providerName, identity);
         const token = randomBytes(32).toString("base64url");
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        sessionRepository.create({ userId: user.id, token, expiresAt, createdAt: new Date().toISOString() });
+        await sessionRepository.create({ userId: user.id, token, expiresAt, createdAt: new Date().toISOString() });
         response.setHeader("Set-Cookie", [sessionCookie(token, request), oauthStateCookie("", request, 0)]);
         response.writeHead(302, { Location: "/" }).end();
         return true;

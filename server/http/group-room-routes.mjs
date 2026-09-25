@@ -15,7 +15,7 @@ export function createGroupRoomRoutes({
   return async function handleGroupRoomRoutes(request, response, requestUrl) {
     const groupRoomsMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms$/);
     if (groupRoomsMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupRoomsMatch[1];
       if (!await isGroupMember(user.id, groupId)) {
@@ -49,7 +49,7 @@ export function createGroupRoomRoutes({
 
     const groupRoomActionMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms\/([\w-]{1,64})$/);
     if (groupRoomActionMatch && ["PATCH", "DELETE"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, roomId] = groupRoomActionMatch;
       const member = await groupPermissionRepository.member(groupId, user.id);
@@ -97,7 +97,7 @@ export function createGroupRoomRoutes({
 
     const groupRoomPermissionsMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms\/([\w-]{1,64})\/permissions$/);
     if (groupRoomPermissionsMatch && ["GET", "PATCH", "DELETE"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, roomId] = groupRoomPermissionsMatch;
       const member = await groupPermissionRepository.member(groupId, user.id);

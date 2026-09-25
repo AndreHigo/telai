@@ -235,6 +235,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Ajustar o helper HTTP JSON para encerrar corretamente o dispatch quando uma rota assíncrona responde diretamente.
 - [x] Tornar configurações de usuário, preferências de voz, notificações e convites pendentes compatíveis com repositórios síncronos e assíncronos.
 - [x] Tornar as rotas HTTP de transmissões públicas, follows e resolução de canais compatíveis com repositórios síncronos e assíncronos.
+- [x] Migrar autenticação, sessões, contas e o handshake de autenticação dos gateways HTTP/WebSocket para a fronteira assíncrona.
 - [ ] Completar a fronteira assíncrona das demais rotas HTTP e gateways antes de selecionar os repositórios PostgreSQL no runtime.
 - [ ] Executar migration, importar dados e ativar PostgreSQL após validação real.
 - [ ] Adicionar Redis/event bus somente quando houver mais de uma instância ou necessidade de filas.

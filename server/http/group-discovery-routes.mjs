@@ -9,14 +9,14 @@ export function createGroupDiscoveryRoutes({
 }) {
   return async function handleGroupDiscoveryRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/api/groups" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       json(response, 200, { groups: await groupRepository.listGroups(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/groups/search" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const query = String(requestUrl.searchParams.get("q") || "").trim().slice(0, 64);
       if (query.length < 2) {
@@ -28,7 +28,7 @@ export function createGroupDiscoveryRoutes({
     }
 
     if (requestUrl.pathname === "/api/groups" && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       try {
         const body = await readJson(request);
@@ -50,7 +50,7 @@ export function createGroupDiscoveryRoutes({
 
     const groupMembershipMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/membership$/);
     if (groupMembershipMatch && request.method === "DELETE") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupMembershipMatch[1];
       const group = await groupSettingsRepository.findGroup(groupId);

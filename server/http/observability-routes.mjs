@@ -30,7 +30,7 @@ export function createObservabilityRoutes({
       }
       try {
         const body = await readJson(request, 12 * 1024);
-        const user = currentUser(request);
+        const user = await currentUser(request);
         const kind = String(body.kind || "client_error").replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 64) || "client_error";
         addMapCount(observability.clientEventCounts, kind);
         const clientDiagnostic = {

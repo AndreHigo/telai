@@ -26,7 +26,7 @@ export function createAdminRoutes({
     }
 
     if (requestUrl.pathname === "/api/admin/maintenance" && request.method === "POST") {
-      const operator = requireMaintenanceOperator(request, response);
+      const operator = await requireMaintenanceOperator(request, response);
       if (!operator) return true;
       try {
         const body = await readJson(request);
@@ -51,7 +51,7 @@ export function createAdminRoutes({
     }
 
     if (requestUrl.pathname === "/api/admin/maintenance" && request.method === "DELETE") {
-      const operator = requireMaintenanceOperator(request, response);
+      const operator = await requireMaintenanceOperator(request, response);
       if (!operator) return true;
       await maintenanceRepository.clear(new Date().toISOString());
       json(response, 200, { ok: true });
@@ -59,14 +59,14 @@ export function createAdminRoutes({
     }
 
     if (requestUrl.pathname === "/api/admin/email/status" && request.method === "GET") {
-      if (!requireSiteAdmin(request, response)) return true;
+      if (!await requireSiteAdmin(request, response)) return true;
       const smtp = requestUrl.searchParams.get("verify") === "1" ? await verifySmtp() : smtpStatus();
       json(response, 200, { smtp });
       return true;
     }
 
     if (requestUrl.pathname === "/api/admin/email/test" && request.method === "POST") {
-      if (!requireSiteAdmin(request, response)) return true;
+      if (!await requireSiteAdmin(request, response)) return true;
       try {
         const body = await readJson(request, 4 * 1024);
         const recipient = String(body.to || "").trim();
@@ -76,7 +76,7 @@ export function createAdminRoutes({
           text: "Este é um teste de envio SMTP do Telai. Se você recebeu esta mensagem, o relay está funcionando.",
           html: "<p>Este é um teste de envio SMTP do Telai.</p><p>Se você recebeu esta mensagem, o relay está funcionando.</p>",
         });
-        infoLog("smtp_test_sent", { operatorId: currentUser(request)?.id || null, recipientDomain: recipient.split("@").pop() || "" });
+        infoLog("smtp_test_sent", { operatorId: (await currentUser(request))?.id || null, recipientDomain: recipient.split("@").pop() || "" });
         json(response, 200, { ok: true, smtp: smtpStatus(), messageId: result.messageId });
       } catch (error) {
         warnLog("smtp_test_failed", { errorCode: error?.code || "smtp-test-failed", error: error?.message || String(error) });
@@ -94,7 +94,7 @@ export function createAdminRoutes({
     ];
     const adminPage = adminPages.find(([pathname]) => pathname === requestUrl.pathname);
     if (adminPage && request.method === "GET") {
-      if (!requireSiteAdmin(request, response)) return true;
+      if (!await requireSiteAdmin(request, response)) return true;
       const [, handler, errorEvent, errorMessage] = adminPage;
       try {
         const payload = handler === siteAdminSummary || handler === siteAdminOverview ? handler() : handler(requestUrl);
@@ -108,7 +108,7 @@ export function createAdminRoutes({
 
     const adminMembersMatch = requestUrl.pathname.match(/^\/api\/admin\/groups\/([\w-]{1,128})\/members$/);
     if (adminMembersMatch && request.method === "GET") {
-      if (!requireSiteAdmin(request, response)) return true;
+      if (!await requireSiteAdmin(request, response)) return true;
       try {
         const result = siteAdminGroupMembersPage(requestUrl, adminMembersMatch[1]);
         if (!result) {

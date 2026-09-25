@@ -17,7 +17,7 @@ export function createGroupInviteRoutes({
   return async function handleGroupInviteRoutes(request, response, requestUrl) {
     const memberInviteCreateMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/member-invites$/);
     if (memberInviteCreateMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = memberInviteCreateMatch[1];
       if (!await isGroupMember(user.id, groupId)) {
@@ -52,7 +52,7 @@ export function createGroupInviteRoutes({
 
     const inviteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/invites$/);
     if (inviteMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = inviteMatch[1];
       const member = await groupPermissionRepository.member(groupId, user.id);
@@ -79,7 +79,7 @@ export function createGroupInviteRoutes({
 
     const inviteDeleteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/invites\/([a-f0-9]{32,128})$/i);
     if (inviteDeleteMatch && request.method === "DELETE") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, tokenHash] = inviteDeleteMatch;
       const group = await groupSettingsRepository.findGroup(groupId);

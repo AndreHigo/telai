@@ -17,8 +17,8 @@ export function createAdminRuntime({
     return Boolean(user && (siteAdminUserIds.has(user.id) || siteAdminUsernames.has(normalizeUsername(user.username))));
   }
 
-  function requireSiteAdmin(request, response) {
-    const user = currentUser(request);
+  async function requireSiteAdmin(request, response) {
+    const user = await currentUser(request);
     if (!user) {
       json(response, 401, { error: "Entre com sua conta para continuar." });
       return null;
@@ -42,9 +42,9 @@ export function createAdminRuntime({
     }
   }
 
-  function requireMaintenanceOperator(request, response) {
+  async function requireMaintenanceOperator(request, response) {
     if (hasMaintenanceToken(request)) return { type: "token" };
-    const user = currentUser(request);
+    const user = await currentUser(request);
     if (!user) {
       json(response, 401, { error: "Entre com sua conta para continuar." });
       return null;

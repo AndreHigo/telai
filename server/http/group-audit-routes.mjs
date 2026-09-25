@@ -2,7 +2,7 @@ export function createGroupAuditRoutes({ json, requireUser, groupPermissionRepos
   return async function handleGroupAuditRoutes(request, response, requestUrl) {
     const match = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/audit-log$/);
     if (!match || request.method !== "GET") return false;
-    const user = requireUser(request, response);
+    const user = await requireUser(request, response);
     if (!user) return true;
     const groupId = match[1];
     const member = await groupPermissionRepository.member(groupId, user.id);

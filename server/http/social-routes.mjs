@@ -1,7 +1,7 @@
 export function createSocialRoutes({ json, requireUser, socialRepository, createNotification }) {
   return async function handleSocialRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/api/users/search" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const query = String(requestUrl.searchParams.get("q") || "").trim().replace(/^@/, "").slice(0, 48);
       if (query.length < 2) {
@@ -13,7 +13,7 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
     }
 
     if (requestUrl.pathname === "/api/social" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       json(response, 200, await socialRepository.listSocial(user.id));
       return true;
@@ -21,7 +21,7 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
 
     const friendRequestActionMatch = requestUrl.pathname.match(/^\/api\/friends\/requests\/([\w-]{16,64})\/(accept|decline)$/);
     if (friendRequestActionMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const requestId = friendRequestActionMatch[1];
       const action = friendRequestActionMatch[2];
@@ -53,7 +53,7 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
 
     const friendRequestCancelMatch = requestUrl.pathname.match(/^\/api\/friends\/requests\/([\w-]{16,64})$/);
     if (friendRequestCancelMatch && request.method === "DELETE") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       if (!await socialRepository.cancelFriendRequest(friendRequestCancelMatch[1], user.id)) {
         json(response, 404, { error: "Solicitação de amizade não encontrada." });
@@ -65,7 +65,7 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
 
     const friendTargetMatch = requestUrl.pathname.match(/^\/api\/friends\/([\w-]{16,64})$/);
     if (friendTargetMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const targetUserId = friendTargetMatch[1];
       if (targetUserId === user.id) {
@@ -102,7 +102,7 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
       return true;
     }
     if (friendTargetMatch && request.method === "DELETE") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       if (!await socialRepository.removeFriendship(user.id, friendTargetMatch[1])) {
         json(response, 404, { error: "Amizade não encontrada." });
@@ -114,7 +114,7 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
 
     const blockTargetMatch = requestUrl.pathname.match(/^\/api\/users\/([\w-]{16,64})\/block$/);
     if (blockTargetMatch && ["POST", "DELETE"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const targetUserId = blockTargetMatch[1];
       if (targetUserId === user.id) {
@@ -133,7 +133,7 @@ export function createSocialRoutes({ json, requireUser, socialRepository, create
 
     const userFollowMatch = requestUrl.pathname.match(/^\/api\/users\/([\w-]{16,64})\/follow$/);
     if (userFollowMatch && ["POST", "DELETE"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const targetUserId = userFollowMatch[1];
       if (targetUserId === user.id) {

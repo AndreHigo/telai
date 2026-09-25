@@ -683,6 +683,7 @@ const {
   clearLoginFailure,
   createSession,
   currentUser,
+  currentUserAsync,
   deleteUserAccount,
   expiredSessionCookie,
   fetchOAuthIdentity,
@@ -722,7 +723,7 @@ const handleStreamRoutes = createStreamRoutes({
   json,
   readJson,
   requireUser,
-  currentUser,
+  currentUser: currentUserAsync,
   streamRepository,
   channelProfileRepository,
   channelProfileForUser,
@@ -788,7 +789,7 @@ const handleUserSettingsRoutes = createUserSettingsRoutes({
   json,
   readJson,
   requireUser,
-  currentUser,
+  currentUser: currentUserAsync,
   userWithLinkedAccounts,
   userProfileRepository,
   channelProfileForUser,
@@ -819,7 +820,7 @@ const {
   siteAdminSummary,
 } = createAdminRuntime({
   json,
-  currentUser,
+  currentUser: currentUserAsync,
   normalizeUsername,
   siteAdminUserIds,
   siteAdminUsernames,
@@ -842,7 +843,7 @@ const handleAdminRoutes = createAdminRoutes({
   smtpStatus,
   verifySmtp,
   sendEmail,
-  currentUser,
+  currentUser: currentUserAsync,
   infoLog,
   warnLog,
   errorLog,
@@ -868,11 +869,8 @@ function pruneExpiredRuntimeState() {
   for (const [key, lastSeen] of groupPresence) {
     if (now - lastSeen > 35_000) groupPresence.delete(key);
   }
-  try {
-    sessionRepository.deleteExpired(new Date(now).toISOString());
-  } catch (error) {
-    errorLog("expired_state_cleanup_error", { error });
-  }
+  Promise.resolve(sessionRepository.deleteExpired(new Date(now).toISOString()))
+    .catch((error) => errorLog("expired_state_cleanup_error", { error }));
 }
 
 setInterval(pruneExpiredRuntimeState, 5 * 60_000).unref();
@@ -881,7 +879,7 @@ const handleAuthRoutes = createAuthRoutes({
   json,
   readJson,
   requireUser,
-  currentUser,
+  currentUser: currentUserAsync,
   userWithLinkedAccounts,
   oauthProvider,
   publicOriginForRequest,
@@ -910,7 +908,7 @@ const handleAuthRoutes = createAuthRoutes({
 });
 const handleOAuthRoutes = createOAuthRoutes({
   oauthProvider,
-  currentUser,
+  currentUser: currentUserAsync,
   oauthStateCookie,
   oauthRedirectUri,
   oauthErrorRedirect,
@@ -934,7 +932,7 @@ const handleStaticRoutes = createStaticRoutes({
   desktopArtifactName,
   desktopReleaseDir,
   allowLargeArtifactRequest,
-  currentUser,
+  currentUser: currentUserAsync,
 });
 const handleObservabilityRoutes = createObservabilityRoutes({
   json,
@@ -942,7 +940,7 @@ const handleObservabilityRoutes = createObservabilityRoutes({
   isLocalObservabilityRequest,
   observabilitySnapshot,
   allowClientErrorRequest,
-  currentUser,
+  currentUser: currentUserAsync,
   addMapCount,
   observability,
   routineClientDiagnosticKinds,
@@ -953,8 +951,8 @@ const handleObservabilityRoutes = createObservabilityRoutes({
 
 const mergeUsers = (targetId, sourceId) => accountRepository.mergeUsers(targetId, sourceId);
 
-function requireUser(request, response) {
-  const user = currentUser(request);
+async function requireUser(request, response) {
+  const user = await currentUserAsync(request);
   if (!user) json(response, 401, { error: "Entre com sua conta para continuar." });
   return user;
 }
@@ -1127,7 +1125,7 @@ const handleBinaryMessage = createBinaryMessageHandler({
 
 const websocketServer = createWebsocketGateway({
   server,
-  currentUser,
+  currentUser: currentUserAsync,
   clientIp,
   publicOriginForRequest,
   allowWebsocketConnection,
@@ -1152,7 +1150,7 @@ const websocketServer = createWebsocketGateway({
 
 eventGateway = createEventGateway({
   server,
-  currentUser,
+  currentUser: currentUserAsync,
   clientIp,
   publicOriginForRequest,
   allowWebsocketConnection,

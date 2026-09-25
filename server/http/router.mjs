@@ -52,7 +52,7 @@ export function createHttpRouter({
     if (await handleAdminRoutes(request, response, routedUrl)) return true;
 
     if ((routedUrl.pathname === "/admin" || routedUrl.pathname === "/admin/") && ["GET", "HEAD"].includes(request.method)) {
-      if (!requireSiteAdmin(request, response)) return true;
+      if (!await requireSiteAdmin(request, response)) return true;
       const adminPath = path.join(publicDir, "admin", "index.html");
       fs.readFile(adminPath, (error, content) => {
         if (error) {

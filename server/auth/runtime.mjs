@@ -95,6 +95,13 @@ export function createAuthRuntime({
     return sessionRepository.findUserByToken(token);
   }
 
+  // A fronteira HTTP/gateway usa esta variante para funcionar tanto com o
+  // repositório SQLite síncrono quanto com o repositório PostgreSQL assíncrono.
+  async function currentUserAsync(request) {
+    const token = parseCookies(request).mirante_session;
+    return await sessionRepository.findUserByToken(token);
+  }
+
   function sessionCookie(token, request) {
     const forwardedProto = trustedForwardedHeaders(request)
       ? String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim()
@@ -111,10 +118,10 @@ export function createAuthRuntime({
     return `mirante_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`;
   }
 
-  function createSession(userId, request, response) {
+  async function createSession(userId, request, response) {
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    sessionRepository.create({ userId, token, expiresAt });
+    await sessionRepository.create({ userId, token, expiresAt });
     response.setHeader("Set-Cookie", sessionCookie(token, request));
   }
 
@@ -209,7 +216,7 @@ export function createAuthRuntime({
     };
   }
 
-  const userDataExport = (userId) => accountRepository.userDataExport(userId);
+  const userDataExport = async (userId) => await accountRepository.userDataExport(userId);
 
   function disconnectUserSockets(userId) {
     const websocketServer = getWebsocketServer();
@@ -221,8 +228,8 @@ export function createAuthRuntime({
     }
   }
 
-  function deleteUserAccount(userId) {
-    accountRepository.deleteUserAccount(userId);
+  async function deleteUserAccount(userId) {
+    await accountRepository.deleteUserAccount(userId);
     for (const key of groupPresence.keys()) if (key.startsWith(`${userId}:`)) groupPresence.delete(key);
     disconnectUserSockets(userId);
   }
@@ -232,6 +239,7 @@ export function createAuthRuntime({
     clearLoginFailure,
     createSession,
     currentUser,
+    currentUserAsync,
     deleteUserAccount,
     expiredSessionCookie,
     fetchOAuthIdentity,

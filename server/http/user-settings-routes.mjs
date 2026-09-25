@@ -19,7 +19,7 @@ export function createUserSettingsRoutes({
 
   return async function handleUserSettingsRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/api/auth/profile" && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       try {
         const body = await readJson(request, 8 * 1024 * 1024);
@@ -39,14 +39,14 @@ export function createUserSettingsRoutes({
     }
 
     if (requestUrl.pathname === "/api/auth/channel" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       json(response, 200, { channel: await channelProfileForUser(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/channel" && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       try {
         const body = await readJson(request, 8 * 1024 * 1024);
@@ -67,14 +67,14 @@ export function createUserSettingsRoutes({
     }
 
     if (requestUrl.pathname === "/api/auth/preferences" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       json(response, 200, { preferences: await userPreferenceRepository.getPreferences(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/preferences" && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       try {
         const body = await readJson(request);
@@ -121,14 +121,14 @@ export function createUserSettingsRoutes({
     }
 
     if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       json(response, 200, { preferences: await userPreferenceRepository.listVoicePreferences(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       try {
         const body = await readJson(request);
@@ -152,7 +152,7 @@ export function createUserSettingsRoutes({
     }
 
     if (requestUrl.pathname === "/api/auth/voice-preferences" && request.method === "DELETE") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       await userPreferenceRepository.deleteVoicePreferences(user.id);
       json(response, 200, { preferences: [] });

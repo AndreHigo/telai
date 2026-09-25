@@ -18,7 +18,7 @@ export function createStaticRoutes({
       "/salas-de-voz-e-comunidades": "seo/salas-de-voz-e-comunidades.html",
     };
     const seoPage = seoPages[requestUrl.pathname.replace(/\/$/, "") || "/"];
-    if (seoPage && ["GET", "HEAD"].includes(request.method) && (requestUrl.pathname !== "/" || !currentUser(request))) {
+    if (seoPage && ["GET", "HEAD"].includes(request.method) && (requestUrl.pathname !== "/" || !await currentUser(request))) {
       const seoPath = path.resolve(publicDir, seoPage);
       fs.readFile(seoPath, (error, content) => {
         if (error) {

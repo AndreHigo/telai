@@ -30,7 +30,7 @@ export function createGroupRuntimeRoutes({
   return async function handleGroupRuntimeRoutes(request, response, requestUrl) {
     const groupThreadMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages\/([\w-]{16,128})\/thread$/);
     if (groupThreadMatch && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, parentMessageId] = groupThreadMatch;
       if (!await isGroupMember(user.id, groupId)) {
@@ -58,7 +58,7 @@ export function createGroupRuntimeRoutes({
 
     const groupMessageSearchMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages\/search$/);
     if (groupMessageSearchMatch && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupMessageSearchMatch[1];
       if (!await isGroupMember(user.id, groupId)) {
@@ -88,7 +88,7 @@ export function createGroupRuntimeRoutes({
 
     const groupRoomReadMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/rooms\/([\w-]{1,64})\/read$/);
     if (groupRoomReadMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const [, groupId, roomId] = groupRoomReadMatch;
       if (!await isGroupMember(user.id, groupId)) {
@@ -112,7 +112,7 @@ export function createGroupRuntimeRoutes({
 
     const groupDeleteMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})$/);
     if (groupDeleteMatch && request.method === "DELETE") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupDeleteMatch[1];
       const group = await groupJoinRequestRepository.findGroup(groupId);
@@ -141,7 +141,7 @@ export function createGroupRuntimeRoutes({
 
     const groupOverviewMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/overview$/);
     if (groupOverviewMatch && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupOverviewMatch[1];
       if (!await isGroupMember(user.id, groupId)) {
@@ -191,7 +191,7 @@ export function createGroupRuntimeRoutes({
 
     const groupPresenceMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/presence$/);
     if (groupPresenceMatch && ["GET", "POST"].includes(request.method)) {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const groupId = groupPresenceMatch[1];
       if (!await isGroupMember(user.id, groupId)) {

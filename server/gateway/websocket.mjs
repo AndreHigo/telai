@@ -71,10 +71,11 @@ export function createWebsocketGateway({
 
   installWebsocketHeartbeat(websocketServer);
   websocketServer.on("connection", (socket, request) => {
+    Promise.resolve().then(async () => {
     socket.clientId = randomUUID();
     socket.clientIpAddress = clientIp(request);
     addWebsocketActive(socket.clientIpAddress);
-    socket.user = currentUser(request);
+    socket.user = await currentUser(request);
     observability.websocket.active += 1;
     observability.websocket.connections += 1;
     const originalSocketSend = socket.send.bind(socket);
@@ -126,6 +127,11 @@ export function createWebsocketGateway({
       infoLog("ws_closed", { clientId: socket.clientId, code, reason: reason?.toString().slice(0, 120), roomId: socket.roomId, voiceRoomId: socket.voiceRoomId });
       leave(socket);
       leaveVoiceRoom(socket);
+    });
+    }).catch((error) => {
+      removeWebsocketActive(socket.clientIpAddress || clientIp(request));
+      errorLog("ws_authentication_error", { clientId: socket.clientId, error: error.message });
+      try { socket.close(1011, "authentication unavailable"); } catch {}
     });
   });
 

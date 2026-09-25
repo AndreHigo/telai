@@ -9,7 +9,7 @@ export function createNotificationRoutes({
 }) {
   return async function handleNotificationRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/api/notifications" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const now = new Date().toISOString();
       await groupInviteRepository.expireMemberInvites(user.id, now);
@@ -36,7 +36,7 @@ export function createNotificationRoutes({
     }
 
     if (requestUrl.pathname === "/api/notifications/read-all" && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       await notificationRepository.markAllRead(user.id, new Date().toISOString());
       json(response, 200, { ok: true });
@@ -45,7 +45,7 @@ export function createNotificationRoutes({
 
     const notificationMatch = requestUrl.pathname.match(/^\/api\/notifications\/([\w-]{16,64})$/);
     if (notificationMatch && request.method === "PATCH") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const notificationId = notificationMatch[1];
       if (!await notificationRepository.hasNotification(user.id, notificationId)) {

@@ -11,14 +11,14 @@ export function createDirectRoutes({
 }) {
   return async function handleDirectRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/api/direct/conversations" && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       json(response, 200, { conversations: await directConversationRepository.listConversationsForUser(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/direct/conversations" && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       try {
         const body = await readJson(request);
@@ -38,7 +38,7 @@ export function createDirectRoutes({
 
     const directConversationMatch = requestUrl.pathname.match(/^\/api\/direct\/conversations\/([\w-]{16,64})(?:\/(messages|read))?$/);
     if (directConversationMatch && request.method === "GET") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const conversationId = directConversationMatch[1];
       const conversation = await directConversationPayload(conversationId, user.id);
@@ -60,7 +60,7 @@ export function createDirectRoutes({
     }
 
     if (directConversationMatch && directConversationMatch[2] === "read" && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const conversationId = directConversationMatch[1];
       if (!await directConversationForUser(conversationId, user.id)) {
@@ -74,7 +74,7 @@ export function createDirectRoutes({
 
     const directMessagesMatch = requestUrl.pathname.match(/^\/api\/direct\/conversations\/([\w-]{16,64})\/messages$/);
     if (directMessagesMatch && request.method === "POST") {
-      const user = requireUser(request, response);
+      const user = await requireUser(request, response);
       if (!user) return true;
       const conversationId = directMessagesMatch[1];
       if (!await directConversationForUser(conversationId, user.id)) {
