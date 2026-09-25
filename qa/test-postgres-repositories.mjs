@@ -251,7 +251,9 @@ try {
 
   const groupSettings = createPostgresGroupSettingsRepository(client);
   assert.equal((await groupSettings.findGroup(createdGroup.id)).ownerId, ids.owner);
+  assert.equal((await groupSettings.findDuplicateSlug(`pg-updated-${ids.group}`, createdGroup.id)), null);
   assert.equal((await groupSettings.updateGroup(createdGroup.id, "PG Updated Group", `pg-updated-${ids.group}`)).name, "PG Updated Group");
+  assert.equal((await groupSettings.findDuplicateSlug(`pg-updated-${ids.group}`, ids.group)).id, createdGroup.id);
   assert.equal(await groupSettings.deleteGroup(createdGroup.id), true);
 
   await client.query("ROLLBACK");

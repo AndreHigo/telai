@@ -12,7 +12,11 @@ export function createGroupSettingsRepository(database) {
     return database.prepare("DELETE FROM groups WHERE id = ?").run(groupId).changes > 0;
   }
 
-  return { findGroup, updateGroup, deleteGroup };
+  function findDuplicateSlug(slug, exceptGroupId) {
+    return database.prepare("SELECT id FROM groups WHERE slug = ? AND id <> ?").get(slug, exceptGroupId) || null;
+  }
+
+  return { findGroup, updateGroup, deleteGroup, findDuplicateSlug };
 }
 
 export function createPostgresGroupSettingsRepository(database) {
@@ -32,5 +36,10 @@ export function createPostgresGroupSettingsRepository(database) {
     return result.rowCount > 0;
   }
 
-  return { findGroup, updateGroup, deleteGroup };
+  async function findDuplicateSlug(slug, exceptGroupId) {
+    const result = await database.query("SELECT id FROM groups WHERE slug = $1 AND id <> $2", [slug, exceptGroupId]);
+    return result.rows[0] || null;
+  }
+
+  return { findGroup, updateGroup, deleteGroup, findDuplicateSlug };
 }

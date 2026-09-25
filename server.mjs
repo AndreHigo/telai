@@ -2808,7 +2808,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = groupMembershipMatch[1];
-    const group = groupJoinRequestRepository.findGroup(groupId);
+    const group = groupSettingsRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     const membership = groupMemberRepository.find(groupId, user.id);
     if (!membership) return json(response, 404, { error: "Você não participa deste grupo." });
@@ -2846,7 +2846,7 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = groupJoinRequestMatch[1];
-    const group = database.prepare("SELECT id, name, owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
+    const group = groupJoinRequestRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     if (request.method === "GET") {
       if (group.ownerId !== user.id) return json(response, 403, { error: "Somente o administrador pode ver as solicitações." });
@@ -2896,13 +2896,13 @@ async function handleHttpRequest(request, response) {
     const user = requireUser(request, response);
     if (!user) return;
     const groupId = groupSettingsMatch[1];
-    const owner = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const owner = groupPermissionRepository.member(groupId, user.id);
     if (owner?.role !== "owner") return json(response, 403, { error: "Somente o dono pode alterar as configurações do grupo." });
     readJson(request).then((body) => {
       const name = String(body.name || "").trim().slice(0, 64);
       const slug = slugFor(body.slug || name);
       if (name.length < 2 || slug.length < 2) return json(response, 400, { error: "Informe um nome válido para o grupo." });
-      const duplicate = database.prepare("SELECT id FROM groups WHERE slug = ? AND id <> ?").get(slug, groupId);
+      const duplicate = groupSettingsRepository.findDuplicateSlug(slug, groupId);
       if (duplicate) return json(response, 409, { error: "Já existe um grupo com esse nome." });
       return json(response, 200, { group: groupSettingsRepository.updateGroup(groupId, name, slug) });
     }).catch(() => json(response, 400, { error: "Não foi possível salvar as configurações do grupo." }));
@@ -2914,7 +2914,7 @@ async function handleHttpRequest(request, response) {
     if (!user) return;
     const groupId = groupAdminMatch[1];
     if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
-    const group = database.prepare("SELECT id, name, slug, owner_id AS ownerId FROM groups WHERE id = ?").get(groupId);
+    const group = groupSettingsRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     groupSetupRepository.ensureDefaultGroupRoles(groupId, group.ownerId);
     const roles = groupRoleRepository.listRoles(groupId);
