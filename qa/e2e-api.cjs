@@ -3,6 +3,7 @@ const { WebSocket } = require("ws");
 
 const base = process.env.BASE_URL || "http://127.0.0.1:8799";
 const wsBase = base.replace(/^http/, "ws");
+const expectedDatabaseDriver = process.env.EXPECTED_DATABASE_DRIVER || "sqlite";
 const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 const sockets = new Set();
 const failures = [];
@@ -82,7 +83,7 @@ async function main() {
   await check("health and runtime routes", async () => {
     const health = await request("/healthz");
     assert.equal(health.body.ok, true);
-    assert.equal(health.body.databaseDriver, "sqlite");
+    assert.equal(health.body.databaseDriver, expectedDatabaseDriver);
     for (const path of ["/healthz", "/runtime-config", "/ice-config", "/svelte/", "/favicon.svg"]) {
       const result = await request(path);
       assert.equal(result.response.status, 200, `${path} returned ${result.response.status}`);

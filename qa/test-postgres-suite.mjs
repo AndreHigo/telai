@@ -8,6 +8,7 @@ const scripts = [
   "test-postgres-repositories.mjs",
   "test-postgres-import.mjs",
   "test-postgres-maintenance.cjs",
+  "run-api-postgres.cjs",
 ];
 const qaDirectory = path.dirname(fileURLToPath(import.meta.url));
 

@@ -264,6 +264,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Migrar o painel administrativo, paginação e overview para consultas assíncronas de contas, grupos, membros e streams.
 - [x] Completar a fronteira assíncrona das rotas HTTP e gateways cobertas pelo runtime atual antes de selecionar os repositórios PostgreSQL.
 - [x] Selecionar os repositórios PostgreSQL no runtime e validar API, gateways, segurança, administração, observabilidade, reconexão de voz e mídia contra PostgreSQL local.
+- [x] Validar a smoke test da API HTTP completa com o runtime PostgreSQL em banco temporário isolado.
 - [ ] Executar migration, importar dados e ativar PostgreSQL após validação real.
 - [ ] Adicionar Redis/event bus somente quando houver mais de uma instância ou necessidade de filas.
 

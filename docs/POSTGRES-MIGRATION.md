@@ -80,6 +80,18 @@ Para executar a validação completa local em ordem segura, use:
 pnpm run db:test:postgres-suite
 ```
 
+Para validar o servidor HTTP inteiro, incluindo autenticação, grupos,
+permissões, eventos e o health check, use a smoke test isolada:
+
+```powershell
+pnpm run db:test:postgres-api
+```
+
+Ela cria um banco PostgreSQL temporário, aplica as migrations, inicia uma
+instância descartável do Telai com `TELAI_DATABASE_DRIVER=postgres`, executa o
+fluxo de API e remove o banco ao final. O banco SQLite local e o ambiente de
+produção não são usados.
+
 Essa suíte roda as fixtures sequencialmente porque importação e repositories usam o mesmo banco de QA; executá-las em paralelo pode remover uma fixture enquanto outra ainda a utiliza.
 
 Os comandos `db:test:postgres-*` carregam automaticamente `deploy/.env.postgres`
