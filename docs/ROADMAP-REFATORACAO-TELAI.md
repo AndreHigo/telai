@@ -89,6 +89,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair a feature de amigos para `frontend/src/features/social`.
 - [x] Extrair a tela de canais seguidos para `frontend/src/features/social`.
 - [x] Extrair a feature de mensagens diretas para `frontend/src/features/direct`.
+- [x] Extrair a camada de apresentação da transmissão para `frontend/src/features/broadcast`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
 
 ### Fase 2 — Contratos e tempo real
@@ -114,6 +115,8 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Manter P2P para chamadas pequenas e TURN como fallback.
 - [ ] Criar contrato de mídia independente do restante do backend.
 - [ ] Avaliar SFU (LiveKit ou mediasoup) com teste de carga real.
+- [ ] Avaliar codecs, bitrate adaptativo, simulcast/SVC e TURN adequados à VPS, preservando a interface atual.
+- [ ] Substituir o P2P por uma arquitetura de mídia escalável somente após benchmark de custo, latência, CPU e qualidade.
 - [ ] Adicionar métricas de jitter, perda, RTT, bitrate e reconexão.
 - [ ] Preservar captura de tela, janela, câmera, áudio de jogos e Electron.
 
