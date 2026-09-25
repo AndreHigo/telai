@@ -14,6 +14,7 @@
     "test:api": "node qa/run-api.cjs",
     "test:api-client": "node qa/test-api-client.mjs",
     "test:api-types": "tsc -p frontend/tsconfig.json --noEmit",
+    "test:auth-controller": "node qa/test-auth-controller.mjs",
     "test:navigation": "node qa/test-navigation-controller.mjs",
     "test:viewport-controller": "node qa/test-viewport-controller.mjs",
     "test:release-notes": "node qa/test-release-notes-controller.mjs",

@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from "svelte";
   import Viewer from "./Viewer.svelte";
   import AuthPage from "./features/auth/AuthPage.svelte";
+  import { createAuthController } from "./features/auth/controller.js";
   import NotificationsPage from "./features/notifications/NotificationsPage.svelte";
   import { createNotificationController } from "./features/notifications/controller.js";
   import FriendsPage from "./features/social/FriendsPage.svelte";
@@ -919,6 +920,24 @@
   }
 
   const api = createApiClient({ reportError: reportClientError });
+  const authController = createAuthController({
+    api,
+    getState: () => ({ authMode, loginUsername, loginPassword, registerDisplayName, registerUsername, registerPassword, registerLegalAccepted }),
+    setState: (next) => {
+      if ("authBusy" in next) authBusy = next.authBusy;
+      if ("authError" in next) authError = next.authError;
+    },
+    onAuthenticated: async (nextUser) => {
+      user = nextUser;
+      canonicalizeAuthenticatedRoute();
+      await refresh();
+      await redeemPendingInvite();
+      await openPendingChannelRoute();
+    },
+    navigateOAuth: (provider) => window.location.assign(`/api/auth/${provider}`),
+  });
+  async function submitAuth(...args) { return authController.submitAuth(...args); }
+  function startOAuth(...args) { return authController.startOAuth(...args); }
   const notificationController = createNotificationController({
     api,
     getUser: () => user,
@@ -5673,35 +5692,6 @@
       event.preventDefault();
       event.currentTarget.form?.requestSubmit();
     }
-  }
-
-  async function submitAuth(event) {
-    event.preventDefault();
-    authBusy = true;
-    authError = "";
-    const isLogin = authMode === "login";
-    const payload = isLogin
-      ? { username: loginUsername, password: loginPassword }
-      : { displayName: registerDisplayName, username: registerUsername, password: registerPassword, termsAccepted: registerLegalAccepted, privacyAccepted: registerLegalAccepted };
-    try {
-      const result = await api(isLogin ? "/api/auth/login" : "/api/auth/register", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      user = result.user;
-      canonicalizeAuthenticatedRoute();
-      await refresh();
-      await redeemPendingInvite();
-      await openPendingChannelRoute();
-    } catch (error) {
-      authError = error.message;
-    } finally {
-      authBusy = false;
-    }
-  }
-
-  function startOAuth(provider) {
-    window.location.assign(`/api/auth/${provider}`);
   }
 
   function runtimeVersion() {
