@@ -48,6 +48,7 @@
   import { createVoicePeerHealthController } from "./features/voice/peer-health-controller.js";
   import { createVoicePeerRecoveryController } from "./features/voice/peer-recovery-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
+  import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
   import {
     audioDeviceDisplayLabel,
@@ -307,12 +308,10 @@
   let GroupThreadDialog = null;
   let groupThreadDialogLoad = null;
   let groupThreadControllerPromise = null;
-  let groupEventHandlerPromise = null;
   let GroupChannelPermissionsSettings = null;
   let groupChannelPermissionsSettingsLoad = null;
   let GroupAuditLogSettings = null;
   let groupAuditLogSettingsLoad = null;
-  let groupEventGateway = null;
   const viewportController = createViewportController({
     getCompactViewport: () => compactViewport,
     matchMedia: (query) => window.matchMedia(query),
@@ -391,32 +390,6 @@
 
   async function openGroupThread(...args) { return (await getGroupThreadController()).openGroupThread(...args); }
   async function sendGroupThreadMessage(...args) { return (await getGroupThreadController()).sendGroupThreadMessage(...args); }
-
-  function getGroupEventHandler() {
-    if (!groupEventHandlerPromise) {
-      groupEventHandlerPromise = import("./features/groups/group-event-handler.js").then(({ createGroupEventHandler }) => createGroupEventHandler({
-        getSelectedGroupId: () => selectedGroupId,
-        getGroupOverview: () => groupOverview,
-        setGroupOverview: (value) => { groupOverview = value; },
-        getUser: () => user,
-        getRooms: () => rooms,
-        getSelectedRoomId: () => selectedRoomId,
-        getActiveGroupThread: () => activeGroupThread,
-        setActiveGroupThread: (value) => { activeGroupThread = value; },
-        getGroupThreadMessages: () => groupThreadMessages,
-        setGroupThreadMessages: (value) => { groupThreadMessages = value; },
-        getKnownGroupMessageIds: () => knownGroupMessageIds,
-        setKnownGroupMessageIds: (value) => { knownGroupMessageIds = value; },
-        shouldKeepGroupMessagesAtBottom,
-        markGroupRoomRead,
-        messageBelongsToRoom,
-        incrementGroupRoomUnread,
-        playVoiceSound,
-        scrollGroupMessagesToBottom,
-      }));
-    }
-    return groupEventHandlerPromise;
-  }
 
   function loadGroupChannelPermissionsSettings() {
     if (GroupChannelPermissionsSettings || groupChannelPermissionsSettingsLoad) return groupChannelPermissionsSettingsLoad;
@@ -1032,6 +1005,33 @@
     setHideReadNotifications,
     syncNotificationHideReadPreference,
   } = notificationController;
+  const groupEventRuntime = createGroupEventRuntime({
+    createGateway: (options) => createGroupEventGateway(options),
+    loadHandler: () => import("./features/groups/group-event-handler.js")
+      .then(({ createGroupEventHandler }) => createGroupEventHandler({
+        getSelectedGroupId: () => selectedGroupId,
+        getGroupOverview: () => groupOverview,
+        setGroupOverview: (value) => { groupOverview = value; },
+        getUser: () => user,
+        getRooms: () => rooms,
+        getSelectedRoomId: () => selectedRoomId,
+        getActiveGroupThread: () => activeGroupThread,
+        setActiveGroupThread: (value) => { activeGroupThread = value; },
+        getGroupThreadMessages: () => groupThreadMessages,
+        setGroupThreadMessages: (value) => { groupThreadMessages = value; },
+        getKnownGroupMessageIds: () => knownGroupMessageIds,
+        setKnownGroupMessageIds: (value) => { knownGroupMessageIds = value; },
+        shouldKeepGroupMessagesAtBottom,
+        markGroupRoomRead,
+        messageBelongsToRoom,
+        incrementGroupRoomUnread,
+        playVoiceSound,
+        scrollGroupMessagesToBottom,
+      })),
+    onNotification: (notification) => receiveNotification(notification),
+    onHandlerError: (error) => reportClientError("group_event_handler_error", error),
+    onGatewayError: (error) => reportClientError("group_events_error", error),
+  });
   let directControllerPromise = null;
   function getDirectController() {
     if (!directControllerPromise) {
@@ -1088,24 +1088,6 @@
     }
   }
 
-  function handleGroupEvent(message) {
-    if (message?.type === "notification-created") {
-      receiveNotification(message.notification);
-      return;
-    }
-    void getGroupEventHandler().then((handler) => handler(message)).catch((error) => reportClientError("group_event_handler_error", error));
-  }
-
-  function ensureGroupEventGateway() {
-    if (!groupEventGateway) {
-      groupEventGateway = createGroupEventGateway({
-        onMessage: handleGroupEvent,
-        onError: (error) => reportClientError("group_events_error", error),
-      });
-    }
-    return groupEventGateway;
-  }
-
   let groupControllerPromise = null;
   function getGroupController() {
     if (!groupControllerPromise) {
@@ -1152,7 +1134,7 @@
         setNotice: (message) => { notice = message; },
         getUser: () => user,
         getIsViewer: () => isViewer,
-        subscribeGroup: (groupId) => ensureGroupEventGateway().subscribeGroup(groupId),
+        subscribeGroup: (groupId) => groupEventRuntime.ensure().subscribeGroup(groupId),
         getSelectedRoomId: () => selectedRoomId,
         markGroupRoomRead: (room) => markGroupRoomRead(room),
         getVoiceSoundContext: () => getVoiceSoundContext(),
@@ -5815,7 +5797,7 @@
     clearInterval(directMessagesTimer);
     clearInterval(maintenanceTimer);
     clearInterval(maintenanceCountdownTimer);
-    groupEventGateway?.close();
+    groupEventRuntime.close();
     clearInterval(voiceActivityTimer);
     voiceQualityController.stop();
     window.removeEventListener("click", closeVoiceContextMenu);
