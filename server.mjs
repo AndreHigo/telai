@@ -1063,6 +1063,10 @@ export function getVoiceRoomCountForTests() {
   return voiceRooms.size;
 }
 
+export function getWebsocketServerForTests() {
+  return websocketServer;
+}
+
 export function closeDatabaseForTests() {
   if (database?.open) database.close();
 }

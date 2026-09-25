@@ -18,6 +18,7 @@
     "test:notifications": "electron --no-sandbox qa/e2e-notifications.cjs",
     "test:web-audit": "electron --no-sandbox qa/e2e-web-audit.cjs",
     "test:media": "electron --no-sandbox qa/e2e-media.cjs",
+    "test:voice-reconnect": "electron --no-sandbox qa/e2e-voice-reconnect.cjs",
     "test:seo": "node qa/e2e-seo.cjs",
     "test:admin": "node qa/e2e-admin.cjs",
     "test:tray": "electron --no-sandbox qa/e2e-tray.cjs",

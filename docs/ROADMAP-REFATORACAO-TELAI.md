@@ -179,7 +179,7 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Criar Gateway de eventos separado da sinalização WebRTC.
 - [x] Adicionar heartbeat nativo ao WebSocket para detectar conexões mortas.
 - [x] Adicionar sequência monotônica por conexão e descarte de eventos de controle antigos no cliente.
-- [ ] Adicionar reconexão automática e ressincronização segura após queda.
+- [x] Adicionar reconexão automática e ressincronização segura após queda, validada com queda controlada do socket e novo `voice-joined` autoritativo.
 - [ ] Trocar polling de chat/presença por eventos onde isso reduzir carga sem prejudicar simplicidade.
 
 ### Fase 3 — Núcleo funcional de comunidade

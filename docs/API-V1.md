@@ -27,3 +27,8 @@ incompatíveis devem ser introduzidas em outra versão e documentadas aqui.
 As mensagens de controle do WebSocket incluem `sequence` monotônica por
 conexão. O cliente descarta sequências repetidas ou antigas; mensagens
 binárias de relay continuam fora desse envelope.
+
+Após uma queda inesperada do socket de voz, o cliente persiste a sala ativa,
+refaz a conexão automaticamente e aceita o novo estado somente depois do
+`voice-joined` emitido pelo servidor. Esse fluxo é coberto por
+`pnpm run test:voice-reconnect`.
