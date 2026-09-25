@@ -1472,6 +1472,41 @@
   function handleStreamCardKeydown(...args) { void getLiveController().then((controller) => controller.handleStreamCardKeydown(...args)); }
   function openMultistream(...args) { void getLiveController().then((controller) => controller.openMultistream(...args)); }
   function closeMultistream(...args) { void getLiveController().then((controller) => controller.closeMultistream(...args)); }
+
+  let navigationControllerPromise = null;
+  function getNavigationController() {
+    if (!navigationControllerPromise) {
+      navigationControllerPromise = import("./features/shell/navigation-controller.js").then(({ createNavigationController }) => createNavigationController({
+        getState: () => ({ compactViewport, globalSidebarCollapsed, groupPickerQuery, groupsWorkspaceOpen, multistreamOpen, showGlobalSidebar, showMobileChannels, showMobileMembers, view }),
+        setState: (next) => {
+          if ("globalSidebarCollapsed" in next) globalSidebarCollapsed = next.globalSidebarCollapsed;
+          if ("groupPickerQuery" in next) groupPickerQuery = next.groupPickerQuery;
+          if ("groupsWorkspaceOpen" in next) groupsWorkspaceOpen = next.groupsWorkspaceOpen;
+          if ("multistreamOpen" in next) multistreamOpen = next.multistreamOpen;
+          if ("showGlobalSidebar" in next) showGlobalSidebar = next.showGlobalSidebar;
+          if ("showMobileChannels" in next) showMobileChannels = next.showMobileChannels;
+          if ("showMobileMembers" in next) showMobileMembers = next.showMobileMembers;
+          if ("view" in next) view = next.view;
+        },
+        loadGroups,
+        loadStreams,
+        loadNotifications,
+        loadDirectConversations,
+        loadSocial,
+        loadGroup,
+        setNotice: (message) => { notice = message; },
+        setNotificationsError: (message) => { notificationsError = message; },
+        setDirectConversationError: (message) => { directConversationError = message; },
+        setSocialError: (message) => { socialError = message; },
+      }));
+    }
+    return navigationControllerPromise;
+  }
+  function selectView(...args) { void getNavigationController().then((controller) => controller.selectView(...args)); }
+  function setGroupsView(...args) { void getNavigationController().then((controller) => controller.setGroupsView(...args)); }
+  function openGroupWorkspace(...args) { void getNavigationController().then((controller) => controller.openGroupWorkspace(...args)); }
+  function toggleGlobalNavigation(...args) { void getNavigationController().then((controller) => controller.toggleGlobalNavigation(...args)); }
+
   function shouldKeepGroupMessagesAtBottom(list) {
     if (!list) return true;
     return list.scrollHeight - list.scrollTop - list.clientHeight <= 96;
@@ -6375,32 +6410,6 @@
     window.location.assign(`/api/auth/${provider}`);
   }
 
-  function selectView(next) {
-    multistreamOpen = false;
-    showGlobalSidebar = false;
-    if (next === "groups") {
-      setGroupsView({ openWorkspace: false });
-      void loadGroups().catch((error) => { notice = error.message; });
-    }
-    else view = next;
-    if (next === "live") void loadStreams().catch((error) => { notice = error.message; });
-    if (next === "notifications") void loadNotifications().catch((error) => { notificationsError = error.message; });
-    if (next === "direct") void loadDirectConversations().catch((error) => { directConversationError = error.message; });
-    if (["friends", "following"].includes(next)) void loadSocial().catch((error) => { socialError = error.message; });
-  }
-
-  function setGroupsView({ openWorkspace = true } = {}) {
-    if (view !== "groups" && !compactViewport) globalSidebarCollapsed = true;
-    showGlobalSidebar = false;
-    view = "groups";
-    groupsWorkspaceOpen = openWorkspace;
-    if (!openWorkspace) {
-      groupPickerQuery = "";
-      showMobileChannels = false;
-      showMobileMembers = false;
-    }
-  }
-
   function currentReleaseNotes() {
     const platform = isDesktop ? "desktop" : "web";
     const version = isDesktop ? desktopVersion : WEB_VERSION;
@@ -6447,23 +6456,6 @@
       try { localStorage.setItem(storageKey, releaseNotes.version); } catch {}
     }
     showReleaseNotes = false;
-  }
-
-  async function openGroupWorkspace(groupId) {
-    if (!groupId) return;
-    setGroupsView();
-    // Abra o workspace imediatamente e carregue o resumo pesado em segundo
-    // plano. Assim a navegação responde mesmo quando o grupo tem muitos
-    // membros, mensagens ou transmissões ativas.
-    void loadGroup(groupId);
-  }
-
-  function toggleGlobalNavigation() {
-    if (compactViewport) {
-      showGlobalSidebar = !showGlobalSidebar;
-      return;
-    }
-    globalSidebarCollapsed = !globalSidebarCollapsed;
   }
 
   function handleLegalConsentAccepted(event) {
@@ -6901,6 +6893,7 @@
       viewerStreamPath = url.pathname;
     }
   }
+
 </script>
 
 <svelte:head>
