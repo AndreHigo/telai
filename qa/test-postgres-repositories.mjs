@@ -20,6 +20,7 @@ import { createPostgresGroupJoinRequestRepository } from "../server/repositories
 import { createPostgresGroupRoleRepository } from "../server/repositories/group-roles.mjs";
 import { createPostgresGroupRoomRepository } from "../server/repositories/group-rooms.mjs";
 import { createPostgresGroupPermissionRepository } from "../server/repositories/group-permissions.mjs";
+import { createPostgresGroupMemberRepository } from "../server/repositories/group-members.mjs";
 
 const config = createDatabaseConfig();
 if (config.driver !== "postgres") throw new Error("Set TELAI_DATABASE_DRIVER=postgres before running repository tests.");
@@ -152,6 +153,12 @@ try {
   assert.equal((await groupPermissions.current(createdGroup.id, ids.member)).canViewVoiceMembers, 1);
   assert.deepEqual(await groupPermissions.update({ groupId: createdGroup.id, userId: ids.member, canChat: true, canStream: false, canInvite: false, canViewVoiceMembers: true, updatedAt: now }), { userId: ids.member, canChat: true, canStream: false, canInvite: false, canViewVoiceMembers: true });
 
+  const groupMembers = createPostgresGroupMemberRepository(client, { compactAvatarData: (value) => value, transactionClient: true });
+  assert.equal((await groupMembers.listMembers(createdGroup.id)).some((member) => member.id === ids.owner), true);
+  assert.equal((await groupMembers.listMemberIds(createdGroup.id)).includes(ids.member), true);
+  assert.equal(await groupMembers.leaveGroup(createdGroup.id, ids.member), true);
+  assert.equal((await groupMembers.find(createdGroup.id, ids.member)), null);
+
   const groupJoinRequests = createPostgresGroupJoinRequestRepository(client, {
     createId: randomUUID,
     groupSetupRepository: groupSetup,
@@ -225,7 +232,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   await client.query("ROLLBACK");
-  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
+  console.log(JSON.stringify({ ok: true, repositories: ["auth", "sessions", "groups", "group-setup", "group-messages", "group-invites", "group-join-requests", "group-roles", "group-rooms", "group-permissions", "group-members", "direct-conversations", "channel-profiles", "user-preferences", "notifications", "notification-sync", "social", "oauth", "accounts"], rollback: true }));
 } catch (error) {
   await client.query("ROLLBACK").catch(() => {});
   console.error(error);

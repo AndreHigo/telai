@@ -26,6 +26,7 @@ import { createGroupJoinRequestRepository } from "./server/repositories/group-jo
 import { createGroupRoleRepository } from "./server/repositories/group-roles.mjs";
 import { createGroupRoomRepository } from "./server/repositories/group-rooms.mjs";
 import { createGroupPermissionRepository } from "./server/repositories/group-permissions.mjs";
+import { createGroupMemberRepository } from "./server/repositories/group-members.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -799,6 +800,7 @@ const groupJoinRequestRepository = createGroupJoinRequestRepository(database, {
 const groupRoleRepository = createGroupRoleRepository(database, { createId: randomUUID });
 const groupRoomRepository = createGroupRoomRepository(database, { createId: randomUUID });
 const groupPermissionRepository = createGroupPermissionRepository(database);
+const groupMemberRepository = createGroupMemberRepository(database, { compactAvatarData });
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2829,19 +2831,15 @@ async function handleHttpRequest(request, response) {
     const groupId = groupMembershipMatch[1];
     const group = groupJoinRequestRepository.findGroup(groupId);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
-    const membership = database.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, user.id);
+    const membership = groupMemberRepository.find(groupId, user.id);
     if (!membership) return json(response, 404, { error: "Você não participa deste grupo." });
     if (membership.role === "owner" || group.ownerId === user.id) {
       return json(response, 400, { error: "O dono não pode sair do próprio grupo. Transfira a propriedade ou exclua o grupo." });
     }
-    database.exec("BEGIN");
     try {
-      database.prepare("DELETE FROM group_member_permissions WHERE group_id = ? AND user_id = ?").run(groupId, user.id);
-      database.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, user.id);
-      database.exec("COMMIT");
+      groupMemberRepository.leaveGroup(groupId, user.id);
       return json(response, 200, { ok: true, group: { id: group.id, name: group.name } });
     } catch (error) {
-      try { database.exec("ROLLBACK"); } catch {}
       return json(response, 400, { error: "Não foi possível sair deste grupo agora." });
     }
   }
@@ -3093,21 +3091,7 @@ async function handleHttpRequest(request, response) {
       const order = { text: 0, live: 1, voice: 2 };
       return (order[left.kind] ?? 9) - (order[right.kind] ?? 9) || String(left.name).localeCompare(String(right.name), "pt-BR");
     });
-    const members = database.prepare(`
-      SELECT users.id, users.display_name AS displayName, users.username, group_members.role,
-        group_members.role_id AS roleId, group_roles.name AS roleName, group_roles.color AS roleColor,
-        group_roles.sort_order AS roleSortOrder,
-        COALESCE(group_roles.can_chat, group_member_permissions.can_chat, 1) AS canChat,
-        COALESCE(group_roles.can_stream, group_member_permissions.can_stream, 1) AS canStream,
-        COALESCE(group_roles.can_invite, group_member_permissions.can_invite, 1) AS canInvite,
-        COALESCE(group_roles.can_view_voice_members, group_member_permissions.can_view_voice_members, 1) AS canViewVoiceMembers,
-        COALESCE(group_roles.can_move_members, 0) AS canMoveMembers,
-        users.avatar_data AS avatarData
-      FROM group_members JOIN users ON users.id = group_members.user_id
-      LEFT JOIN group_roles ON group_roles.id = group_members.role_id AND group_roles.group_id = group_members.group_id
-      LEFT JOIN group_member_permissions ON group_member_permissions.group_id = group_members.group_id AND group_member_permissions.user_id = group_members.user_id
-      WHERE group_members.group_id = ? ORDER BY CASE WHEN group_members.role = 'owner' THEN 0 ELSE 1 END, COALESCE(group_roles.sort_order, 2147483647), users.display_name COLLATE NOCASE
-    `).all(groupId).map((member) => ({ ...member, roleName: member.role === "owner" ? "Dono" : member.roleName || "Membro", roleColor: member.roleColor || "#5865f2", roleSortOrder: member.roleSortOrder === null || member.roleSortOrder === undefined ? null : Number(member.roleSortOrder), canMoveMembers: member.role === "owner" || Boolean(member.canMoveMembers), canChat: member.role === "owner" || Boolean(member.canChat), canStream: member.role === "owner" || Boolean(member.canStream), canInvite: member.role === "owner" || Boolean(member.canInvite), canViewVoiceMembers: member.role === "owner" || Boolean(member.canViewVoiceMembers), online: isPresent(groupId, member.id) }));
+    const members = groupMemberRepository.listMembers(groupId).map((member) => ({ ...member, online: isPresent(groupId, member.id) }));
     const messages = groupMessageRepository.listMessages(groupId);
     const streams = database.prepare(`
       SELECT streams.id, streams.room_name AS roomName, streams.room_id AS roomId, streams.voice_room_id AS voiceRoomId, streams.title, streams.visibility, streams.started_at AS startedAt,
@@ -3187,12 +3171,7 @@ async function handleHttpRequest(request, response) {
     if (!isGroupMember(user.id, groupId)) return json(response, 403, { error: "Você não participa deste grupo." });
     touchGroupPresence(groupId, user.id);
     if (request.method === "POST") return json(response, 200, { ok: true });
-    const members = database.prepare(`
-      SELECT users.id
-      FROM group_members JOIN users ON users.id = group_members.user_id
-      WHERE group_members.group_id = ?
-      ORDER BY users.id
-    `).all(groupId).map(({ id }) => ({ id, online: isPresent(groupId, id) }));
+    const members = groupMemberRepository.listMemberIds(groupId).map((id) => ({ id, online: isPresent(groupId, id) }));
     return json(response, 200, { groupId, members });
   }
   const groupMessageMatch = requestUrl.pathname.match(/^\/api\/groups\/([\w-]{1,64})\/messages$/);
