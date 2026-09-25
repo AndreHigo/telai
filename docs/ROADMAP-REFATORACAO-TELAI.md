@@ -168,7 +168,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair carregamento e persistência de perfil, canal, preferências gerais e preferências de voz para controlador em chunk separado, mantendo mídia e identidade visual no shell.
     - [x] Extrair cartão de notificações.
     - [x] Extrair carregamento, leitura e preferência de notificações para `frontend/src/features/notifications/controller.js`.
-    - [ ] Extrair cartão de voz com code-splitting para não aumentar o bundle inicial.
+    - [x] Extrair workspace de voz com code-splitting sob demanda para não aumentar o bundle inicial.
 
 ### Fase 2 — Contratos e tempo real
 

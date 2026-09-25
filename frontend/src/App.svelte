@@ -16,7 +16,6 @@
   import GroupWorkspaceHeader from "./features/groups/GroupWorkspaceHeader.svelte";
   import GroupChatHeader from "./features/groups/GroupChatHeader.svelte";
   import GroupTextChatWorkspace from "./features/groups/GroupTextChatWorkspace.svelte";
-  import GroupVoiceWorkspace from "./features/groups/GroupVoiceWorkspace.svelte";
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
@@ -320,6 +319,19 @@
   // para participantes atuais. O analisador remoto fica apenas como fallback
   // para clientes antigos que ainda não publicam esse estado.
   let voiceSpeakingSignalKnownParticipantIds = new Set();
+  let GroupVoiceWorkspace = null;
+  let groupVoiceWorkspaceLoad = null;
+
+  function loadGroupVoiceWorkspace() {
+    if (GroupVoiceWorkspace || groupVoiceWorkspaceLoad) return groupVoiceWorkspaceLoad;
+    groupVoiceWorkspaceLoad = import("./features/groups/GroupVoiceWorkspace.svelte")
+      .then((module) => { GroupVoiceWorkspace = module.default; })
+      .catch((error) => reportClientError("voice_workspace_load_error", error))
+      .finally(() => { groupVoiceWorkspaceLoad = null; });
+    return groupVoiceWorkspaceLoad;
+  }
+
+  $: if (selectedRoom?.kind === "voice" && !GroupVoiceWorkspace) void loadGroupVoiceWorkspace();
   let voiceSoundContext = null;
   let pendingNotificationSound = false;
   let voiceActivityTimer;
@@ -7042,7 +7054,7 @@
           onOpenVoiceSettings={openVoiceSettings}
           onLeaveVoiceRoom={leaveVoiceRoom}
         />
-        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}<GroupVoiceWorkspace {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<GroupTextChatWorkspace bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} {mentionSuggestions} {mentionActiveIndex} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} />{/if}</section>
+        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => { showMobileChannels = !showMobileChannels; showMobileMembers = false; }} onToggleMembers={() => { showMobileMembers = !showMobileMembers; showMobileChannels = false; }} onCreateChannel={() => { showRoomDialog = true; }} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else}<GroupTextChatWorkspace bind:messageComposerInput bind:messageDraft {selectedRoom} {roomMessages} {mentionSuggestions} {mentionActiveIndex} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} />{/if}</section>
         <GroupMemberRail
           {user}
           {memberRoleGroups}
