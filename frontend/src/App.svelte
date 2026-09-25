@@ -1097,6 +1097,65 @@
     return result;
   }
 
+  let groupMessageControllerPromise = null;
+  function getGroupMessageController() {
+    if (!groupMessageControllerPromise) {
+      groupMessageControllerPromise = import("./features/groups/message-controller.js").then(({ createGroupMessageController }) => createGroupMessageController({
+        api,
+        getState: () => ({
+          activeGroupThread,
+          editingMessageDraft,
+          editingMessageId,
+          groupMessageSearchBusy,
+          groupMessageSearchError,
+          groupMessageSearchQuery,
+          groupMessageSearchResults,
+          showGroupMessageSearch,
+          groupOverview,
+          groupThreadMessages,
+          knownGroupMessageIds,
+          messageAttachments,
+          messageDraft,
+          notice,
+          rooms,
+          selectedGroupId,
+          selectedRoom,
+          selectedRoomId,
+          user,
+        }),
+        setState: (next) => {
+          if ("activeGroupThread" in next) activeGroupThread = next.activeGroupThread;
+          if ("editingMessageDraft" in next) editingMessageDraft = next.editingMessageDraft;
+          if ("editingMessageId" in next) editingMessageId = next.editingMessageId;
+          if ("groupMessageSearchBusy" in next) groupMessageSearchBusy = next.groupMessageSearchBusy;
+          if ("groupMessageSearchError" in next) groupMessageSearchError = next.groupMessageSearchError;
+          if ("groupMessageSearchQuery" in next) groupMessageSearchQuery = next.groupMessageSearchQuery;
+          if ("groupMessageSearchResults" in next) groupMessageSearchResults = next.groupMessageSearchResults;
+          if ("showGroupMessageSearch" in next) showGroupMessageSearch = next.showGroupMessageSearch;
+          if ("groupOverview" in next) groupOverview = next.groupOverview;
+          if ("groupThreadMessages" in next) groupThreadMessages = next.groupThreadMessages;
+          if ("knownGroupMessageIds" in next) knownGroupMessageIds = next.knownGroupMessageIds;
+          if ("messageAttachments" in next) messageAttachments = next.messageAttachments;
+          if ("messageDraft" in next) messageDraft = next.messageDraft;
+          if ("notice" in next) notice = next.notice;
+        },
+        selectRoom,
+        scrollGroupMessagesToBottom,
+      }));
+    }
+    return groupMessageControllerPromise;
+  }
+  async function addMessageAttachments(...args) { return (await getGroupMessageController()).addMessageAttachments(...args); }
+  async function deleteMessage(...args) { return (await getGroupMessageController()).deleteMessage(...args); }
+  async function openGroupMessageSearchResult(...args) { return (await getGroupMessageController()).openGroupMessageSearchResult(...args); }
+  async function saveEditMessage(...args) { return (await getGroupMessageController()).saveEditMessage(...args); }
+  async function searchGroupMessages(...args) { return (await getGroupMessageController()).searchGroupMessages(...args); }
+  async function sendMessage(...args) { return (await getGroupMessageController()).sendMessage(...args); }
+  async function startEditMessage(...args) { return (await getGroupMessageController()).startEditMessage(...args); }
+  function cancelEditMessage(...args) { void getGroupMessageController().then((controller) => controller.cancelEditMessage(...args)); }
+  function openGroupMessageSearch(...args) { void getGroupMessageController().then((controller) => controller.openGroupMessageSearch(...args)); }
+  function removeMessageAttachment(...args) { void getGroupMessageController().then((controller) => controller.removeMessageAttachment(...args)); }
+
   let settingsControllerPromise = null;
   function getSettingsController() {
     if (!settingsControllerPromise) {
@@ -2951,37 +3010,6 @@
     if (voiceQualityTimer) window.clearInterval(voiceQualityTimer);
     voiceQualityTimer = null;
     voiceQualitySnapshots = new Map();
-  }
-
-  async function searchGroupMessages() {
-    if (groupMessageSearchBusy || !selectedGroupId) return;
-    const query = groupMessageSearchQuery.trim();
-    groupMessageSearchError = "";
-    if (query.length < 2) {
-      groupMessageSearchResults = [];
-      if (query) groupMessageSearchError = "Digite pelo menos 2 caracteres para pesquisar.";
-      return;
-    }
-    groupMessageSearchBusy = true;
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/messages/search?q=${encodeURIComponent(query)}`);
-      groupMessageSearchResults = result.messages || [];
-      if (!groupMessageSearchResults.length) groupMessageSearchError = "Nenhuma mensagem encontrada.";
-    } catch (error) { groupMessageSearchError = error.message; }
-    finally { groupMessageSearchBusy = false; }
-  }
-
-  function openGroupMessageSearch() {
-    groupMessageSearchQuery = "";
-    groupMessageSearchResults = [];
-    groupMessageSearchError = "";
-    showGroupMessageSearch = true;
-  }
-
-  async function openGroupMessageSearchResult(message) {
-    const room = rooms.find((candidate) => candidate.id === message.roomId) || rooms.find((candidate) => candidate.slug === "geral" && candidate.kind === "text");
-    showGroupMessageSearch = false;
-    if (room) await selectRoom(room.id);
   }
 
   function closeGroupThread() {
@@ -6450,114 +6478,6 @@
     if (nextView === "notifications") await loadNotifications().catch(() => {});
     if (nextView === "direct") await loadDirectConversations().catch(() => {});
     if (nextView === "groups" && selectedGroupId) await loadGroup(selectedGroupId);
-  }
-
-  async function sendMessage(event) {
-    event.preventDefault();
-    const body = messageDraft.trim();
-    const attachments = messageAttachments.slice();
-    if (!selectedGroupId || (!body && !attachments.length) || selectedRoom?.kind !== "text") return;
-    const groupId = selectedGroupId;
-    const roomId = selectedRoomId;
-    const pendingId = `pending-${Date.now()}`;
-    const pendingMessage = {
-      id: pendingId,
-      roomId,
-      body,
-      displayName: user.displayName,
-      username: user.username,
-      userId: user.id,
-      createdAt: new Date().toISOString(),
-      attachments: attachments.map(({ name, type, size }) => ({ name, mimeType: type, byteSize: size, pending: true })),
-      pending: true,
-    };
-    if (groupOverview?.group?.id === groupId) {
-      groupOverview = { ...groupOverview, messages: [...(groupOverview.messages || []), pendingMessage].slice(-80) };
-    }
-    messageDraft = "";
-    messageAttachments = [];
-    await scrollGroupMessagesToBottom({ force: true });
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(groupId)}/messages`, { method: "POST", body: JSON.stringify({ body, roomId, attachments }) });
-      if (selectedGroupId === groupId && groupOverview?.group?.id === groupId && result.message) {
-        knownGroupMessageIds = new Set([...knownGroupMessageIds, result.message.id]);
-        const messages = groupOverview.messages || [];
-        const pendingStillVisible = messages.some((message) => message.id === pendingId);
-        groupOverview = { ...groupOverview, messages: pendingStillVisible ? messages.map((message) => message.id === pendingId ? result.message : message) : [...messages, result.message].slice(-80) };
-        await scrollGroupMessagesToBottom({ force: true });
-      }
-    } catch (error) {
-      if (selectedGroupId === groupId && groupOverview?.group?.id === groupId) {
-        groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).filter((message) => message.id !== pendingId) };
-      }
-      messageDraft = body;
-      messageAttachments = attachments;
-      notice = error.message;
-    }
-  }
-
-  async function addMessageAttachments(event) {
-    const files = [...(event.currentTarget.files || [])];
-    event.currentTarget.value = "";
-    if (!files.length) return;
-    try {
-      const { readMessageAttachments } = await import("./services/media/message-attachments.js");
-      const next = await readMessageAttachments(files, messageAttachments.length, messageAttachments.reduce((total, attachment) => total + attachment.size, 0));
-      messageAttachments = [...messageAttachments, ...next];
-    } catch (error) {
-      notice = error.message;
-    }
-  }
-
-  function removeMessageAttachment(index) {
-    messageAttachments = messageAttachments.filter((_, attachmentIndex) => attachmentIndex !== index);
-  }
-
-  function startEditMessage(message) {
-    editingMessageId = message.id;
-    editingMessageDraft = message.body;
-  }
-
-  function cancelEditMessage() {
-    editingMessageId = "";
-    editingMessageDraft = "";
-  }
-
-  async function saveEditMessage(message) {
-    const body = editingMessageDraft.trim();
-    if (!body || !selectedGroupId) return;
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/messages/${encodeURIComponent(message.id)}`, { method: "PATCH", body: JSON.stringify({ body }) });
-      if (result.message && groupOverview?.group?.id === selectedGroupId) {
-        if (message.parentMessageId && activeGroupThread?.id === message.parentMessageId) {
-          groupThreadMessages = groupThreadMessages.map((item) => item.id === message.id ? result.message : item);
-        } else {
-          groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).map((item) => item.id === message.id ? result.message : item) };
-        }
-      }
-      cancelEditMessage();
-    } catch (error) {
-      notice = error.message;
-    }
-  }
-
-  async function deleteMessage(message) {
-    if (!selectedGroupId || !window.confirm("Excluir esta mensagem?")) return;
-    try {
-      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/messages/${encodeURIComponent(message.id)}`, { method: "DELETE" });
-      if (message.parentMessageId) {
-        if (activeGroupThread?.id === message.parentMessageId) groupThreadMessages = groupThreadMessages.filter((item) => item.id !== message.id);
-        groupOverview = {
-          ...groupOverview,
-          messages: (groupOverview.messages || []).map((item) => item.id === message.parentMessageId ? { ...item, threadCount: Math.max(0, (item.threadCount || 0) - 1) } : item),
-        };
-      } else {
-        groupOverview = { ...groupOverview, messages: (groupOverview.messages || []).filter((item) => item.id !== message.id) };
-      }
-      knownGroupMessageIds = new Set([...knownGroupMessageIds].filter((id) => id !== message.id));
-    } catch (error) {
-      notice = error.message;
-    }
   }
 
   function clearMentionSuggestions() {
