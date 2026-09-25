@@ -21,6 +21,7 @@ import { createAuthRuntime } from "./server/auth/runtime.mjs";
 import { createRequireUser } from "./server/auth/guards.mjs";
 import { hashPassword, hashSessionToken } from "./server/auth/crypto.mjs";
 import { createStreamRuntime } from "./server/domain/streams/runtime.mjs";
+import { createGroupRuntime } from "./server/domain/groups/runtime.mjs";
 import { createVoiceRuntime } from "./server/domain/voice/runtime.mjs";
 import { createDirectConversationRepository, createPostgresDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
 import { createGroupAccessRepository, createPostgresGroupAccessRepository, createGroupRepository, createPostgresGroupRepository } from "./server/repositories/groups.mjs";
@@ -485,19 +486,14 @@ const {
   canGroupRoomAction,
 });
 
-async function disconnectGroupUser(groupId, userId, reason) {
-  for (const voiceRoom of voiceRooms.values()) {
-    if (voiceRoom.groupId !== groupId) continue;
-    for (const participant of [...voiceRoom.participants.values()]) {
-      if (participant.user?.id !== userId) continue;
-      send(participant, { type: "voice-disconnected", reason, message: reason === "ban" ? "Você foi banido deste grupo." : "Você foi expulso deste grupo." });
-      leaveVoiceRoom(participant);
-    }
-  }
-  groupPresence.delete(`${groupId}:${userId}`);
-  eventGateway?.disconnectUserFromGroup(groupId, userId, reason);
-  await eventGateway?.publishGroupPresence(groupId);
-}
+const { disconnectGroupUser } = createGroupRuntime({
+  voiceRooms,
+  groupPresence,
+  send,
+  leaveVoiceRoom,
+  disconnectUserFromGroup: (...args) => eventGateway?.disconnectUserFromGroup(...args),
+  publishGroupPresence: (...args) => eventGateway?.publishGroupPresence(...args),
+});
 const groupPermissionRepository = databaseDriver === "postgres"
   ? createPostgresGroupPermissionRepository(database)
   : createGroupPermissionRepository(database);
