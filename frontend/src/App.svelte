@@ -34,6 +34,7 @@
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
   import { createApiClient } from "./services/api.js";
+  import { createGroupRoomReadController } from "./features/groups/room-read-controller.js";
   import {
     createSelectedVoiceAudioConstraints,
     createVoiceAudioConstraints,
@@ -819,7 +820,6 @@
   let groupLoadSequence = 0;
   let groupOverviewRetryAt = 0;
   const pendingGroupOverviewRequests = new Map();
-  const groupRoomReadRequests = new Map();
   let lastAutoMarkedGroupRoomKey = "";
   const maxAvatarFileBytes = 5 * 1024 * 1024;
   const gameOptions = ["League of Legends", "Valorant", "Minecraft", "Fortnite", "Roblox", "GTA V", "CS2", "Outro"];
@@ -921,6 +921,14 @@
   }
 
   const api = createApiClient({ reportError: reportClientError });
+  const groupRoomReadController = createGroupRoomReadController({
+    api,
+    getSelectedGroupId: () => selectedGroupId,
+    getGroupOverview: () => groupOverview,
+    setGroupOverview: (value) => { groupOverview = value; },
+    getUser: () => user,
+  });
+  const { markGroupRoomRead, messageBelongsToRoom, incrementGroupRoomUnread } = groupRoomReadController;
   const settingsNavigationController = createSettingsNavigationController({
     api,
     getState: () => ({
@@ -4576,38 +4584,6 @@
   function openVoiceSettings() {
     void openSettings("user", "groups").then(() => loadAudioDevices(true));
     settingsSection = "voice";
-  }
-
-  function markGroupRoomRead(room) {
-    if (!selectedGroupId || room?.kind !== "text") return Promise.resolve();
-    const groupId = selectedGroupId;
-    const key = `${groupId}:${room.id}`;
-    if (groupRoomReadRequests.has(key)) return groupRoomReadRequests.get(key);
-    const request = api(`/api/groups/${encodeURIComponent(groupId)}/rooms/${encodeURIComponent(room.id)}/read`, { method: "POST" })
-      .then(() => {
-        if (selectedGroupId !== groupId || groupOverview?.group?.id !== groupId) return;
-        groupOverview = {
-          ...groupOverview,
-          rooms: (groupOverview.rooms || []).map((candidate) => candidate.id === room.id ? { ...candidate, unreadCount: 0 } : candidate),
-        };
-      })
-      .catch(() => {})
-      .finally(() => groupRoomReadRequests.delete(key));
-    groupRoomReadRequests.set(key, request);
-    return request;
-  }
-
-  function messageBelongsToRoom(message, room) {
-    if (!message || !room || room.kind !== "text") return false;
-    return message.roomId ? message.roomId === room.id : room.slug === "geral";
-  }
-
-  function incrementGroupRoomUnread(message) {
-    if (!groupOverview || !message || message.userId === user?.id) return;
-    groupOverview = {
-      ...groupOverview,
-      rooms: (groupOverview.rooms || []).map((room) => messageBelongsToRoom(message, room) ? { ...room, unreadCount: (room.unreadCount || 0) + 1 } : room),
-    };
   }
 
   function watchSelectedRoomLive(streamId = selectedRoomLiveStream?.id) {
