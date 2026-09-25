@@ -31,6 +31,10 @@ export function createGroupRoomRepository(database, { createId = randomUUID } = 
     return database.prepare("SELECT id, name, slug, 'voice' AS kind, COALESCE(max_participants, 8) AS maxParticipants FROM group_voice_rooms WHERE id = ? AND group_id = ?").get(roomId, groupId) || null;
   }
 
+  function findVoiceRoomById(roomId) {
+    return database.prepare("SELECT id, group_id AS groupId, COALESCE(max_participants, 8) AS maxParticipants FROM group_voice_rooms WHERE id = ?").get(roomId) || null;
+  }
+
   function createRoom({ groupId, name, slug, kind, maxParticipants, createdBy, createdAt = new Date().toISOString(), id = createId() }) {
     const room = { id, groupId, name, slug, kind, ...(kind === "voice" ? { maxParticipants } : {}), createdAt };
     if (kind === "voice") database.prepare("INSERT INTO group_voice_rooms (id, group_id, name, slug, max_participants, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, groupId, name, slug, maxParticipants, createdBy, createdAt);
@@ -51,7 +55,7 @@ export function createGroupRoomRepository(database, { createId = randomUUID } = 
     return { id: roomId, groupId, name, slug, kind };
   }
 
-  return { listTextRooms, listVoiceRooms, findBySlug, findRoom, createRoom, deleteRoom, updateRoom };
+  return { listTextRooms, listVoiceRooms, findBySlug, findRoom, findVoiceRoomById, createRoom, deleteRoom, updateRoom };
 }
 
 export function createPostgresGroupRoomRepository(database, { createId = randomUUID } = {}) {
@@ -89,6 +93,11 @@ export function createPostgresGroupRoomRepository(database, { createId = randomU
     return voiceResult.rows[0] || null;
   }
 
+  async function findVoiceRoomById(roomId) {
+    const result = await database.query('SELECT id, group_id AS "groupId", COALESCE(max_participants, 8) AS "maxParticipants" FROM group_voice_rooms WHERE id = $1', [roomId]);
+    return result.rows[0] || null;
+  }
+
   async function createRoom({ groupId, name, slug, kind, maxParticipants, createdBy, createdAt = new Date().toISOString(), id = createId() }) {
     const room = { id, groupId, name, slug, kind, ...(kind === "voice" ? { maxParticipants } : {}), createdAt };
     if (kind === "voice") await database.query("INSERT INTO group_voice_rooms (id, group_id, name, slug, max_participants, created_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)", [id, groupId, name, slug, maxParticipants, createdBy, createdAt]);
@@ -107,5 +116,5 @@ export function createPostgresGroupRoomRepository(database, { createId = randomU
     return { id: roomId, groupId, name, slug, kind, ...(kind === "voice" ? { maxParticipants } : {}) };
   }
 
-  return { listTextRooms, listVoiceRooms, findBySlug, findRoom, createRoom, deleteRoom, updateRoom };
+  return { listTextRooms, listVoiceRooms, findBySlug, findRoom, findVoiceRoomById, createRoom, deleteRoom, updateRoom };
 }

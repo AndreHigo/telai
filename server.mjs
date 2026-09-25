@@ -1801,7 +1801,7 @@ async function handleMessage(socket, message) {
     if (!sourceRoom || !movingParticipant || !groupId || !socket.user || !canGroupAction(socket.user.id, groupId, "canMoveMembers")) {
       return send(socket, { type: "voice-error", action: "move", message: "Você não tem permissão para mover pessoas entre salas." });
     }
-    const targetRoomRecord = database.prepare("SELECT id, group_id AS groupId, COALESCE(max_participants, 8) AS maxParticipants FROM group_voice_rooms WHERE id = ?").get(targetRoomId);
+    const targetRoomRecord = groupRoomRepository.findVoiceRoomById(targetRoomId);
     if (!targetRoomRecord || targetRoomRecord.groupId !== groupId) return send(socket, { type: "voice-error", action: "move", message: "A sala de destino não pertence a este grupo." });
     if (targetRoomId === socket.voiceRoomId) return;
     const targetRoom = voiceRoomFor(targetRoomId, groupId);
@@ -2607,7 +2607,7 @@ async function handleHttpRequest(request, response) {
     readJson(request).then((body) => {
       const targetUserId = String(body.targetUserId || "").trim().slice(0, 128);
       if (!targetUserId || targetUserId === user.id) return json(response, 400, { error: "Informe um usuário de voz válido." });
-      if (!database.prepare("SELECT id FROM users WHERE id = ?").get(targetUserId)) return json(response, 404, { error: "Usuário de voz não encontrado." });
+      if (!userProfileRepository.existsById(targetUserId)) return json(response, 404, { error: "Usuário de voz não encontrado." });
       const current = userPreferenceRepository.getVoicePreference(user.id, targetUserId);
       const volume = Object.prototype.hasOwnProperty.call(body, "volume")
         ? normalizePreferenceVolume(body.volume)

@@ -19,7 +19,11 @@ export function createUserProfileRepository(database) {
       .get(userId) || null;
   }
 
-  return { findCredentialsByUsername, createUser, updateProfile };
+  function existsById(userId) {
+    return Boolean(database.prepare("SELECT id FROM users WHERE id = ?").get(userId));
+  }
+
+  return { findCredentialsByUsername, createUser, updateProfile, existsById };
 }
 
 export function createPostgresUserProfileRepository(database) {
@@ -42,5 +46,10 @@ export function createPostgresUserProfileRepository(database) {
     return result.rows[0] || null;
   }
 
-  return { findCredentialsByUsername, createUser, updateProfile };
+  async function existsById(userId) {
+    const result = await database.query("SELECT id FROM users WHERE id = $1", [userId]);
+    return result.rowCount > 0;
+  }
+
+  return { findCredentialsByUsername, createUser, updateProfile, existsById };
 }

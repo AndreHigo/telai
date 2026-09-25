@@ -82,6 +82,7 @@ try {
 
   const userProfiles = createPostgresUserProfileRepository(client);
   assert.equal((await userProfiles.findCredentialsByUsername(ownerUsername))?.id, ids.owner);
+  assert.equal(await userProfiles.existsById(ids.owner), true);
   assert.equal((await userProfiles.updateProfile(ids.invitee, { displayName: "PG Invitee Updated", avatarData: null }))?.displayName, "PG Invitee Updated");
 
   const auth = createPostgresAuthRepository(client, { legalPolicyVersion: "test-v1" });
@@ -171,6 +172,7 @@ try {
   assert.equal((await groupRooms.listTextRooms(createdGroup.id)).some((room) => room.id === textRoom.id), true);
   assert.equal((await groupRooms.listVoiceRooms(createdGroup.id)).some((room) => room.id === voiceRoom.id), true);
   assert.equal((await groupRooms.findRoom(createdGroup.id, voiceRoom.id)).kind, "voice");
+  assert.equal((await groupRooms.findVoiceRoomById(voiceRoom.id)).groupId, createdGroup.id);
   await groupRooms.updateRoom({ groupId: createdGroup.id, roomId: textRoom.id, kind: "text", name: "Discussão atualizada", slug: "discussao-atualizada" });
   assert.equal((await groupRooms.findRoom(createdGroup.id, textRoom.id)).slug, "discussao-atualizada");
   assert.equal(await groupRooms.deleteRoom(createdGroup.id, voiceRoom.id, "voice"), true);
