@@ -83,6 +83,7 @@ import { createMediaRoutes } from "./server/http/media-routes.mjs";
 import { createOAuthRoutes } from "./server/http/oauth-routes.mjs";
 import { createStaticRoutes } from "./server/http/static-routes.mjs";
 import { createStreamRoutes } from "./server/http/stream-routes.mjs";
+import { clientIp, publicOriginForRequest, trustedForwardedHeaders } from "./server/http/request-context.mjs";
 import { createObservabilityRuntime } from "./server/observability/runtime.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
@@ -209,19 +210,6 @@ function compactUserSummary(user) {
   return user ? { ...user, avatarData: compactAvatarData(user.avatarData) } : user;
 }
 
-function trustedForwardedHeaders(request) {
-  // O app fica atrás do Caddy/Nginx local. Um cliente externo que alcance o
-  // Node diretamente não pode escolher o IP, host ou protocolo encaminhado.
-  return isLoopback(request.socket.remoteAddress);
-}
-
-function clientIp(request) {
-  const forwarded = trustedForwardedHeaders(request)
-    ? String(request.headers["x-forwarded-for"] || "").split(",")[0].trim()
-    : "";
-  return forwarded || request.socket.remoteAddress || "unknown";
-}
-
 const {
   allowClientErrorRequest,
   allowLargeArtifactRequest,
@@ -264,10 +252,6 @@ process.on("unhandledRejection", (reason) => {
   const error = reason instanceof Error ? reason : new Error(String(reason));
   errorLog("process_unhandled_rejection", { name: error.name, error: error.message, stack: error.stack });
 });
-
-function isLoopback(address) {
-  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
-}
 
 function observabilitySnapshot() {
   const topRoutes = (map) => [...map.entries()]
@@ -968,19 +952,6 @@ function removeWebsocketActive(ip) {
   const next = Math.max(0, websocketActiveCount(ip) - 1);
   if (next) websocketActiveByIp.set(ip, next);
   else websocketActiveByIp.delete(ip);
-}
-
-function publicOriginForRequest(request) {
-  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, "");
-  const forwardedProto = trustedForwardedHeaders(request)
-    ? String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim()
-    : "";
-  const forwardedHost = trustedForwardedHeaders(request)
-    ? String(request.headers["x-forwarded-host"] || "").split(",")[0].trim()
-    : "";
-  const protocol = forwardedProto || (request.socket.encrypted ? "https" : "http");
-  const host = forwardedHost || request.headers.host;
-  return host ? `${protocol}://${host}` : "";
 }
 
 const handleHttpRoutes = createHttpRouter({

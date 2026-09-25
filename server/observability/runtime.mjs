@@ -1,3 +1,5 @@
+import { isLoopback } from "../http/request-context.mjs";
+
 export function createObservabilityRuntime({ fs, path, logPath, logLevels, logLevel }) {
   let logFileStream = null;
   if (logPath) {
@@ -95,8 +97,4 @@ export function createObservabilityRuntime({ fs, path, logPath, logLevels, logLe
     addResponseBytes,
     isLocalObservabilityRequest,
   };
-}
-
-function isLoopback(address) {
-  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
