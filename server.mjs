@@ -39,6 +39,7 @@ import { createSocialRoutes } from "./server/http/social-routes.mjs";
 import { createNotificationRoutes } from "./server/http/notification-routes.mjs";
 import { createDirectRoutes } from "./server/http/direct-routes.mjs";
 import { createMemberInviteRoutes } from "./server/http/member-invite-routes.mjs";
+import { createAdminRoutes } from "./server/http/admin-routes.mjs";
 import { parseVoiceRoomParticipantLimit, roomSlugFor, slugFor } from "./server/domain/groups/normalization.mjs";
 import { normalizePreferenceDeviceId, normalizePreferenceVolume, normalizeUsername, parseChannelGames, safePreferenceColor } from "./server/shared/validation.mjs";
 
@@ -825,6 +826,27 @@ const handleUserSettingsRoutes = createUserSettingsRoutes({
 });
 const siteAdminRepository = createSiteAdminRepository(database);
 const maintenanceRepository = createMaintenanceRepository(database);
+const handleAdminRoutes = createAdminRoutes({
+  json,
+  readJson,
+  requireMaintenanceOperator,
+  requireSiteAdmin,
+  activeMaintenanceNotice,
+  maintenanceRepository,
+  smtpStatus,
+  verifySmtp,
+  sendEmail,
+  currentUser,
+  infoLog,
+  warnLog,
+  errorLog,
+  siteAdminSummary,
+  siteAdminAccountsPage,
+  siteAdminGroupsPage,
+  siteAdminStreamsPage,
+  siteAdminGroupMembersPage,
+  siteAdminOverview,
+});
 const { upsertOAuthUser, linkOAuthAccount } = createOAuthRepository(database, {
   slugFor,
   createPasswordHash: () => hashPassword(randomBytes(48).toString("base64url")),
@@ -2158,116 +2180,7 @@ async function handleHttpRequest(request, response) {
   response.setHeader("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' http: https: ws: wss:");
   const requestUrl = new URL(request.url, `http://${request.headers.host}`);
   if (!enforceApiRateLimit(request, response, requestUrl.pathname)) return;
-  if (requestUrl.pathname === "/api/maintenance" && request.method === "GET") {
-    return json(response, 200, { notice: activeMaintenanceNotice() });
-  }
-  if (requestUrl.pathname === "/api/admin/maintenance" && request.method === "POST") {
-    const operator = requireMaintenanceOperator(request, response);
-    if (!operator) return;
-    readJson(request).then((body) => {
-      const delaySeconds = Number(body.delaySeconds ?? 60);
-      const durationSeconds = Number(body.durationSeconds ?? 600);
-      if (!Number.isInteger(delaySeconds) || delaySeconds < 10 || delaySeconds > 3600) {
-        return json(response, 400, { error: "O atraso precisa estar entre 10 e 3600 segundos." });
-      }
-      if (!Number.isInteger(durationSeconds) || durationSeconds < 60 || durationSeconds > 86_400) {
-        return json(response, 400, { error: "A duração precisa estar entre 60 e 86400 segundos." });
-      }
-      const message = String(body.message || "O Telai será atualizado para aplicar melhorias. Salve seu trabalho e aguarde a reconexão.").trim().slice(0, 240);
-      const now = Date.now();
-      const startsAt = new Date(now + delaySeconds * 1000).toISOString();
-      const expiresAt = new Date(now + (delaySeconds + durationSeconds) * 1000).toISOString();
-      maintenanceRepository.schedule({ message, startsAt, expiresAt, createdBy: operator.user?.id || null, createdAt: new Date(now).toISOString() }, new Date(now).toISOString());
-      return json(response, 201, { notice: activeMaintenanceNotice() });
-    }).catch(() => json(response, 400, { error: "Não foi possível programar a manutenção." }));
-    return;
-  }
-  if (requestUrl.pathname === "/api/admin/maintenance" && request.method === "DELETE") {
-    const operator = requireMaintenanceOperator(request, response);
-    if (!operator) return;
-    maintenanceRepository.clear(new Date().toISOString());
-    return json(response, 200, { ok: true });
-  }
-  if (requestUrl.pathname === "/api/admin/email/status" && request.method === "GET") {
-    if (!requireSiteAdmin(request, response)) return;
-    const smtp = requestUrl.searchParams.get("verify") === "1" ? await verifySmtp() : smtpStatus();
-    return json(response, 200, { smtp });
-  }
-  if (requestUrl.pathname === "/api/admin/email/test" && request.method === "POST") {
-    if (!requireSiteAdmin(request, response)) return;
-    try {
-      const body = await readJson(request, 4 * 1024);
-      const recipient = String(body.to || "").trim();
-      const result = await sendEmail({
-        to: recipient,
-        subject: "Teste de SMTP do Telai",
-        text: "Este é um teste de envio SMTP do Telai. Se você recebeu esta mensagem, o relay está funcionando.",
-        html: "<p>Este é um teste de envio SMTP do Telai.</p><p>Se você recebeu esta mensagem, o relay está funcionando.</p>",
-      });
-      infoLog("smtp_test_sent", { operatorId: currentUser(request)?.id || null, recipientDomain: recipient.split("@").pop() || "" });
-      return json(response, 200, { ok: true, smtp: smtpStatus(), messageId: result.messageId });
-    } catch (error) {
-      warnLog("smtp_test_failed", { errorCode: error?.code || "smtp-test-failed", error: error?.message || String(error) });
-      return json(response, 502, { error: "Não foi possível enviar o e-mail de teste.", code: error?.code || "smtp-test-failed" });
-    }
-  }
-  if (requestUrl.pathname === "/api/admin/summary" && request.method === "GET") {
-    if (!requireSiteAdmin(request, response)) return;
-    try {
-      return json(response, 200, siteAdminSummary());
-    } catch (error) {
-      errorLog("admin_summary_error", { error: error.message });
-      return json(response, 500, { error: "Não foi possível carregar o resumo administrativo." });
-    }
-  }
-  if (requestUrl.pathname === "/api/admin/accounts" && request.method === "GET") {
-    if (!requireSiteAdmin(request, response)) return;
-    try {
-      return json(response, 200, siteAdminAccountsPage(requestUrl));
-    } catch (error) {
-      errorLog("admin_accounts_error", { error: error.message });
-      return json(response, 500, { error: "Não foi possível carregar as contas administrativas." });
-    }
-  }
-  if (requestUrl.pathname === "/api/admin/groups" && request.method === "GET") {
-    if (!requireSiteAdmin(request, response)) return;
-    try {
-      return json(response, 200, siteAdminGroupsPage(requestUrl));
-    } catch (error) {
-      errorLog("admin_groups_error", { error: error.message });
-      return json(response, 500, { error: "Não foi possível carregar os grupos administrativos." });
-    }
-  }
-  if (requestUrl.pathname === "/api/admin/streams" && request.method === "GET") {
-    if (!requireSiteAdmin(request, response)) return;
-    try {
-      return json(response, 200, siteAdminStreamsPage(requestUrl));
-    } catch (error) {
-      errorLog("admin_streams_error", { error: error.message });
-      return json(response, 500, { error: "Não foi possível carregar as transmissões administrativas." });
-    }
-  }
-  const adminMembersMatch = requestUrl.pathname.match(/^\/api\/admin\/groups\/([\w-]{1,128})\/members$/);
-  if (adminMembersMatch && request.method === "GET") {
-    if (!requireSiteAdmin(request, response)) return;
-    try {
-      const result = siteAdminGroupMembersPage(requestUrl, adminMembersMatch[1]);
-      if (!result) return json(response, 404, { error: "Grupo não encontrado." });
-      return json(response, 200, result);
-    } catch (error) {
-      errorLog("admin_group_members_error", { error: error.message });
-      return json(response, 500, { error: "Não foi possível carregar os membros do grupo." });
-    }
-  }
-  if (requestUrl.pathname === "/api/admin/overview" && request.method === "GET") {
-    if (!requireSiteAdmin(request, response)) return;
-    try {
-      return json(response, 200, siteAdminOverview());
-    } catch (error) {
-      errorLog("admin_overview_error", { error: error.message });
-      return json(response, 500, { error: "Não foi possível carregar o painel administrativo." });
-    }
-  }
+  if (await handleAdminRoutes(request, response, requestUrl)) return;
   if ((requestUrl.pathname === "/admin" || requestUrl.pathname === "/admin/") && ["GET", "HEAD"].includes(request.method)) {
     if (!requireSiteAdmin(request, response)) return;
     const adminPath = path.join(publicDir, "admin", "index.html");
