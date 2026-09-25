@@ -1,0 +1,8 @@
+<script>
+  export let settingsBusy = false;
+  export let liveNotificationScopes = [];
+  export let onSave = () => {};
+  export let onSetScope = () => {};
+</script>
+
+<form class="settings-card notification-preferences-card" on:submit|preventDefault={onSave}><div class="settings-card-heading"><div><p class="eyebrow">avisos de transmissão</p><h2>Quando avisar sobre novas lives</h2><p class="muted">Escolha se o Telai deve avisar sobre qualquer live pública ou somente sobre canais seguidos e grupos dos quais você participa.</p></div><button class="primary rounded-xl px-4 py-2 text-xs font-extrabold" type="submit" disabled={settingsBusy}>Salvar preferências</button></div><div class="notification-scope-field"><span>Notificações de novas lives</span><div class="notification-scope-options" role="group" aria-label="Escopos de notificações de novas lives"><label class="notification-scope-option"><input type="checkbox" checked={liveNotificationScopes.includes("related")} on:change={(event) => onSetScope("related", event.currentTarget.checked)} /><span><strong>Canais seguidos e grupos</strong><small>Avisa quando alguém desses espaços iniciar uma live.</small></span></label><label class="notification-scope-option"><input type="checkbox" checked={liveNotificationScopes.includes("all")} on:change={(event) => onSetScope("all", event.currentTarget.checked)} /><span><strong>Todas as lives públicas</strong><small>Inclui também lives públicas fora dos seus relacionamentos.</small></span></label></div><small class="notification-scope-help">Você pode marcar as duas opções. Com ambas ativas, nenhum canal público fica de fora.</small></div></form>
