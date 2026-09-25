@@ -72,6 +72,7 @@ enviada ao GitHub nem publicada em produção.
 - [ ] Padronizar formato de erros HTTP sem alterar contratos existentes.
 - [x] Extrair abertura do SQLite e migrações genéricas para `server/repositories`.
 - [x] Extrair o repositório de acesso e permissões de grupos.
+- [x] Extrair o repositório de conversas diretas.
 - [ ] Separar consultas/repositórios restantes de domínio das rotas HTTP.
 - [ ] Separar autenticação, grupos, mensagens, notificações e mídia por domínio.
 - [x] Extrair o cliente HTTP para `frontend/src/services` sem alterar o layout.

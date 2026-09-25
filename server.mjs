@@ -7,6 +7,7 @@ import { WebSocketServer } from "ws";
 import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./mailer.mjs";
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { installWebsocketHeartbeat } from "./server/gateway/heartbeat.mjs";
+import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
 import { createGroupAccessRepository } from "./server/repositories/groups.mjs";
 import { ensureColumn, openSqliteDatabase } from "./server/repositories/sqlite.mjs";
 import { json, readJson } from "./server/http/body.mjs";
@@ -744,6 +745,7 @@ database.exec("CREATE INDEX IF NOT EXISTS stream_chat_messages_stream_idx ON str
 database.exec("CREATE INDEX IF NOT EXISTS group_messages_room_idx ON group_messages(group_id, room_id, created_at DESC)");
 database.exec("CREATE INDEX IF NOT EXISTS direct_messages_sender_idx ON direct_messages(sender_id, created_at DESC)");
 const { isGroupMember, ensureGroupPermissionRow, groupPermissions, canGroupAction } = createGroupAccessRepository(database);
+const { directConversationForUser, directConversationPayload } = createDirectConversationRepository(database, { compactUserSummary });
 
 function pruneExpiredRuntimeState() {
   const now = Date.now();
@@ -1730,30 +1732,6 @@ for (const group of database.prepare("SELECT id, owner_id AS ownerId FROM groups
   ensureDefaultGroupRooms(group.id, group.ownerId);
   ensureDefaultGroupRoles(group.id, group.ownerId);
   ensureGroupRolePositions(group.id);
-}
-
-function directConversationForUser(conversationId, userId) {
-  return database.prepare(`
-    SELECT direct_conversations.id, direct_conversations.created_at AS createdAt,
-      direct_conversations.updated_at AS updatedAt
-    FROM direct_conversations
-    JOIN direct_conversation_members ON direct_conversation_members.conversation_id = direct_conversations.id
-    WHERE direct_conversations.id = ? AND direct_conversation_members.user_id = ?
-  `).get(conversationId, userId) || null;
-}
-
-function directConversationPayload(conversationId, userId) {
-  const conversation = directConversationForUser(conversationId, userId);
-  if (!conversation) return null;
-  const otherUser = database.prepare(`
-    SELECT users.id, users.username, users.display_name AS displayName, users.avatar_data AS avatarData
-    FROM direct_conversation_members
-    JOIN users ON users.id = direct_conversation_members.user_id
-    WHERE direct_conversation_members.conversation_id = ? AND direct_conversation_members.user_id <> ?
-    LIMIT 1
-  `).get(conversationId, userId);
-  if (!otherUser) return null;
-  return { ...conversation, otherUser: compactUserSummary(otherUser) };
 }
 
 function presenceKey(groupId, userId) { return `${groupId}:${userId}`; }
