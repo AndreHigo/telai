@@ -229,6 +229,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Subir PostgreSQL local em Docker e aplicar/validar a migration baseline sem cutover.
 - [x] Impedir que `TELAI_DATABASE_DRIVER=postgres` seja aceito silenciosamente pelo runtime SQLite antes do cutover validado.
 - [x] Validar o primeiro domínio PostgreSQL opt-in (manutenção administrativa) com agendamento, leitura e limpeza contra o container local.
+- [x] Tornar as rotas HTTP de social e mensagens diretas explicitamente compatíveis com repositórios síncronos e assíncronos, sem alterar o comportamento SQLite.
+- [ ] Completar a fronteira assíncrona das demais rotas HTTP e gateways antes de selecionar os repositórios PostgreSQL no runtime.
 - [ ] Executar migration, importar dados e ativar PostgreSQL após validação real.
 - [ ] Adicionar Redis/event bus somente quando houver mais de uma instância ou necessidade de filas.
 

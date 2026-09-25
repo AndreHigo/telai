@@ -13,25 +13,26 @@ export function createDirectRoutes({
     if (requestUrl.pathname === "/api/direct/conversations" && request.method === "GET") {
       const user = requireUser(request, response);
       if (!user) return true;
-      json(response, 200, { conversations: directConversationRepository.listConversationsForUser(user.id) });
+      json(response, 200, { conversations: await directConversationRepository.listConversationsForUser(user.id) });
       return true;
     }
 
     if (requestUrl.pathname === "/api/direct/conversations" && request.method === "POST") {
       const user = requireUser(request, response);
       if (!user) return true;
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const targetUserId = String(body.userId || "").trim();
         if (!targetUserId || targetUserId === user.id) return json(response, 400, { error: "Escolha outra pessoa para iniciar a conversa." });
-        const target = directConversationRepository.findUser(targetUserId);
+        const target = await directConversationRepository.findUser(targetUserId);
         if (!target) return json(response, 404, { error: "Usuário não encontrado." });
-        if (isBlocked?.(user.id, targetUserId)) return json(response, 403, { error: "Não é possível iniciar uma conversa com este usuário." });
-        const conversationId = directConversationRepository.createConversation(user.id, targetUserId);
-        return json(response, 201, { conversation: directConversationPayload(conversationId, user.id) });
-      }).catch((error) => {
+        if (await isBlocked?.(user.id, targetUserId)) return json(response, 403, { error: "Não é possível iniciar uma conversa com este usuário." });
+        const conversationId = await directConversationRepository.createConversation(user.id, targetUserId);
+        return json(response, 201, { conversation: await directConversationPayload(conversationId, user.id) });
+      } catch (error) {
         errorLog("direct_conversation_create_error", { error });
         return json(response, 400, { error: "Não foi possível iniciar a conversa." });
-      });
+      }
       return true;
     }
 
@@ -40,14 +41,14 @@ export function createDirectRoutes({
       const user = requireUser(request, response);
       if (!user) return true;
       const conversationId = directConversationMatch[1];
-      const conversation = directConversationPayload(conversationId, user.id);
+      const conversation = await directConversationPayload(conversationId, user.id);
       if (!conversation) {
         json(response, 404, { error: "Conversa não encontrada." });
         return true;
       }
       if (directConversationMatch[2] === "messages") {
         const includeConversationAvatar = requestUrl.searchParams.get("includeAvatar") === "1";
-        const { messages } = directConversationRepository.listMessages(conversationId, user.id, includeConversationAvatar);
+        const { messages } = await directConversationRepository.listMessages(conversationId, user.id, includeConversationAvatar);
         const responseConversation = includeConversationAvatar
           ? conversation
           : { ...conversation, otherUser: null };
@@ -62,11 +63,11 @@ export function createDirectRoutes({
       const user = requireUser(request, response);
       if (!user) return true;
       const conversationId = directConversationMatch[1];
-      if (!directConversationForUser(conversationId, user.id)) {
+      if (!await directConversationForUser(conversationId, user.id)) {
         json(response, 404, { error: "Conversa não encontrada." });
         return true;
       }
-      directConversationRepository.markRead(conversationId, user.id);
+      await directConversationRepository.markRead(conversationId, user.id);
       json(response, 200, { ok: true });
       return true;
     }
@@ -76,25 +77,26 @@ export function createDirectRoutes({
       const user = requireUser(request, response);
       if (!user) return true;
       const conversationId = directMessagesMatch[1];
-      if (!directConversationForUser(conversationId, user.id)) {
+      if (!await directConversationForUser(conversationId, user.id)) {
         json(response, 404, { error: "Conversa não encontrada." });
         return true;
       }
-      const recipient = directConversationRepository.recipientForMessage?.(conversationId, user.id);
-      if (recipient && isBlocked?.(user.id, recipient.id)) {
+      const recipient = await directConversationRepository.recipientForMessage?.(conversationId, user.id);
+      if (recipient && await isBlocked?.(user.id, recipient.id)) {
         json(response, 403, { error: "Não é possível enviar mensagens para este usuário." });
         return true;
       }
-      readJson(request).then((body) => {
+      try {
+        const body = await readJson(request);
         const messageBody = String(body.body || "").trim().slice(0, 1000);
         if (!messageBody) return json(response, 400, { error: "Escreva uma mensagem antes de enviar." });
         const createdAt = new Date().toISOString();
-        const message = directConversationRepository.createMessage({ conversationId, senderId: user.id, body: messageBody, createdAt, displayName: user.displayName, username: user.username, createNotification });
+        const message = await directConversationRepository.createMessage({ conversationId, senderId: user.id, body: messageBody, createdAt, displayName: user.displayName, username: user.username, createNotification });
         return json(response, 201, { message });
-      }).catch((error) => {
+      } catch (error) {
         errorLog("direct_message_create_error", { error });
         return json(response, 400, { error: "Não foi possível enviar a mensagem." });
-      });
+      }
       return true;
     }
 
