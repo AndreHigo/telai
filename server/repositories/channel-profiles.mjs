@@ -15,7 +15,21 @@ export function createChannelProfileRepository(database, { compactAvatarData, pa
     return channelProfileForUser(userId);
   }
 
-  return { channelProfileForUser, saveChannelProfile };
+  function listDirectory() {
+    return database.prepare(`
+      SELECT users.id, users.username,
+        COALESCE(channel_profiles.display_name, users.display_name) AS channelName,
+        COALESCE(channel_profiles.avatar_data, users.avatar_data) AS channelAvatarData,
+        channel_profiles.games AS channelGames
+      FROM users LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id
+    `).all().map((item) => ({
+      ...item,
+      channelAvatarData: compactAvatarData(item.channelAvatarData),
+      channelGames: parseChannelGames(item.channelGames),
+    }));
+  }
+
+  return { channelProfileForUser, saveChannelProfile, listDirectory };
 }
 
 export function createPostgresChannelProfileRepository(database, { compactAvatarData = (value) => value, parseChannelGames = (value) => JSON.parse(value || "[]") } = {}) {
@@ -44,5 +58,20 @@ export function createPostgresChannelProfileRepository(database, { compactAvatar
     return channelProfileForUser(userId);
   }
 
-  return { channelProfileForUser, saveChannelProfile };
+  async function listDirectory() {
+    const result = await database.query(`
+      SELECT users.id, users.username,
+        COALESCE(channel_profiles.display_name, users.display_name) AS "channelName",
+        COALESCE(channel_profiles.avatar_data, users.avatar_data) AS "channelAvatarData",
+        channel_profiles.games AS "channelGames"
+      FROM users LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id
+    `);
+    return result.rows.map((item) => ({
+      ...item,
+      channelAvatarData: compactAvatarData(item.channelAvatarData),
+      channelGames: parseChannelGames(item.channelGames),
+    }));
+  }
+
+  return { channelProfileForUser, saveChannelProfile, listDirectory };
 }

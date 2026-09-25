@@ -247,6 +247,7 @@ try {
   const profiles = createPostgresChannelProfileRepository(client, { parseChannelGames: (value) => JSON.parse(value || "[]") });
   assert.equal((await profiles.channelProfileForUser(ids.owner))?.displayName, "Owner Channel");
   assert.equal((await profiles.saveChannelProfile(ids.owner, { displayName: "Updated Channel", avatarData: null, games: ["Game"], updatedAt: now })).games[0], "Game");
+  assert.equal((await profiles.listDirectory()).some((profile) => profile.id === ids.owner), true);
 
   const preferences = createPostgresUserPreferenceRepository(client, { normalizePreferenceVolume });
   await preferences.savePreferences(ids.owner, {
@@ -274,6 +275,7 @@ try {
   await notificationSync.sync(ids.owner);
 
   const groupSettings = createPostgresGroupSettingsRepository(client);
+  assert.equal((await groupSettings.listDirectoryGroups()).some((group) => group.id === ids.group), true);
   assert.equal((await groupSettings.findGroup(createdGroup.id)).ownerId, ids.owner);
   assert.equal((await groupSettings.findDuplicateSlug(`pg-updated-${ids.group}`, createdGroup.id)), null);
   assert.equal((await groupSettings.updateGroup(createdGroup.id, "PG Updated Group", `pg-updated-${ids.group}`)).name, "PG Updated Group");

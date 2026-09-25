@@ -3312,13 +3312,13 @@ async function handleHttpRequest(request, response) {
       if (!canAccessStream(user?.id, stream)) return json(response, 404, { error: "Canal não encontrado." });
       return json(response, 200, { stream: { ...stream, channelAvatarData: compactAvatarData(stream.channelAvatarData), channelGames: parseChannelGames(stream.channelGames), publicPath: streamPublicPath(stream) } });
     }
-    const users = database.prepare("SELECT users.id, users.username, COALESCE(channel_profiles.display_name, users.display_name) AS channelName, COALESCE(channel_profiles.avatar_data, users.avatar_data) AS channelAvatarData, channel_profiles.games AS channelGames FROM users LEFT JOIN channel_profiles ON channel_profiles.user_id = users.id").all().map((item) => ({ ...item, channelAvatarData: compactAvatarData(item.channelAvatarData), channelGames: parseChannelGames(item.channelGames) }));
+    const users = channelProfileRepository.listDirectory();
     const displayNameMatches = users.filter((item) => slugFor(item.channelName) === channelPart);
     const exactUsername = users.find((item) => slugFor(item.username) === channelPart);
     const channel = displayNameMatches.length === 1 ? displayNameMatches[0] : exactUsername;
     if (!channel) return json(response, 404, { error: "Canal não encontrado." });
     if (parts.length === 1) return json(response, 200, { stream: { channelName: channel.channelName, channelUsername: channel.username, channelAvatarData: compactAvatarData(channel.channelAvatarData), channelGames: channel.channelGames, visibility: "public", publicPath: `/${slugFor(channel.channelName || channel.username)}`, offline: true } });
-    const group = database.prepare("SELECT id, name, slug FROM groups").all().find((item) => slugFor(item.slug) === parts[0]);
+    const group = groupSettingsRepository.listDirectoryGroups().find((item) => slugFor(item.slug) === parts[0]);
     if (!group) return json(response, 404, { error: "Grupo não encontrado." });
     if (!user || !isGroupMember(user.id, group.id)) return json(response, 404, { error: "Canal não encontrado." });
     return json(response, 200, { stream: { channelName: channel.channelName, channelUsername: channel.username, channelAvatarData: compactAvatarData(channel.channelAvatarData), channelGames: channel.channelGames, visibility: "private", groupSlug: group.slug, groupName: group.name, publicPath: `/${slugFor(group.slug)}/${slugFor(channel.channelName || channel.username)}`, offline: true } });
@@ -3360,7 +3360,7 @@ async function handleHttpRequest(request, response) {
       try {
         // A verificação e a inserção precisam ser atômicas: dois cliques, abas
         // ou clientes concorrentes não podem abrir duas lives do mesmo escopo.
-        const groupSlug = groupId ? database.prepare("SELECT slug FROM groups WHERE id = ?").get(groupId)?.slug || "" : "";
+        const groupSlug = groupId ? groupSettingsRepository.findGroup(groupId)?.slug || "" : "";
         const channel = channelProfileForUser(user.id) || { displayName: user.displayName, avatarData: user.avatarData, games: [] };
         const result = streamRepository.createStream({
           roomName, visibility, groupId, roomId: roomId || null, voiceRoomId: voiceRoomId || null,

@@ -16,7 +16,11 @@ export function createGroupSettingsRepository(database) {
     return database.prepare("SELECT id FROM groups WHERE slug = ? AND id <> ?").get(slug, exceptGroupId) || null;
   }
 
-  return { findGroup, updateGroup, deleteGroup, findDuplicateSlug };
+  function listDirectoryGroups() {
+    return database.prepare("SELECT id, name, slug FROM groups").all();
+  }
+
+  return { findGroup, updateGroup, deleteGroup, findDuplicateSlug, listDirectoryGroups };
 }
 
 export function createPostgresGroupSettingsRepository(database) {
@@ -41,5 +45,9 @@ export function createPostgresGroupSettingsRepository(database) {
     return result.rows[0] || null;
   }
 
-  return { findGroup, updateGroup, deleteGroup, findDuplicateSlug };
+  async function listDirectoryGroups() {
+    return (await database.query("SELECT id, name, slug FROM groups")).rows;
+  }
+
+  return { findGroup, updateGroup, deleteGroup, findDuplicateSlug, listDirectoryGroups };
 }
