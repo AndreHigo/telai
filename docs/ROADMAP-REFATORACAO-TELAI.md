@@ -111,6 +111,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair autenticação de operador, consultas paginadas e visão do painel para `server/admin/runtime.mjs`.
 - [x] Extrair sessão, consentimento, cadastro, login, logout e operações de conta para `server/http/auth-routes.mjs`, mantendo OAuth no gateway.
 - [x] Extrair o runtime de sessão, cookies, rate limit de login, PKCE e identidade OAuth para `server/auth/runtime.mjs`.
+- [x] Extrair buckets, políticas e limpeza de rate limit HTTP para `server/http/rate-limit.mjs`.
 - [x] Extrair métricas locais e diagnósticos de cliente para `server/http/observability-routes.mjs`.
 - [x] Extrair descoberta, criação e saída de grupos para `server/http/group-discovery-routes.mjs`, mantendo exclusão e runtime de voz no gateway.
 - [x] Extrair solicitações de entrada, configurações e visão administrativa de grupos para `server/http/group-management-routes.mjs`.
