@@ -38,6 +38,7 @@
   } from "./services/media/voice-input.js";
   import { createVoiceCaptureService } from "./services/media/voice-capture.js";
   import { createVoiceTrackSyncService } from "./services/media/voice-track-sync.js";
+  import { createVoiceReconnectStorage } from "./services/media/voice-reconnect-storage.js";
   import { createVoiceQualityController } from "./features/voice/quality-controller.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
@@ -1822,42 +1823,20 @@
   }
 
   const VOICE_RECONNECT_STORAGE_KEY = "mirante-voice-reconnect";
-  const VOICE_RECONNECT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+  const voiceReconnectStorage = createVoiceReconnectStorage({
+    key: VOICE_RECONNECT_STORAGE_KEY,
+    onError: (kind, error) => reportClientError(kind, error),
+  });
 
   function readVoiceReconnectSession() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(VOICE_RECONNECT_STORAGE_KEY) || "null");
-      if (!saved || typeof saved !== "object" || !saved.groupId || !saved.voiceRoomId) return null;
-      const savedAt = Number(saved.savedAt || 0);
-      if (!Number.isFinite(savedAt) || Date.now() - savedAt > VOICE_RECONNECT_MAX_AGE_MS) {
-        localStorage.removeItem(VOICE_RECONNECT_STORAGE_KEY);
-        return null;
-      }
-      return {
-        groupId: String(saved.groupId).slice(0, 64),
-        voiceRoomId: String(saved.voiceRoomId).slice(0, 64),
-        groupName: String(saved.groupName || "grupo").slice(0, 80),
-        roomName: String(saved.roomName || "sala de voz").slice(0, 80),
-        savedAt,
-      };
-    } catch {
-      localStorage.removeItem(VOICE_RECONNECT_STORAGE_KEY);
-      return null;
-    }
+    return voiceReconnectStorage.read();
   }
 
   function writeVoiceReconnectSession(session, { show = true } = {}) {
     if (!session?.groupId || !session.voiceRoomId) return;
-    const next = {
-      groupId: String(session.groupId).slice(0, 64),
-      voiceRoomId: String(session.voiceRoomId).slice(0, 64),
-      groupName: String(session.groupName || "grupo").slice(0, 80),
-      roomName: String(session.roomName || "sala de voz").slice(0, 80),
-      savedAt: Date.now(),
-    };
+    const next = voiceReconnectStorage.write(session);
     voiceReconnectSession = next;
     voiceReconnectVisible = show;
-    try { localStorage.setItem(VOICE_RECONNECT_STORAGE_KEY, JSON.stringify(next)); } catch (error) { reportClientError("voice_reconnect_persist_error", error); }
   }
 
   function clearVoiceReconnectSession() {
@@ -1865,7 +1844,7 @@
     voiceReconnectVisible = false;
     if (voiceReconnectTimer) window.clearTimeout(voiceReconnectTimer);
     voiceReconnectTimer = null;
-    try { localStorage.removeItem(VOICE_RECONNECT_STORAGE_KEY); } catch (error) { reportClientError("voice_reconnect_clear_error", error); }
+    voiceReconnectStorage.clear();
   }
 
   async function createGroup() {
