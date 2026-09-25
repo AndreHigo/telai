@@ -86,6 +86,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair configuração de ícones e navegação global do `App.svelte`.
 - [x] Extrair a feature de autenticação para `frontend/src/features/auth`.
 - [x] Extrair a feature de notificações para `frontend/src/features/notifications`.
+- [x] Extrair a feature de amigos para `frontend/src/features/social`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
 
 ### Fase 2 — Contratos e tempo real

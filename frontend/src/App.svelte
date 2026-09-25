@@ -3,6 +3,7 @@
   import Viewer from "./Viewer.svelte";
   import AuthPage from "./features/auth/AuthPage.svelte";
   import NotificationsPage from "./features/notifications/NotificationsPage.svelte";
+  import FriendsPage from "./features/social/FriendsPage.svelte";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
@@ -7372,22 +7373,24 @@
           onNavigateHome={() => selectView("home")}
         />
       {:else if view === "friends"}
-        <section class="social-page window-page" aria-labelledby="social-title">
-          <header class="social-heading">
-            <div><p class="eyebrow">conexões do Telai</p><h1 id="social-title">Amigos</h1><p class="muted">Converse com seus amigos e acompanhe os canais que você curte.</p></div>
-            <div class="social-heading-actions"><button class="outline rounded-xl px-4 py-2 text-sm font-extrabold" type="button" aria-expanded={socialSearchOpen} on:click={() => socialSearchOpen = !socialSearchOpen}>{#if socialSearchOpen}Fechar{:else}<HugeiconsIcon icon={iconFor("search")} size={15} strokeWidth={1.8} /> Pesquisar{/if}</button><button class="primary rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={() => socialSearchOpen = true}><HugeiconsIcon icon={iconFor("add")} size={15} strokeWidth={1.8} /> Adicionar</button><button class="outline rounded-xl px-4 py-2 text-sm font-extrabold" type="button" aria-expanded={socialRequestsOpen} on:click={() => socialRequestsOpen = !socialRequestsOpen}>Solicitações{#if social.incomingRequests.length}<span class="social-action-count">{social.incomingRequests.length}</span>{/if}</button><button class="outline rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={() => selectView("home")}>Voltar</button></div>
-          </header>
-          {#if socialError}<p class="settings-error" role="alert">{socialError}</p>{/if}
-          {#if socialSearchOpen}<section class="social-search-panel social-discover-panel">
-            <div><p class="eyebrow">adicionar contato</p><h2>Encontrar alguém</h2><p class="muted">Busque pelo nome ou @usuário para adicionar, seguir ou enviar mensagem.</p></div>
-            <form class="social-search-form" on:submit|preventDefault={searchSocialUsers}><input class="settings-input" bind:value={socialSearchQuery} type="search" placeholder="Nome ou @usuário" autocomplete="off" aria-label="Pesquisar pessoas" /><button class="primary rounded-xl px-4 py-2 text-xs font-extrabold" type="submit" disabled={socialSearchBusy}>{socialSearchBusy ? "Buscando…" : "Pesquisar"}</button></form>
-            {#if socialSearchResults.length}<div class="social-search-results">{#each socialSearchResults as target}<article class="social-person-row"><span class="social-person-avatar">{#if target.avatarData}<img src={target.avatarData} alt="" />{:else}{target.displayName?.slice(0, 1) || "M"}{/if}</span><span class="social-person-copy"><strong>{target.displayName}</strong><small>@{target.username}</small></span><div class="social-person-actions"><button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={() => openDirectConversationWithUser(target)}>Mensagem</button>{#if target.friendshipStatus === "accepted"}<span class="social-state">Amigos</span>{:else if target.friendshipStatus === "pending_sent"}<button class="subtle-action" type="button" on:click={() => cancelFriendRequest({ id: target.friendRequestId })} disabled={!target.friendRequestId || socialActionId === target.friendRequestId}>Solicitação enviada</button>{:else if target.friendshipStatus === "pending_received"}<span class="social-state">Confira solicitações</span>{:else}<button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={() => sendFriendRequest(target)} disabled={socialActionId === target.id}>{socialActionId === target.id ? "Enviando…" : "Adicionar amigo"}</button>{/if}<button class="social-follow-button" class:active={target.following} type="button" on:click={() => toggleFollowUser(target)} disabled={socialActionId === `follow:${target.id}`}>{target.following ? "Seguindo" : "Seguir canal"}</button></div></article>{/each}</div>{/if}
-          </section>{/if}
-          <div class:requests-visible={socialRequestsOpen} class="social-columns">
-            <section class="social-list-panel"><div class="social-panel-heading"><div><p class="eyebrow">sua rede</p><h2>Amigos</h2></div><span>{social.friends.length}</span></div>{#if social.friends.length}<div class="social-list">{#each social.friends as friend}<article class="social-person-row"><span class="social-person-avatar">{#if friend.avatarData}<img src={friend.avatarData} alt="" />{:else}{friend.displayName?.slice(0, 1) || "M"}{/if}</span><span class="social-person-copy"><strong>{friend.displayName}</strong><small>@{friend.username}</small></span><div class="social-person-actions"><button class="outline rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={() => openDirectConversationWithUser(friend)}>Mensagem</button><button class="subtle-action" type="button" on:click={() => removeFriend(friend)} disabled={socialActionId === friend.id}>Remover</button></div></article>{/each}</div>{:else}<div class="social-empty-state"><span class="social-empty-icon telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("communities")} size={22} strokeWidth={1.8} /></span><p class="social-empty">Você ainda não adicionou ninguém. Use Adicionar ou Pesquisar no canto superior.</p></div>{/if}</section>
-            <section class="social-list-panel"><div class="social-panel-heading"><div><p class="eyebrow">convites</p><h2>Solicitações</h2></div><span>{social.incomingRequests.length}</span></div>{#if social.incomingRequests.length}<div class="social-list">{#each social.incomingRequests as request}<article class="social-person-row"><span class="social-person-avatar">{#if request.avatarData}<img src={request.avatarData} alt="" />{:else}{request.displayName?.slice(0, 1) || "M"}{/if}</span><span class="social-person-copy"><strong>{request.displayName}</strong><small>@{request.username} quer ser seu amigo</small></span><div class="social-person-actions"><button class="primary rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={() => respondToFriendRequest(request, "accept")} disabled={socialActionId === request.id}>Aceitar</button><button class="subtle-action" type="button" on:click={() => respondToFriendRequest(request, "decline")} disabled={socialActionId === request.id}>Recusar</button></div></article>{/each}</div>{:else}<div class="social-empty-state"><span class="social-empty-icon telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("userAdd")} size={22} strokeWidth={1.8} /></span><p class="social-empty">Nenhuma solicitação pendente.</p></div>{/if}{#if social.outgoingRequests.length}<p class="social-subheading">Enviadas</p><div class="social-list">{#each social.outgoingRequests as request}<article class="social-person-row compact"><span class="social-person-avatar">{#if request.avatarData}<img src={request.avatarData} alt="" />{:else}{request.displayName?.slice(0, 1) || "M"}{/if}</span><span class="social-person-copy"><strong>{request.displayName}</strong><small>@{request.username}</small></span><button class="subtle-action" type="button" on:click={() => cancelFriendRequest(request)} disabled={socialActionId === request.id}>Cancelar</button></article>{/each}</div>{/if}</section>
-          </div>
-        </section>
+        <FriendsPage
+          bind:socialSearchOpen
+          bind:socialRequestsOpen
+          bind:socialSearchQuery
+          {social}
+          {socialError}
+          {socialSearchBusy}
+          {socialSearchResults}
+          {socialActionId}
+          onSearchUsers={searchSocialUsers}
+          onOpenDirectConversation={openDirectConversationWithUser}
+          onCancelFriendRequest={cancelFriendRequest}
+          onSendFriendRequest={sendFriendRequest}
+          onToggleFollowUser={toggleFollowUser}
+          onRespondToFriendRequest={respondToFriendRequest}
+          onRemoveFriend={removeFriend}
+          onNavigateHome={() => selectView("home")}
+        />
       {:else if view === "following"}
         <section class="social-page window-page" aria-labelledby="following-title">
           <header class="social-heading">
