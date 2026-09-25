@@ -7,6 +7,7 @@ import { sendEmail, sendGroupInviteEmail, smtpStatus, verifySmtp } from "./maile
 import { createRuntimeConfig } from "./server/config/runtime.mjs";
 import { createWebsocketGateway } from "./server/gateway/websocket.mjs";
 import { createBinaryMessageHandler } from "./server/gateway/binary-message.mjs";
+import { createVoiceMessageHandler } from "./server/gateway/voice-message-handler.mjs";
 import { createIceConfiguration } from "./server/media/ice-configuration.mjs";
 import { createDirectConversationRepository } from "./server/repositories/direct-conversations.mjs";
 import { createGroupAccessRepository, createGroupRepository } from "./server/repositories/groups.mjs";
@@ -1950,163 +1951,7 @@ async function handleMessage(socket, message) {
       });
     }
   }
-  if (message.type === "voice-join") {
-    const voiceRoomId = String(message.voiceRoomId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
-    const groupId = String(message.groupId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
-    if (voiceRoomId.length < 12 || groupId.length < 12) return send(socket, { type: "error", message: "Sala de voz inválida." });
-    const authorization = authorizeVoiceRoomJoin(voiceRoomId, groupId, socket);
-    if (!authorization.ok) return send(socket, { type: "error", message: authorization.message });
-    const voiceRoom = voiceRoomFor(voiceRoomId, groupId);
-    const maxParticipants = parseVoiceRoomParticipantLimit(authorization.voiceRoom.maxParticipants);
-    // Valide a capacidade antes de substituir a eventual sessão de voz
-    // anterior desta conta. Assim, tentar entrar numa sala cheia não derruba
-    // a conexão que ainda estava funcionando em outra sala.
-    const currentUserId = socket.user?.id || null;
-    const occupiedByOtherUsers = [...voiceRoom.participants.values()]
-      .filter((participant) => participant.user?.id !== currentUserId)
-      .length;
-    if (occupiedByOtherUsers >= maxParticipants) return send(socket, { type: "voice-error", message: `Esta sala de voz atingiu o limite de ${maxParticipants} participante${maxParticipants === 1 ? "" : "s"}.` });
-    replaceOtherVoiceSessions(socket);
-    leaveVoiceRoom(socket);
-    removeDuplicateVoiceSessions(voiceRoom, socket);
-    socket.voiceRoomId = voiceRoomId;
-    socket.voiceClientId = randomUUID();
-    socket.voiceMuted = false;
-    socket.voiceServerMuted = false;
-    socket.voiceDeafened = false;
-    socket.voiceSpeaking = false;
-    const participant = voiceParticipantFor(socket);
-    const existingParticipants = [...voiceRoom.participants.values()].map(voiceParticipantFor);
-    voiceRoom.participants.set(socket.voiceClientId, socket);
-    send(socket, { type: "voice-joined", voiceRoomId, clientId: socket.voiceClientId, participants: existingParticipants });
-    for (const existing of voiceRoom.participants.values()) {
-      if (existing !== socket) send(existing, { type: "voice-user-joined", participant });
-    }
-    infoLog("voice_join", { clientId: socket.clientId, voiceRoomId, participants: voiceRoom.participants.size });
-    return;
-  }
-
-  if (message.type === "voice-move") {
-    const sourceRoom = voiceRooms.get(socket.voiceRoomId);
-    const participantId = String(message.participantId || "");
-    const targetRoomId = String(message.targetRoomId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
-    const movingParticipant = sourceRoom?.participants.get(participantId);
-    const groupId = sourceRoom?.groupId;
-    if (!sourceRoom || !movingParticipant || !groupId || !socket.user || !canGroupAction(socket.user.id, groupId, "canMoveMembers")) {
-      return send(socket, { type: "voice-error", action: "move", message: "Você não tem permissão para mover pessoas entre salas." });
-    }
-    const targetRoomRecord = groupRoomRepository.findVoiceRoomById(targetRoomId);
-    if (!targetRoomRecord || targetRoomRecord.groupId !== groupId) return send(socket, { type: "voice-error", action: "move", message: "A sala de destino não pertence a este grupo." });
-    if (targetRoomId === socket.voiceRoomId) return;
-    const targetRoom = voiceRoomFor(targetRoomId, groupId);
-    const targetMaxParticipants = parseVoiceRoomParticipantLimit(targetRoomRecord.maxParticipants);
-    if (targetRoom.participants.size >= targetMaxParticipants) return send(socket, { type: "voice-error", action: "move", message: `A sala de destino atingiu o limite de ${targetMaxParticipants} participante${targetMaxParticipants === 1 ? "" : "s"}.` });
-
-    const previousRoomId = movingParticipant.voiceRoomId;
-    const movingUserId = movingParticipant.user?.id || null;
-    sourceRoom.participants.delete(participantId);
-    for (const participant of sourceRoom.participants.values()) send(participant, { type: "voice-user-left", participantId, userId: movingUserId });
-    if (sourceRoom.participants.size === 0) voiceRooms.delete(previousRoomId);
-
-    movingParticipant.voiceRoomId = targetRoomId;
-    movingParticipant.voiceClientId = randomUUID();
-    movingParticipant.voiceSpeaking = false;
-    const participant = voiceParticipantFor(movingParticipant);
-    const existingParticipants = [...targetRoom.participants.values()].map(voiceParticipantFor);
-    targetRoom.participants.set(movingParticipant.voiceClientId, movingParticipant);
-    send(movingParticipant, { type: "voice-moved", voiceRoomId: targetRoomId, clientId: movingParticipant.voiceClientId, participants: existingParticipants, previousRoomId, muted: Boolean(movingParticipant.voiceMuted || movingParticipant.voiceServerMuted), serverMuted: Boolean(movingParticipant.voiceServerMuted) });
-    for (const existing of targetRoom.participants.values()) {
-      if (existing !== movingParticipant) send(existing, { type: "voice-user-joined", participant });
-    }
-    return;
-  }
-
-  if (message.type === "voice-mute") {
-    const voiceRoom = voiceRooms.get(socket.voiceRoomId);
-    const participantId = String(message.participantId || "");
-    const target = voiceRoom?.participants.get(participantId);
-    const groupId = voiceRoom?.groupId;
-    if (!voiceRoom || !target || !groupId || !socket.user || !canGroupAction(socket.user.id, groupId, "canMoveMembers")) {
-      return send(socket, { type: "voice-error", action: "mute", message: "Você não tem permissão para silenciar pessoas nesta sala." });
-    }
-    target.voiceServerMuted = message.muted !== false;
-    if (target.voiceServerMuted && target.voiceSpeaking) {
-      target.voiceSpeaking = false;
-      broadcastVoice(voiceRoom, { type: "voice-user-speaking", participantId: target.voiceClientId, speaking: false });
-    }
-    send(target, { type: "voice-force-mute", muted: Boolean(target.voiceServerMuted) });
-    broadcastVoice(voiceRoom, { type: "voice-user-muted", participantId: target.voiceClientId, muted: Boolean(target.voiceMuted || target.voiceServerMuted), serverMuted: Boolean(target.voiceServerMuted) });
-    return;
-  }
-
-  if (message.type === "voice-mute-state") {
-    const voiceRoom = voiceRooms.get(socket.voiceRoomId);
-    if (!voiceRoom) return;
-    socket.voiceMuted = Boolean(message.muted);
-    if (socket.voiceMuted && socket.voiceSpeaking) {
-      socket.voiceSpeaking = false;
-      broadcastVoice(voiceRoom, { type: "voice-user-speaking", participantId: socket.voiceClientId, speaking: false });
-    }
-    broadcastVoice(voiceRoom, { type: "voice-user-muted", participantId: socket.voiceClientId, muted: Boolean(socket.voiceMuted || socket.voiceServerMuted), serverMuted: Boolean(socket.voiceServerMuted) });
-    return;
-  }
-
-  if (message.type === "voice-speaking") {
-    const voiceRoom = voiceRooms.get(socket.voiceRoomId);
-    if (!voiceRoom || !socket.voiceClientId) return;
-    if (!allowVoiceSpeakingUpdate(socket)) {
-      reportVoiceSpeakingRateLimited(socket);
-      return;
-    }
-    // Um participante silenciado na sala não pode voltar a anunciar voz até
-    // que a moderação remova o bloqueio do microfone.
-    const speaking = !socket.voiceMuted && !socket.voiceServerMuted && message.speaking === true;
-    if (socket.voiceSpeaking === speaking) return;
-    socket.voiceSpeaking = speaking;
-    broadcastVoice(voiceRoom, { type: "voice-user-speaking", participantId: socket.voiceClientId, speaking });
-    return;
-  }
-
-  if (message.type === "voice-deafen-state") {
-    const voiceRoom = voiceRooms.get(socket.voiceRoomId);
-    if (!voiceRoom || !socket.voiceClientId) return;
-    socket.voiceDeafened = Boolean(message.deafened);
-    broadcastVoice(voiceRoom, { type: "voice-user-deafened", participantId: socket.voiceClientId, deafened: socket.voiceDeafened });
-    return;
-  }
-
-  if (message.type === "voice-disconnect") {
-    const voiceRoom = voiceRooms.get(socket.voiceRoomId);
-    const participantId = String(message.participantId || "");
-    const target = voiceRoom?.participants.get(participantId);
-    const groupId = voiceRoom?.groupId;
-    if (!voiceRoom || !target || !groupId || !socket.user || !canGroupAction(socket.user.id, groupId, "canMoveMembers")) {
-      return send(socket, { type: "voice-error", action: "disconnect", message: "Você não tem permissão para desconectar pessoas desta sala." });
-    }
-    if (target === socket) {
-      leaveVoiceRoom(socket);
-      return;
-    }
-    send(target, { type: "voice-disconnected", message: "Você foi desconectado da sala por um administrador." });
-    leaveVoiceRoom(target);
-    return;
-  }
-
-  if (message.type === "voice-leave") {
-    leaveVoiceRoom(socket);
-    return;
-  }
-
-  if (message.type === "voice-signal") {
-    const voiceRoom = voiceRooms.get(socket.voiceRoomId);
-    const targetId = String(message.target || "");
-    const target = voiceRoom?.participants.get(targetId);
-    if (!target || target === socket) return;
-    const payload = normalizeRtcSignalPayload(message.payload);
-    if (!payload) return send(socket, { type: "error", message: "Sinalização de voz inválida." });
-    send(target, { type: "voice-signal", from: socket.voiceClientId, payload });
-    return;
-  }
+  if (handleVoiceMessage(socket, message)) return;
 
   if (message.type === "join") {
     const roomId = String(message.roomId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40);
@@ -2382,6 +2227,26 @@ const server = http.createServer((request, response) => {
 server.requestTimeout = 120_000;
 server.headersTimeout = 15_000;
 server.keepAliveTimeout = 5_000;
+
+const handleVoiceMessage = createVoiceMessageHandler({
+  send,
+  voiceRooms,
+  authorizeVoiceRoomJoin,
+  voiceRoomFor,
+  parseVoiceRoomParticipantLimit,
+  replaceOtherVoiceSessions,
+  leaveVoiceRoom,
+  removeDuplicateVoiceSessions,
+  randomUUID,
+  voiceParticipantFor,
+  infoLog,
+  canGroupAction,
+  groupRoomRepository,
+  broadcastVoice,
+  allowVoiceSpeakingUpdate,
+  reportVoiceSpeakingRateLimited,
+  normalizeRtcSignalPayload,
+});
 
 const handleBinaryMessage = createBinaryMessageHandler({
   rooms,
