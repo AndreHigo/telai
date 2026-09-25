@@ -1097,6 +1097,68 @@
     return result;
   }
 
+  let groupMembershipControllerPromise = null;
+  function getGroupMembershipController() {
+    if (!groupMembershipControllerPromise) {
+      groupMembershipControllerPromise = import("./features/groups/membership-controller.js").then(({ createGroupMembershipController }) => createGroupMembershipController({
+        api,
+        getUser: () => user,
+        getState: () => ({
+          groupAdminError,
+          groupJoinActionId,
+          groupJoinRequests,
+          groupSearchBusy,
+          groupSearchError,
+          groupSearchQuery,
+          groupSearchResults,
+          inviteActionId,
+          inviteSearchBusy,
+          inviteSearchError,
+          inviteSearchQuery,
+          inviteSearchResults,
+          groupInviteLink,
+          pendingInviteToken,
+          selectedGroupId,
+        }),
+        setState: (next) => {
+          if ("groupAdminError" in next) groupAdminError = next.groupAdminError;
+          if ("groupJoinActionId" in next) groupJoinActionId = next.groupJoinActionId;
+          if ("groupJoinRequests" in next) groupJoinRequests = next.groupJoinRequests;
+          if ("groupSearchBusy" in next) groupSearchBusy = next.groupSearchBusy;
+          if ("groupSearchError" in next) groupSearchError = next.groupSearchError;
+          if ("groupSearchQuery" in next) groupSearchQuery = next.groupSearchQuery;
+          if ("groupSearchResults" in next) groupSearchResults = next.groupSearchResults;
+          if ("groupInviteLink" in next) groupInviteLink = next.groupInviteLink;
+          if ("inviteActionId" in next) inviteActionId = next.inviteActionId;
+          if ("inviteSearchBusy" in next) inviteSearchBusy = next.inviteSearchBusy;
+          if ("inviteSearchError" in next) inviteSearchError = next.inviteSearchError;
+          if ("inviteSearchQuery" in next) inviteSearchQuery = next.inviteSearchQuery;
+          if ("inviteSearchResults" in next) inviteSearchResults = next.inviteSearchResults;
+          if ("notice" in next) notice = next.notice;
+          if ("pendingInviteToken" in next) pendingInviteToken = next.pendingInviteToken;
+          if ("showGroupSearchDialog" in next) showGroupSearchDialog = next.showGroupSearchDialog;
+          if ("showInviteDialog" in next) showInviteDialog = next.showInviteDialog;
+        },
+        loadGroups,
+        loadGroup,
+        loadNotifications,
+        markNotificationRead,
+        openSettings,
+        setGroupsView,
+      }));
+    }
+    return groupMembershipControllerPromise;
+  }
+  async function inviteUser(...args) { return (await getGroupMembershipController()).inviteUser(...args); }
+  function openGroupSearchDialog(...args) { void getGroupMembershipController().then((controller) => controller.openGroupSearchDialog(...args)); }
+  function openInviteDialog(...args) { void getGroupMembershipController().then((controller) => controller.openInviteDialog(...args)); }
+  async function redeemPendingInvite(...args) { return (await getGroupMembershipController()).redeemPendingInvite(...args); }
+  async function requestGroupEntry(...args) { return (await getGroupMembershipController()).requestGroupEntry(...args); }
+  async function respondToGroupJoinRequest(...args) { return (await getGroupMembershipController()).respondToGroupJoinRequest(...args); }
+  async function respondToInvite(...args) { return (await getGroupMembershipController()).respondToInvite(...args); }
+  async function searchGroups(...args) { return (await getGroupMembershipController()).searchGroups(...args); }
+  async function searchUsers(...args) { return (await getGroupMembershipController()).searchUsers(...args); }
+
   let groupMessageControllerPromise = null;
   function getGroupMessageController() {
     if (!groupMessageControllerPromise) {
@@ -2756,132 +2818,6 @@
       deleteGroupError = error.message || "Não foi possível excluir o grupo agora.";
     } finally {
       deleteGroupBusy = false;
-    }
-  }
-
-  function openInviteDialog() {
-    inviteSearchQuery = "";
-    inviteSearchResults = [];
-    inviteSearchError = "";
-    groupInviteLink = "";
-    showInviteDialog = true;
-  }
-
-  async function searchUsers() {
-    if (inviteSearchBusy) return;
-    const query = inviteSearchQuery.trim();
-    if (query.length < 2) {
-      inviteSearchError = "Digite pelo menos 2 caracteres para pesquisar.";
-      inviteSearchResults = [];
-      return;
-    }
-    inviteSearchBusy = true;
-    inviteSearchError = "";
-    try {
-      const result = await api(`/api/users/search?q=${encodeURIComponent(query)}`);
-      inviteSearchResults = result.users || [];
-      if (!inviteSearchResults.length) inviteSearchError = "Nenhuma conta encontrada.";
-    } catch (error) { inviteSearchError = error.message; }
-    finally { inviteSearchBusy = false; }
-  }
-
-  async function inviteUser(target) {
-    if (!selectedGroupId || !target?.id) return;
-    inviteActionId = target.id;
-    inviteSearchError = "";
-    try {
-      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/member-invites`, { method: "POST", body: JSON.stringify({ userId: target.id }) });
-      inviteSearchResults = inviteSearchResults.filter((item) => item.id !== target.id);
-      notice = `Convite enviado para ${target.displayName}.`;
-    } catch (error) { inviteSearchError = error.message; }
-    finally { inviteActionId = ""; }
-  }
-
-  async function searchGroups() {
-    if (groupSearchBusy) return;
-    const query = groupSearchQuery.trim();
-    groupSearchError = "";
-    if (query.length < 2) {
-      groupSearchResults = [];
-      if (query) groupSearchError = "Digite pelo menos 2 caracteres para pesquisar.";
-      return;
-    }
-    groupSearchBusy = true;
-    try {
-      const result = await api(`/api/groups/search?q=${encodeURIComponent(query)}`);
-      groupSearchResults = result.groups || [];
-      if (!groupSearchResults.length) groupSearchError = "Nenhum grupo encontrado.";
-    } catch (error) { groupSearchError = error.message; }
-    finally { groupSearchBusy = false; }
-  }
-
-  function openGroupSearchDialog() {
-    groupSearchQuery = "";
-    groupSearchResults = [];
-    groupSearchError = "";
-    showGroupSearchDialog = true;
-  }
-
-  async function requestGroupEntry(group) {
-    if (!group?.id) return;
-    groupJoinActionId = group.id;
-    groupSearchError = "";
-    try {
-      await api(`/api/groups/${encodeURIComponent(group.id)}/join-requests`, { method: "POST" });
-      groupSearchResults = groupSearchResults.map((item) => item.id === group.id ? { ...item, requestStatus: "pending" } : item);
-      notice = `Solicitação enviada para ${group.name}.`;
-    } catch (error) { groupSearchError = error.message; }
-    finally { groupJoinActionId = ""; }
-  }
-
-  async function respondToGroupJoinRequest(joinRequest, status) {
-    if (!selectedGroupId || !joinRequest?.id) return;
-    groupJoinActionId = joinRequest.id;
-    groupAdminError = "";
-    try {
-      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/join-requests/${encodeURIComponent(joinRequest.id)}`, { method: "PATCH", body: JSON.stringify({ status }) });
-      groupJoinRequests = groupJoinRequests.filter((item) => item.id !== joinRequest.id);
-      if (status === "approved") await loadGroup(selectedGroupId);
-      notice = status === "approved" ? `${joinRequest.displayName} entrou no grupo.` : "Solicitação recusada.";
-    } catch (error) { groupAdminError = error.message; }
-    finally { groupJoinActionId = ""; }
-  }
-
-  async function respondToInvite(invite, action) {
-    const inviteId = invite?.entityId || invite?.id;
-    if (!inviteId) return;
-    inviteActionId = inviteId;
-    try {
-      await markNotificationRead(invite);
-      await api(`/api/member-invites/${encodeURIComponent(inviteId)}/${action}`, { method: "POST" });
-      await loadNotifications();
-      if (action === "accept") {
-        await loadGroups();
-        notice = `Você entrou no grupo ${invite.groupName}.`;
-      } else notice = "Convite recusado.";
-    } catch (error) { notice = error.message; }
-    finally { inviteActionId = ""; }
-  }
-
-  async function redeemPendingInvite() {
-    if (!pendingInviteToken) return;
-    if (!user) {
-      notice = "Entre ou crie sua conta para aceitar este convite.";
-      return;
-    }
-    const token = pendingInviteToken;
-    try {
-      const result = await api(`/api/invites/${encodeURIComponent(token)}/redeem`, { method: "POST" });
-      pendingInviteToken = "";
-      const cleanUrl = new URL(window.location.href);
-      cleanUrl.searchParams.delete("invite");
-      window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
-      await loadGroups();
-      if (result.groupId) await loadGroup(result.groupId);
-      setGroupsView();
-      notice = "Você entrou no grupo pelo convite.";
-    } catch (error) {
-      notice = error.message;
     }
   }
 
