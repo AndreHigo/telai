@@ -57,6 +57,10 @@ try {
   const sessions = createPostgresSessionRepository(client, { hashSessionToken: (token) => `hash:${token}` });
   await sessions.create({ userId: ids.owner, token: "token", expiresAt: new Date(Date.now() + 60_000).toISOString(), createdAt: now });
   assert.equal((await sessions.findUserByToken("token"))?.id, ids.owner);
+  assert.equal(await sessions.deleteByToken("token"), true);
+  assert.equal(await sessions.findUserByToken("token"), null);
+  await sessions.create({ userId: ids.owner, token: "expired", expiresAt: new Date(Date.now() - 60_000).toISOString(), createdAt: now });
+  assert.equal(await sessions.deleteExpired(now), 1);
 
   const auth = createPostgresAuthRepository(client, { legalPolicyVersion: "test-v1" });
   await auth.recordLegalConsents(ids.owner, now);
@@ -218,6 +222,7 @@ try {
 
   const profiles = createPostgresChannelProfileRepository(client, { parseChannelGames: (value) => JSON.parse(value || "[]") });
   assert.equal((await profiles.channelProfileForUser(ids.owner))?.displayName, "Owner Channel");
+  assert.equal((await profiles.saveChannelProfile(ids.owner, { displayName: "Updated Channel", avatarData: null, games: ["Game"], updatedAt: now })).games[0], "Game");
 
   const preferences = createPostgresUserPreferenceRepository(client, { normalizePreferenceVolume });
   await preferences.savePreferences(ids.owner, {

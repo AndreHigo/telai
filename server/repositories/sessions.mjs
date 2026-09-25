@@ -15,7 +15,16 @@ export function createSessionRepository(database, { hashSessionToken }) {
       .run(hashSessionToken(token), userId, expiresAt, createdAt);
   }
 
-  return { findUserByToken, create };
+  function deleteByToken(token) {
+    if (!token) return false;
+    return database.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashSessionToken(token)).changes > 0;
+  }
+
+  function deleteExpired(now = new Date().toISOString()) {
+    return database.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(now).changes;
+  }
+
+  return { findUserByToken, create, deleteByToken, deleteExpired };
 }
 
 export function createPostgresSessionRepository(database, { hashSessionToken }) {
@@ -38,5 +47,16 @@ export function createPostgresSessionRepository(database, { hashSessionToken }) 
     );
   }
 
-  return { findUserByToken, create };
+  async function deleteByToken(token) {
+    if (!token) return false;
+    const result = await database.query("DELETE FROM sessions WHERE token_hash = $1", [hashSessionToken(token)]);
+    return result.rowCount > 0;
+  }
+
+  async function deleteExpired(now = new Date().toISOString()) {
+    const result = await database.query("DELETE FROM sessions WHERE expires_at <= $1", [now]);
+    return result.rowCount;
+  }
+
+  return { findUserByToken, create, deleteByToken, deleteExpired };
 }

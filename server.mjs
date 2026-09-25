@@ -774,7 +774,8 @@ const { userWithLinkedAccounts, legalConsentStatus, recordLegalConsents } = crea
 });
 const notificationRepository = createNotificationRepository(database);
 const { createNotification } = notificationRepository;
-const { channelProfileForUser } = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
+const channelProfileRepository = createChannelProfileRepository(database, { compactAvatarData, parseChannelGames });
+const { channelProfileForUser } = channelProfileRepository;
 const userPreferenceRepository = createUserPreferenceRepository(database, { normalizePreferenceVolume });
 const notificationSyncService = createNotificationSyncService(database, {
   getNotificationScope: (userId) => userPreferenceRepository.getPreferences(userId).liveNotificationScope,
@@ -821,7 +822,7 @@ function pruneExpiredRuntimeState() {
     if (now - lastSeen > 35_000) groupPresence.delete(key);
   }
   try {
-    database.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(new Date(now).toISOString());
+    sessionRepository.deleteExpired(new Date(now).toISOString());
   } catch (error) {
     errorLog("expired_state_cleanup_error", { error });
   }
@@ -2440,8 +2441,7 @@ async function handleHttpRequest(request, response) {
       const user = upsertOAuthUser(providerName, identity);
       const token = randomBytes(32).toString("base64url");
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      database.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)")
-        .run(hashSessionToken(token), user.id, expiresAt, new Date().toISOString());
+      sessionRepository.create({ userId: user.id, token, expiresAt, createdAt: new Date().toISOString() });
       response.setHeader("Set-Cookie", [sessionCookie(token, request), oauthStateCookie("", request, 0)]);
       return response.writeHead(302, { Location: "/" }).end();
     } catch (error) {
@@ -2569,7 +2569,7 @@ async function handleHttpRequest(request, response) {
   }
   if (requestUrl.pathname === "/api/auth/logout" && request.method === "POST") {
     const token = parseCookies(request).mirante_session;
-    if (token) database.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashSessionToken(token));
+    sessionRepository.deleteByToken(token);
     response.setHeader("Set-Cookie", expiredSessionCookie(request));
     return json(response, 200, { ok: true });
   }
@@ -2607,12 +2607,7 @@ async function handleHttpRequest(request, response) {
         return json(response, 400, { error: "A foto do canal deve ser PNG, JPG, WEBP ou GIF com até 5 MB." });
       }
       const games = Array.isArray(body.games) ? parseChannelGames(body.games) : (current?.games || []);
-      database.prepare(`
-        INSERT INTO channel_profiles (user_id, display_name, avatar_data, games, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET display_name = excluded.display_name, avatar_data = excluded.avatar_data, games = excluded.games, updated_at = excluded.updated_at
-      `).run(user.id, displayName, avatarData, JSON.stringify(games), new Date().toISOString());
-      return json(response, 200, { channel: channelProfileForUser(user.id) });
+      return json(response, 200, { channel: channelProfileRepository.saveChannelProfile(user.id, { displayName, avatarData, games, updatedAt: new Date().toISOString() }) });
     }).catch((error) => json(response, 400, { error: error.message === "body-too-large" ? "A foto é muito grande. Use um arquivo de até 5 MB." : "Não foi possível atualizar o canal." }));
     return;
   }
