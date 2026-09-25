@@ -120,6 +120,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair exclusão de grupos, overview e presença para `server/http/group-runtime-routes.mjs`, mantendo o runtime de voz no gateway.
 - [x] Extrair início, callback e vínculo OAuth para `server/http/oauth-routes.mjs`, mantendo a sessão local e os provedores existentes.
 - [x] Extrair páginas SEO, legais, download, updates e fallback de arquivos para `server/http/static-routes.mjs`.
+- [x] Extrair o despacho HTTP e a página administrativa para `server/http/router.mjs`, mantendo a ordem dos domínios e dos fallbacks.
 - [x] Extrair bootstrap, limites, heartbeat e lifecycle do WebSocket para `server/gateway/websocket.mjs`, mantendo handlers de voz/transmissão e o protocolo `/signal`.
 - [x] Extrair o handler binário do relay de mídia para `server/gateway/binary-message.mjs`, mantendo limites e ressincronização.
 - [x] Extrair entrada, moderação, estado e sinalização das salas de voz para `server/gateway/voice-message-handler.mjs`.
