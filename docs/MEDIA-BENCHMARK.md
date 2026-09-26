@@ -32,7 +32,8 @@ npm run test:voice-reconnect
 `npm run test:media` também coleta duas amostras RTC do espectador no fluxo de
 transmissão pública. A coleta é ativada somente pelo parâmetro interno
 `qaStats=1` usado pelo harness e não cria telemetria adicional para usuários
-normais.
+normais. Além das métricas de rede, o sample QA pode registrar codec, resolução,
+FPS efetivo, frames decodificados/perdidos e limitação do encoder.
 
 O harness aceita `TELAI_MEDIA_VIEWER_COUNT` entre 1 e 20. O padrão continua
 sendo 2 viewers para manter a regressão rápida. Em PowerShell, por exemplo:

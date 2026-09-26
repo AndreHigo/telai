@@ -15,6 +15,7 @@ function roundMetric(value, digits = 2) {
  */
 export function summarizeRtcQuality(stats, snapshots = new Map(), options = {}) {
   const includeCodecs = options?.includeCodecs === true;
+  const includeVideoDetails = options?.includeVideoDetails === true;
   const reports = [...(stats?.values?.() || [])];
   const codecReports = includeCodecs
     ? new Map(reports.filter((report) => report?.type === "codec" && report.id).map((report) => [report.id, report]))
@@ -27,6 +28,15 @@ export function summarizeRtcQuality(stats, snapshots = new Map(), options = {}) 
   let bitrateKbps = 0;
   let mediaStreams = 0;
   const codecs = new Map();
+  let framesDecoded = 0;
+  let framesDropped = 0;
+  let frameWidth = null;
+  let frameHeight = null;
+  let framesPerSecond = null;
+  let qualityLimitationReason = null;
+  let nackCount = 0;
+  let pliCount = 0;
+  let firCount = 0;
 
   for (const report of reports) {
     if (report.type === "candidate-pair" && (report.state === "succeeded" || report.nominated)) {
@@ -37,6 +47,20 @@ export function summarizeRtcQuality(stats, snapshots = new Map(), options = {}) 
     if (report.type !== "inbound-rtp" && report.type !== "outbound-rtp") continue;
     if (report.kind !== "audio" && report.kind !== "video" && report.mediaType !== "audio" && report.mediaType !== "video") continue;
     mediaStreams += 1;
+    const reportKind = report.kind || report.mediaType;
+    if (includeVideoDetails && reportKind === "video") {
+      framesDecoded += Math.max(0, finiteNumber(report.framesDecoded) || 0);
+      framesDropped += Math.max(0, finiteNumber(report.framesDropped) || 0);
+      frameWidth = Math.max(frameWidth || 0, finiteNumber(report.frameWidth) || 0) || null;
+      frameHeight = Math.max(frameHeight || 0, finiteNumber(report.frameHeight) || 0) || null;
+      framesPerSecond = Math.max(framesPerSecond || 0, finiteNumber(report.framesPerSecond) || 0) || null;
+      nackCount += Math.max(0, finiteNumber(report.nackCount) || 0);
+      pliCount += Math.max(0, finiteNumber(report.pliCount) || 0);
+      firCount += Math.max(0, finiteNumber(report.firCount) || 0);
+      if (report.qualityLimitationReason && report.qualityLimitationReason !== "none") {
+        qualityLimitationReason = report.qualityLimitationReason;
+      }
+    }
     if (includeCodecs && report.codecId) {
       const codec = codecReports.get(report.codecId);
       if (codec?.mimeType) {
@@ -74,6 +98,19 @@ export function summarizeRtcQuality(stats, snapshots = new Map(), options = {}) 
       bitrateKbps: roundMetric(bitrateKbps),
       mediaStreams,
       ...(includeCodecs ? { codecs: [...codecs.values()] } : {}),
+      ...(includeVideoDetails ? {
+        video: {
+          framesDecoded: Math.round(framesDecoded),
+          framesDropped: Math.round(framesDropped),
+          frameWidth,
+          frameHeight,
+          framesPerSecond: roundMetric(framesPerSecond),
+          qualityLimitationReason,
+          nackCount: Math.round(nackCount),
+          pliCount: Math.round(pliCount),
+          firCount: Math.round(firCount),
+        },
+      } : {}),
     },
     snapshots: nextSnapshots,
   };

@@ -22,4 +22,20 @@ assert.equal(second.sample.jitterMs, 20);
 assert.equal(second.sample.packetsLost, 3);
 assert.equal(second.sample.packetsReceived, 197);
 assert.equal(second.sample.bitrateKbps, 64);
+
+const video = summarizeRtcQuality(new Map([
+  ["codec-video", { id: "codec-video", type: "codec", mimeType: "video/VP8", clockRate: 90000 }],
+  ["video", { id: "video", type: "inbound-rtp", kind: "video", codecId: "codec-video", framesDecoded: 120, framesDropped: 3, frameWidth: 1280, frameHeight: 720, framesPerSecond: 29.5, nackCount: 2, pliCount: 1 }],
+]), new Map(), { includeCodecs: true, includeVideoDetails: true });
+assert.deepEqual(video.sample.video, {
+  framesDecoded: 120,
+  framesDropped: 3,
+  frameWidth: 1280,
+  frameHeight: 720,
+  framesPerSecond: 29.5,
+  qualityLimitationReason: null,
+  nackCount: 2,
+  pliCount: 1,
+  firCount: 0,
+});
 console.log(JSON.stringify({ ok: true, metrics: second.sample }));
