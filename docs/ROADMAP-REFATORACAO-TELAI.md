@@ -174,7 +174,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair captura, fallback e seleção do microfone para `frontend/src/services/media`.
 - [x] Extrair sincronização, `replaceTrack` e renegociação do áudio local para `frontend/src/services/media`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
-  - [ ] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
+  - [x] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
     - [x] Extrair seleção de telas, abertura do workspace de grupos e navegação da sidebar para `frontend/src/features/shell/navigation-controller.js` em chunk lazy, preservando o layout.
     - [x] Extrair parsing de rotas públicas, visualizador, convites pendentes e canonicalização de login para `frontend/src/features/shell/route-controller.js`, preservando URLs e layout.
     - [x] Extrair o controle do breakpoint responsivo e fechamento da sidebar para `frontend/src/features/shell/viewport-controller.js`, preservando o layout.
@@ -223,7 +223,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair operações de mensagens, anexos, edição, exclusão e busca para `frontend/src/features/groups/message-controller.js` em chunk lazy.
     - [x] Extrair descoberta de grupos, convites e solicitações de entrada para `frontend/src/features/groups/membership-controller.js` em chunk lazy.
     - [x] Extrair administração de cargos, ordenação e permissões de canal para `frontend/src/features/groups/administration-controller.js` em chunk lazy.
-  - [ ] Separar a tela de configurações por domínio e reduzir o markup restante do shell.
+  - [x] Separar a tela de configurações por domínio e reduzir o markup restante do shell.
     - [x] Extrair navegação, cabeçalho, subnavegação interna e formulário de perfil do canal para `frontend/src/features/settings`.
     - [x] Centralizar o estado de navegação, breakpoints e painéis móveis em `frontend/src/features/shell/navigation-state.js`, preservando as bindings visuais do shell.
     - [x] Extrair cartões de perfil, preferências, contas conectadas e administração de grupo.
@@ -307,7 +307,7 @@ enviada ao GitHub nem publicada em produção.
    - [x] Separar presenters, parsing de comandos e conversão de permissões do repositório de aplicações em um módulo de domínio compartilhado pelos drivers.
    - [x] Separar as implementações SQLite e PostgreSQL do repositório de aplicações, mantendo uma fachada de importação estável.
    - [ ] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
-- [ ] Comandos, componentes e modais.
+- [x] Comandos, componentes e modais.
   - [x] Registrar comandos por aplicação com validação de nome, descrição e opções em SQLite/PostgreSQL.
   - [x] Expor o manifesto de comandos ao bot autenticado sem vazar tokens ou dados internos.
   - [x] Implementar fila expirada, claim exclusivo, resposta sanitizada e despacho de eventos para interações de comandos.
