@@ -11,9 +11,13 @@ export function createBroadcastCompositionController({
     if (hasFrame()) return;
     await new Promise((resolve, reject) => {
       let settled = false;
-      const timeoutId = window.setTimeout(() => finish(new Error(`A fonte ${label} não entregou um frame de vídeo.`)), 5000);
+      let frameRequestId = null;
+      const timeoutId = window.setTimeout(() => finish(new Error(`A fonte ${label} não entregou um frame de vídeo.`)), 8000);
       const cleanup = () => {
         window.clearTimeout(timeoutId);
+        if (frameRequestId !== null && typeof video.cancelVideoFrameCallback === "function") {
+          try { video.cancelVideoFrameCallback(frameRequestId); } catch {}
+        }
         video.removeEventListener("loadedmetadata", check);
         video.removeEventListener("loadeddata", check);
         video.removeEventListener("canplay", check);
@@ -28,12 +32,21 @@ export function createBroadcastCompositionController({
       };
       const check = () => {
         if (hasFrame()) finish();
+        else scheduleFrameCheck();
+      };
+      const scheduleFrameCheck = () => {
+        if (settled || frameRequestId !== null || typeof video.requestVideoFrameCallback !== "function") return;
+        frameRequestId = video.requestVideoFrameCallback(() => {
+          frameRequestId = null;
+          check();
+        });
       };
       video.addEventListener("loadedmetadata", check);
       video.addEventListener("loadeddata", check);
       video.addEventListener("canplay", check);
       video.addEventListener("playing", check);
-      if (typeof video.requestVideoFrameCallback === "function") video.requestVideoFrameCallback(check);
+      void video.play?.().catch?.(() => {});
+      scheduleFrameCheck();
       check();
     });
   }

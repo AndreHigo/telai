@@ -393,7 +393,7 @@
     for (const [peerId, peer] of peerConnections) {
       if (peer?.connectionState === "closed" || typeof peer?.getStats !== "function") continue;
       try {
-        const result = summarizeRtcQuality(await peer.getStats(), qaStatsSnapshotsByPeer.get(peerId));
+        const result = summarizeRtcQuality(await peer.getStats(), qaStatsSnapshotsByPeer.get(peerId), { includeCodecs: true });
         qaStatsSnapshotsByPeer.set(peerId, result.snapshots);
         peers.push({
           peerId,

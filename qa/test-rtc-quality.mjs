@@ -3,13 +3,15 @@ import { summarizeRtcQuality } from "../frontend/src/services/media/rtc-quality.
 
 const first = summarizeRtcQuality(new Map([
   ["pair", { type: "candidate-pair", state: "succeeded", currentRoundTripTime: 0.05 }],
-  ["audio", { id: "audio", type: "inbound-rtp", kind: "audio", jitter: 0.01, packetsLost: 2, packetsReceived: 98, bytesReceived: 1000, timestamp: 1000 }],
-]));
+  ["codec-audio", { id: "codec-audio", type: "codec", mimeType: "audio/opus", clockRate: 48000, channels: 2 }],
+  ["audio", { id: "audio", type: "inbound-rtp", kind: "audio", codecId: "codec-audio", jitter: 0.01, packetsLost: 2, packetsReceived: 98, bytesReceived: 1000, timestamp: 1000 }],
+]), new Map(), { includeCodecs: true });
 assert.equal(first.sample.roundTripTimeMs, 50);
 assert.equal(first.sample.jitterMs, 10);
 assert.equal(first.sample.packetsLost, 2);
 assert.equal(first.sample.mediaStreams, 1);
 assert.equal(first.sample.bitrateKbps, 0);
+assert.deepEqual(first.sample.codecs, [{ kind: "audio", mimeType: "audio/opus", clockRate: 48000, channels: 2, sdpFmtpLine: null }]);
 
 const second = summarizeRtcQuality(new Map([
   ["pair", { type: "candidate-pair", state: "succeeded", currentRoundTripTime: 0.04 }],

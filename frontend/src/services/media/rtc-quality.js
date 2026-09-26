@@ -13,7 +13,12 @@ function roundMetric(value, digits = 2) {
  * `snapshots` é mantido pelo chamador para que o bitrate seja calculado por
  * delta, sem guardar o relatório inteiro do navegador.
  */
-export function summarizeRtcQuality(stats, snapshots = new Map()) {
+export function summarizeRtcQuality(stats, snapshots = new Map(), options = {}) {
+  const includeCodecs = options?.includeCodecs === true;
+  const reports = [...(stats?.values?.() || [])];
+  const codecReports = includeCodecs
+    ? new Map(reports.filter((report) => report?.type === "codec" && report.id).map((report) => [report.id, report]))
+    : new Map();
   const nextSnapshots = new Map(snapshots);
   let jitterMs = null;
   let packetsLost = 0;
@@ -21,8 +26,9 @@ export function summarizeRtcQuality(stats, snapshots = new Map()) {
   let roundTripTimeMs = null;
   let bitrateKbps = 0;
   let mediaStreams = 0;
+  const codecs = new Map();
 
-  for (const report of stats?.values?.() || []) {
+  for (const report of reports) {
     if (report.type === "candidate-pair" && (report.state === "succeeded" || report.nominated)) {
       const rtt = finiteNumber(report.currentRoundTripTime);
       if (rtt !== null) roundTripTimeMs = Math.max(roundTripTimeMs || 0, rtt * 1000);
@@ -31,6 +37,19 @@ export function summarizeRtcQuality(stats, snapshots = new Map()) {
     if (report.type !== "inbound-rtp" && report.type !== "outbound-rtp") continue;
     if (report.kind !== "audio" && report.kind !== "video" && report.mediaType !== "audio" && report.mediaType !== "video") continue;
     mediaStreams += 1;
+    if (includeCodecs && report.codecId) {
+      const codec = codecReports.get(report.codecId);
+      if (codec?.mimeType) {
+        const codecKey = `${report.kind || report.mediaType}:${codec.mimeType}:${codec.clockRate || ""}:${codec.channels || ""}:${codec.sdpFmtpLine || ""}`;
+        codecs.set(codecKey, {
+          kind: report.kind || report.mediaType,
+          mimeType: codec.mimeType,
+          clockRate: finiteNumber(codec.clockRate),
+          channels: finiteNumber(codec.channels),
+          sdpFmtpLine: codec.sdpFmtpLine || null,
+        });
+      }
+    }
     const jitter = finiteNumber(report.jitter);
     if (jitter !== null) jitterMs = Math.max(jitterMs || 0, jitter * 1000);
     packetsLost += Math.max(0, finiteNumber(report.packetsLost) || 0);
@@ -54,6 +73,7 @@ export function summarizeRtcQuality(stats, snapshots = new Map()) {
       roundTripTimeMs: roundMetric(roundTripTimeMs),
       bitrateKbps: roundMetric(bitrateKbps),
       mediaStreams,
+      ...(includeCodecs ? { codecs: [...codecs.values()] } : {}),
     },
     snapshots: nextSnapshots,
   };

@@ -41,16 +41,18 @@ O resultado inclui tempo de carregamento, CPU e RSS do processo Electron que
 executou o teste durante a abertura dos viewers. É uma comparação local do
 harness, não uma medição isolada do servidor.
 
-Na última execução local, o segundo sample do viewer sintético registrou RTT de
-1 ms, jitter de 0 ms, perda de 0 pacotes, 2 streams de mídia e aproximadamente
-91,81 kbps recebidos. Isso confirma que a medição funciona; não é uma meta de
-produção nem uma medição da VPS.
+Na última execução local com 5 viewers, o segundo sample do viewer sintético
+registrou RTT de 1 ms, jitter de 0 ms, perda de 0 pacotes, 2 streams de mídia
+e aproximadamente 106,35 kbps recebidos. O carregamento dos 5 viewers levou
+782 ms, com aproximadamente 60% de CPU e 145 MB de RSS no processo Electron do
+harness. Isso confirma que a medição funciona; não é uma meta de produção nem
+uma medição da VPS.
 
 ## O que ainda não está medido
 
-A suíte atual confirma fluxo e regressão e agora coleta métricas de um viewer,
-mas ainda não é um teste de capacidade. Antes de trocar P2P por SFU, o
-benchmark deve registrar, por cenário:
+A suíte atual confirma fluxo e regressão e agora coleta métricas de múltiplos
+viewers sintéticos, mas ainda não é um teste de capacidade da VPS. Antes de
+trocar P2P por SFU, o benchmark deve registrar, por cenário:
 
 - CPU e memória do servidor e do Electron;
 - RTT, jitter, perda de pacotes e bitrate por peer;
