@@ -78,6 +78,7 @@
   import { createClientPollingController } from "./services/client-polling.js";
   import { createGatewaySequenceGuard } from "./services/gateway-sequence.js";
   import { createMaintenanceController } from "./features/shell/maintenance-controller.js";
+  import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
@@ -3249,43 +3250,34 @@
     }
   }
 
-  function sendBroadcast(message) {
-    if (broadcastSocket?.readyState === WebSocket.OPEN) broadcastSocket.send(JSON.stringify(message));
-  }
-
-  function clearBroadcastCaptureRecoveryTimer() {
-    if (broadcastCaptureRecoveryTimer) window.clearTimeout(broadcastCaptureRecoveryTimer);
-    broadcastCaptureRecoveryTimer = null;
-  }
-
-  function handleBroadcastVideoTrackEnded(track) {
-    const isActiveCaptureTrack = track && (
-      broadcastStream?.getVideoTracks?.()[0] === track
-      || broadcastDisplayStream?.getVideoTracks?.()[0] === track
-      || broadcastCameraStream?.getVideoTracks?.()[0] === track
-    );
-    if (!isActiveCaptureTrack) return;
-    const context = { roomId: broadcastRoomId, streamId: broadcastStreamId, sourceType: broadcastSourceType, mediaMode };
-    const message = "A captura de vídeo foi encerrada. Troque a janela ou tela para continuar; a live ficará aberta por até 60 segundos.";
-    reportClientError("broadcast_video_capture_ended", new Error(message), context);
-    if (broadcastState === "starting") {
-      void stopBroadcast("capture-ended-before-start");
-      return;
-    }
-    if (broadcastState !== "live" || broadcastCaptureRecoveryTimer) return;
-    broadcastAudioWarning = message;
-    broadcastCaptureRecoveryTimer = window.setTimeout(() => {
-      broadcastCaptureRecoveryTimer = null;
-      if (broadcastState === "live" && !hasLiveBroadcastCapture()) void stopBroadcast("capture-timeout");
-    }, 60_000);
-  }
-
-  function sendBroadcastChatMessage() {
-    const body = broadcastChatDraft.trim();
-    if (broadcastState !== "live" || !body) return;
-    sendBroadcast({ type: "chat-message", body });
-    broadcastChatDraft = "";
-  }
+  const broadcastRuntimeController = createBroadcastRuntimeController({
+    getState: () => ({
+      broadcastAudioWarning,
+      broadcastCameraStream,
+      broadcastCaptureRecoveryTimer,
+      broadcastChatDraft,
+      broadcastDisplayStream,
+      broadcastRoomId,
+      broadcastSourceType,
+      broadcastState,
+      broadcastStream,
+      broadcastStreamId,
+      broadcastSocket,
+      mediaMode,
+    }),
+    hasLiveBroadcastCapture,
+    reportClientError,
+    setState: (next) => {
+      if ("broadcastAudioWarning" in next) broadcastAudioWarning = next.broadcastAudioWarning;
+      if ("broadcastCaptureRecoveryTimer" in next) broadcastCaptureRecoveryTimer = next.broadcastCaptureRecoveryTimer;
+      if ("broadcastChatDraft" in next) broadcastChatDraft = next.broadcastChatDraft;
+    },
+    stopBroadcast,
+  });
+  function sendBroadcast(...args) { return broadcastRuntimeController.sendBroadcast(...args); }
+  function clearBroadcastCaptureRecoveryTimer(...args) { return broadcastRuntimeController.clearBroadcastCaptureRecoveryTimer(...args); }
+  function handleBroadcastVideoTrackEnded(...args) { return broadcastRuntimeController.handleBroadcastVideoTrackEnded(...args); }
+  function sendBroadcastChatMessage(...args) { return broadcastRuntimeController.sendBroadcastChatMessage(...args); }
 
   function sendVoice(message) {
     if (voiceSocket?.readyState === WebSocket.OPEN) voiceSocket.send(JSON.stringify(message));
