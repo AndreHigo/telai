@@ -79,6 +79,7 @@
   import { createGatewaySequenceGuard } from "./services/gateway-sequence.js";
   import { createMaintenanceController } from "./features/shell/maintenance-controller.js";
   import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
+  import { createBroadcastLifecycleController } from "./features/broadcast/lifecycle-controller.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
@@ -227,7 +228,6 @@
   let broadcastChatMessages = [];
   let broadcastChatDraft = "";
   let broadcastChatListElement;
-  let broadcastStopPromise = null;
   let broadcastCaptureRecoveryTimer = null;
   let broadcastSourceType = broadcastStateStore.getState().broadcastSourceType;
   let broadcastDisplaySurface = broadcastStateStore.getState().broadcastDisplaySurface;
@@ -2295,6 +2295,73 @@
   }
   async function stopBroadcastAudioMix(...args) { return (await getBroadcastAudioMixerController()).stop(...args); }
   async function mixBroadcastAudio(...args) { return (await getBroadcastAudioMixerController()).mix(...args); }
+
+  const broadcastLifecycleController = createBroadcastLifecycleController({
+    api,
+    clearBroadcastCaptureRecoveryTimer,
+    getState: () => ({
+      broadcastCameraStream,
+      broadcastCaptureRecoveryTimer,
+      broadcastChatDraft,
+      broadcastChatMessageIds,
+      broadcastChatMessages,
+      broadcastDisplayStream,
+      broadcastInvite,
+      broadcastMicrophoneStream,
+      broadcastPeerNegotiations,
+      broadcastPeerRetryTimers,
+      broadcastRoomId,
+      broadcastSelectedSourceName,
+      broadcastSelectionKind,
+      broadcastSourceType,
+      broadcastSourceSwitching,
+      broadcastState,
+      broadcastStream,
+      broadcastStreamId,
+      broadcastVideo,
+      broadcastSocket,
+      mediaMode,
+      pendingBroadcastCandidates,
+      peerConnections,
+      selectedGroupId,
+    }),
+    loadStreams,
+    refreshGroupOverview,
+    reportClientError,
+    sendBroadcast,
+    setNotice: (value) => { notice = value; },
+    setState: (next) => {
+      if ("broadcastCameraEnabled" in next) setBroadcastState({ broadcastCameraEnabled: next.broadcastCameraEnabled });
+      if ("broadcastCaptureRecoveryTimer" in next) broadcastCaptureRecoveryTimer = next.broadcastCaptureRecoveryTimer;
+      if ("broadcastChatDraft" in next) broadcastChatDraft = next.broadcastChatDraft;
+      if ("broadcastChatMessageIds" in next) broadcastChatMessageIds = next.broadcastChatMessageIds;
+      if ("broadcastChatMessages" in next) broadcastChatMessages = next.broadcastChatMessages;
+      if ("broadcastDisplayStream" in next) broadcastDisplayStream = next.broadcastDisplayStream;
+      if ("broadcastError" in next) setBroadcastState({ broadcastError: next.broadcastError });
+      if ("broadcastInvite" in next) setBroadcastState({ broadcastInvite: next.broadcastInvite });
+      if ("broadcastMicrophoneStream" in next) broadcastMicrophoneStream = next.broadcastMicrophoneStream;
+      if ("broadcastRoomId" in next) setBroadcastState({ broadcastRoomId: next.broadcastRoomId });
+      if ("broadcastSelectedSourceName" in next) setBroadcastState({ broadcastSelectedSourceName: next.broadcastSelectedSourceName });
+      if ("broadcastSelectionKind" in next) setBroadcastState({ broadcastSelectionKind: next.broadcastSelectionKind });
+      if ("broadcastSourceAudioTrack" in next) broadcastSourceAudioTrack = next.broadcastSourceAudioTrack;
+      if ("broadcastSourceSwitching" in next) broadcastSourceSwitching = next.broadcastSourceSwitching;
+      if ("broadcastState" in next) setBroadcastState({ broadcastState: next.broadcastState });
+      if ("broadcastStream" in next) setBroadcastState({ broadcastStream: next.broadcastStream });
+      if ("broadcastStreamId" in next) setBroadcastState({ broadcastStreamId: next.broadcastStreamId });
+      if ("broadcastSourceType" in next) setBroadcastState({ broadcastSourceType: next.broadcastSourceType });
+      if ("broadcastDisplaySurface" in next) setBroadcastState({ broadcastDisplaySurface: next.broadcastDisplaySurface });
+      if ("broadcastMediaSwitching" in next) broadcastMediaSwitching = next.broadcastMediaSwitching;
+      if ("activeDisplayProcessId" in next) activeDisplayProcessId = next.activeDisplayProcessId;
+      if ("broadcastSocket" in next) broadcastSocket = next.broadcastSocket;
+      if ("viewerCount" in next) viewerCount = next.viewerCount;
+    },
+    stopBroadcastAudioMix,
+    stopBroadcastVideoComposition,
+    stopRelayRecorder,
+    stopVoiceInputStream,
+    stopWindowAudioBridge,
+  });
+  async function stopBroadcast(...args) { return broadcastLifecycleController.stop(...args); }
 
   let broadcastTrackControllerPromise = null;
   function getBroadcastTrackController() {
@@ -5153,84 +5220,6 @@
     setNavigationState({ view: "broadcast" });
     notice = "Escolha uma tela, janela ou aplicativo para iniciar a transmissão.";
     void tick().then(() => beginBroadcast({ sourceType, ...nextContext }));
-  }
-
-  async function stopBroadcast(reason = "user") {
-    if (broadcastStopPromise) return broadcastStopPromise;
-    const endingStreamId = broadcastStreamId;
-    clearBroadcastCaptureRecoveryTimer();
-    const stopPromise = (async () => {
-      setBroadcastState({ broadcastState: "stopping" });
-
-      try { await stopRelayRecorder(); } catch (error) { console.warn("Falha ao parar o gravador da live:", error); }
-      try { sendBroadcast({ type: "stop", reason }); sendBroadcast({ type: "leave" }); } catch (error) { console.warn("Falha ao avisar o encerramento da live:", error); }
-
-      const socket = broadcastSocket;
-      broadcastSocket = null;
-      try { socket?.close(); } catch (error) { console.warn("Falha ao fechar a conexão da live:", error); }
-      for (const peer of peerConnections.values()) {
-        for (const sender of peer.getSenders?.() || []) {
-          try { await sender.replaceTrack(null); } catch {}
-        }
-        try { peer.close(); } catch (error) { console.warn("Falha ao fechar conexão de espectador:", error); }
-      }
-      peerConnections.clear();
-      for (const timer of broadcastPeerRetryTimers.values()) window.clearTimeout(timer);
-      broadcastPeerRetryTimers.clear();
-      pendingBroadcastCandidates.clear();
-      broadcastPeerNegotiations.clear();
-
-      try { await stopWindowAudioBridge(); } catch (error) { console.warn("Falha ao parar o áudio da janela:", error); }
-      const stream = broadcastStream;
-      setBroadcastState({ broadcastStream: null });
-      if (broadcastVideo) broadcastVideo.srcObject = null;
-      try { stream?.getTracks().forEach((track) => track.stop()); } catch (error) { console.warn("Falha ao liberar a captura da live:", error); }
-      stopVoiceInputStream(broadcastMicrophoneStream);
-      broadcastMicrophoneStream = null;
-      stopBroadcastVideoComposition();
-      await stopBroadcastAudioMix();
-      try { broadcastDisplayStream?.getTracks?.().forEach((track) => track.stop()); } catch {}
-      try { broadcastCameraStream?.getTracks?.().forEach((track) => track.stop()); } catch {}
-      broadcastDisplayStream = null;
-      broadcastCameraStream = null;
-      setBroadcastState({ broadcastCameraEnabled: false });
-      broadcastSourceAudioTrack = null;
-      let endConfirmed = !endingStreamId;
-      if (endingStreamId) {
-        try {
-          await api(`/api/streams/${endingStreamId}/end`, { method: "POST" });
-          endConfirmed = true;
-        } catch (error) {
-          endConfirmed = false;
-          reportClientError("broadcast_end_confirmation_error", error, { streamId: endingStreamId, mediaMode });
-          setBroadcastState({ broadcastError: "A captura local foi encerrada, mas o servidor não confirmou o fim da live. Tente confirmar novamente." });
-        }
-      }
-
-      setBroadcastState({ broadcastStreamId: endConfirmed ? "" : endingStreamId, broadcastRoomId: "", broadcastInvite: "" });
-      viewerCount = 0;
-      broadcastChatMessages = [];
-      broadcastChatMessageIds = new Set();
-      broadcastChatDraft = "";
-      setBroadcastState({ broadcastSourceType: "screen", broadcastDisplaySurface: null, broadcastSelectedSourceName: "", broadcastSelectionKind: "screen" });
-      activeDisplayProcessId = null;
-      broadcastSourceSwitching = false;
-      broadcastMediaSwitching = false;
-      setBroadcastState({ broadcastState: endConfirmed ? "idle" : "error" });
-      await loadStreams().catch((error) => console.warn("Falha ao atualizar as lives depois do encerramento:", error));
-      if (selectedGroupId) await refreshGroupOverview().catch((error) => console.warn("Falha ao atualizar o grupo depois do encerramento:", error));
-    })().catch((error) => {
-      reportClientError("broadcast_stop_error", error, { streamId: endingStreamId, mediaMode });
-      console.error("Erro inesperado ao encerrar a live:", error);
-      setBroadcastState({ broadcastState: endingStreamId ? "error" : "idle", broadcastError: endingStreamId ? "Não foi possível confirmar o encerramento da transmissão. Tente novamente." : "" });
-      notice = endingStreamId ? "A live precisa de confirmação do servidor." : "A transmissão foi encerrada.";
-    });
-    broadcastStopPromise = stopPromise;
-    try {
-      return await stopPromise;
-    } finally {
-      if (broadcastStopPromise === stopPromise) broadcastStopPromise = null;
-    }
   }
 
   async function copyBroadcastInvite() {

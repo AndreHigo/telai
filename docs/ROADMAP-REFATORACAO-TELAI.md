@@ -178,6 +178,7 @@ enviada ao GitHub nem publicada em produção.
   - [x] Extrair preparação pública, revisão, visibilidade e início de câmera para `frontend/src/features/broadcast/setup-controller.js`, preservando os mesmos diálogos e rotas.
   - [x] Extrair captura, composição e inicialização da transmissão para `frontend/src/features/broadcast/start-controller.js`, mantendo os fluxos P2P/relay e o layout.
   - [x] Extrair envio, chat e recuperação da captura para `frontend/src/features/broadcast/runtime-controller.js`, preservando mensagens, avisos e encerramento automático.
+  - [x] Extrair encerramento, limpeza de peers/tracks, confirmação da API e fechamento do relay para `frontend/src/features/broadcast/lifecycle-controller.js`, mantendo o estado visual.
   - [x] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
     - [x] Extrair seleção de telas, abertura do workspace de grupos e navegação da sidebar para `frontend/src/features/shell/navigation-controller.js` em chunk lazy, preservando o layout.
     - [x] Extrair parsing de rotas públicas, visualizador, convites pendentes e canonicalização de login para `frontend/src/features/shell/route-controller.js`, preservando URLs e layout.
