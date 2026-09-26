@@ -4,7 +4,9 @@ const { pathToFileURL } = require("node:url");
 const fs = require("node:fs");
 
 const rootDir = path.resolve(__dirname, "..");
-const databasePath = path.join(rootDir, `.tmp-media-harness-${process.pid}.sqlite`);
+const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const databasePath = path.join(rootDir, `.tmp-media-harness-${process.pid}-${runId}.sqlite`);
+const expectedMediaMode = process.env.MEDIA_MODE === "relay" ? "relay" : "p2p";
 process.env.MIRANTE_DB_PATH = databasePath;
 process.env.REQUIRE_LOGIN = "true";
 app.commandLine.appendSwitch("use-fake-device-for-media-stream");
@@ -219,14 +221,21 @@ async function captureRealCameraProbe(window) {
 }
 
 async function captureRealDisplayProbe(window, kind, preferredWindowName = "") {
-  const sources = await desktopCapturer.getSources({
-    types: ["screen", "window"],
-    thumbnailSize: { width: 160, height: 90 },
-  });
-  const selectedSource = sources.find((source) => kind === "window"
-    ? source.id.startsWith("window:") && (!preferredWindowName || source.name === preferredWindowName)
-    : source.id.startsWith("screen:"));
-  if (!selectedSource) throw new Error(`nenhuma fonte ${kind} foi retornada pelo Electron; fontes: ${sources.map((source) => `${source.id}:${source.name}`).join(" | ") || "nenhuma"}`);
+  let latestSources = [];
+  let selectedSource;
+  try {
+    selectedSource = await waitFor(`fonte real ${kind}`, async () => {
+      latestSources = await desktopCapturer.getSources({
+        types: ["screen", "window"],
+        thumbnailSize: { width: 160, height: 90 },
+      });
+      return latestSources.find((source) => kind === "window"
+        ? source.id.startsWith("window:") && (!preferredWindowName || source.name === preferredWindowName)
+        : source.id.startsWith("screen:"));
+    });
+  } catch {
+    throw new Error(`nenhuma fonte ${kind} foi retornada pelo Electron; fontes: ${latestSources.map((source) => `${source.id}:${source.name}`).join(" | ") || "nenhuma"}`);
+  }
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
     callback({ video: selectedSource });
   });
@@ -278,8 +287,8 @@ async function main() {
   const server = await startServer({ host: "127.0.0.1", port: 0 });
   const port = server.address().port;
   const baseUrl = `http://127.0.0.1:${port}`;
-  const username = `qa_media_${process.pid}`;
-  const password = `qa-media-${process.pid}-pass`;
+  const username = `qa_media_${runId.replace(/[^a-z0-9]/gi, "")}`;
+  const password = `qa-media-${runId}-pass`;
   let hostWindow;
   let viewerWindow;
   let multistreamWindow;
@@ -536,10 +545,14 @@ async function main() {
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, partition: "qa-screen-viewer" },
     });
     await viewerWindow.loadURL(screenInvite);
-    await waitFor("vídeo da live de tela no espectador", () => evaluate(viewerWindow, () => {
+    await waitFor("vídeo da live de tela no espectador", () => evaluate(viewerWindow, `() => {
       const video = document.querySelector("video");
-      return video && video.readyState >= 2 && video.srcObject?.getVideoTracks?.().some((track) => track.readyState === "live");
-    }));
+      if (!video) return false;
+      if (${JSON.stringify(expectedMediaMode)} === "relay") {
+        return video.readyState >= 1 && video.videoWidth > 0 && video.videoHeight > 0 && Boolean(video.src);
+      }
+      return video.readyState >= 2 && video.srcObject?.getVideoTracks?.().some((track) => track.readyState === "live");
+    }`));
     const liveBroadcastControls = await evaluate(hostWindow, () => ({
       cameraDisabled: Boolean(document.querySelector(".broadcast-camera-select")?.disabled),
       microphoneDisabled: Boolean(document.querySelector(".broadcast-microphone-select")?.disabled),
@@ -634,10 +647,17 @@ async function main() {
       const previewStream = document.querySelector(".broadcast-stage video")?.srcObject;
       return previewStream?.getAudioTracks?.().length === 1 ? true : false;
     }));
-    await waitFor("faixa do microfone no espectador", () => evaluate(viewerWindow, () => {
-      const remoteStream = document.querySelector("video")?.srcObject;
-      return remoteStream?.getAudioTracks?.().some((track) => track.readyState === "live") ? true : false;
-    }));
+    if (expectedMediaMode === "relay") {
+      await waitFor("vídeo relay após a troca do microfone", () => evaluate(viewerWindow, () => {
+        const video = document.querySelector("video");
+        return Boolean(video && video.readyState >= 1 && video.videoWidth > 0 && video.videoHeight > 0 && video.src);
+      }));
+    } else {
+      await waitFor("faixa do microfone no espectador", () => evaluate(viewerWindow, () => {
+        const remoteStream = document.querySelector("video")?.srcObject;
+        return remoteStream?.getAudioTracks?.().some((track) => track.readyState === "live") ? true : false;
+      }));
+    }
     viewerWindow.destroy();
     viewerWindow = null;
     await evaluate(hostWindow, () => {
@@ -738,12 +758,13 @@ async function main() {
       title: document.title,
       hasViewerVideo: Boolean(document.querySelector("video")),
       videoReady: (document.querySelector("video")?.readyState || 0) >= 2,
+      relayVideoReady: Boolean(document.querySelector("video") && document.querySelector("video").readyState >= 1 && document.querySelector("video").videoWidth > 0 && document.querySelector("video").videoHeight > 0 && document.querySelector("video").src),
       hasLiveTrack: Boolean(document.querySelector("video")?.srcObject?.getVideoTracks().some((track) => track.readyState === "live")),
       body: document.body.innerText.slice(0, 240),
-    })).then((result) => result.videoReady && result.hasLiveTrack ? result : false));
-    const viewerQualityFirst = await waitFor("primeira amostra RTC do espectador", () => evaluate(viewerWindow, async () => window.__telaiQaCollectMediaStats?.()).then((result) => result?.peerCount ? result : false));
+    })).then((result) => (expectedMediaMode === "relay" ? result.relayVideoReady : result.videoReady && result.hasLiveTrack) ? result : false));
+    const viewerQualityFirst = await waitFor("primeira amostra RTC do espectador", () => evaluate(viewerWindow, async () => window.__telaiQaCollectMediaStats?.()).then((result) => expectedMediaMode === "relay" ? result : result?.peerCount ? result : false));
     await sleep(1_000);
-    const viewerQualitySecond = await waitFor("segunda amostra RTC do espectador", () => evaluate(viewerWindow, async () => window.__telaiQaCollectMediaStats?.()).then((result) => result?.peerCount ? result : false));
+    const viewerQualitySecond = await waitFor("segunda amostra RTC do espectador", () => evaluate(viewerWindow, async () => window.__telaiQaCollectMediaStats?.()).then((result) => expectedMediaMode === "relay" ? result : result?.peerCount ? result : false));
 
     multistreamWindow = new BrowserWindow({
       show: false,
@@ -777,10 +798,11 @@ async function main() {
         return {
           documentReady: Boolean(frame.contentDocument),
           videoReady: (video?.readyState || 0) >= 2,
+          relayVideoReady: Boolean(video && video.readyState >= 1 && video.videoWidth > 0 && video.videoHeight > 0 && video.src),
           hasLiveTrack: Boolean(video?.srcObject?.getVideoTracks().some((track) => track.readyState === "live")),
         };
       });
-      return status.length === ${multistreamViewerCount} && status.every((item) => item.documentReady && item.videoReady && item.hasLiveTrack) ? status : false;
+      return status.length === ${multistreamViewerCount} && status.every((item) => item.documentReady && (${JSON.stringify(expectedMediaMode)} === "relay" ? item.relayVideoReady : item.videoReady && item.hasLiveTrack)) ? status : false;
     }`));
     const loadBenchmarkElapsedMs = Number(process.hrtime.bigint() - loadBenchmarkStartedAt) / 1_000_000;
     const loadBenchmarkCpu = process.cpuUsage(loadBenchmarkCpuBefore);
@@ -860,6 +882,7 @@ async function main() {
       display: { calls: displayResult.calls.filter((call) => call.type === "display"), previewHasLiveVideo: displayResult.previewHasLiveVideo, sourceSwitch: displaySwitchResult },
       camera: { calls: cameraResult.calls.filter((call) => call.type === "camera"), previewHasLiveVideo: cameraResult.previewHasLiveVideo },
       viewer: { ...viewerResult, chatLayout: viewerChatLayout, chatCollapsed: viewerChatCollapsed, rtcQuality: { first: viewerQualityFirst, second: viewerQualitySecond } },
+      mediaMode: expectedMediaMode,
       multistream: { frameCount: multistreamResult.length, allFramesReady: true, loadBenchmark },
       broadcasterChat: { layout: hostChatLayout, messageReceived: true },
     }));

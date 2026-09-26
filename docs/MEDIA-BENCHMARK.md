@@ -16,6 +16,12 @@ O transporte padrão continua P2P (`MEDIA_MODE=p2p`) com TURN disponível como f
 - encerramento limpo da transmissão;
 - reconexão automática da sala de voz após queda controlada do WebSocket.
 
+Também foi validado localmente o caminho alternativo `MEDIA_MODE=relay`. Nesse
+modo o viewer recebe WebM por `MediaSource`, então não há peers RTC nem métricas
+de `RTCStatsReport`; a suíte valida frame, chat, multistream e encerramento pelo
+relay. O aviso de autoplay durante a troca de `MediaSource` foi recuperado pelo
+player e não impediu a entrega do vídeo.
+
 Comandos reproduzíveis:
 
 ```text
@@ -47,6 +53,14 @@ e aproximadamente 106,35 kbps recebidos. O carregamento dos 5 viewers levou
 782 ms, com aproximadamente 60% de CPU e 145 MB de RSS no processo Electron do
 harness. Isso confirma que a medição funciona; não é uma meta de produção nem
 uma medição da VPS.
+
+Para repetir o smoke test relay em PowerShell:
+
+```powershell
+$env:MEDIA_MODE = "relay"
+npm run test:media
+Remove-Item Env:MEDIA_MODE
+```
 
 ## O que ainda não está medido
 
