@@ -61,6 +61,7 @@
   import { createVoiceParticipantPreferencesController } from "./features/voice/participant-preferences-controller.js";
   import { createVoiceInputLifecycleController } from "./features/voice/input-lifecycle-controller.js";
   import { createVoiceSoundController, readSoundPreferences, SOUND_PREFERENCE_DEFAULTS } from "./features/voice/sound-controller.js";
+  import { formatBroadcastCaptureError, formatBroadcastMissingAudio } from "./features/broadcast/capture-errors.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
@@ -4710,34 +4711,6 @@
     setBroadcastState({ publicBroadcastReviewSelection: null });
   }
 
-  function broadcastCaptureErrorMessage(error, sourceType = "screen") {
-    const errorName = String(error?.name || "");
-    const errorMessage = String(error?.message || "").toLowerCase();
-    if (errorName === "NotAllowedError" || errorName === "AbortError" || errorMessage.includes("permission denied")) {
-      return sourceType === "camera"
-        ? "O acesso à câmera foi recusado ou cancelado. Permita a câmera no navegador e tente novamente."
-        : "A seleção da tela foi recusada ou cancelada. Escolha uma janela ou tela e tente novamente.";
-    }
-    if (errorName === "NotFoundError") {
-      return sourceType === "camera"
-        ? "Nenhuma câmera disponível foi encontrada. Conecte uma câmera e tente novamente."
-        : "Nenhuma tela ou janela disponível foi encontrada. Tente novamente.";
-    }
-    if (errorName === "NotReadableError") {
-      return "O sistema não conseguiu acessar a fonte escolhida. Feche outro aplicativo que esteja usando-a e tente novamente.";
-    }
-    return error?.message || "Não foi possível iniciar a transmissão. Tente novamente.";
-  }
-
-  function broadcastMissingAudioMessage() {
-    if (isDesktop) {
-      return "O Windows não entregou áudio para esta captura. Verifique se o aplicativo tem volume e tente escolher a tela ou janela novamente.";
-    }
-    return broadcastDisplaySurface === "screen" || broadcastSelectionKind === "screen"
-      ? "O navegador entregou a imagem, mas não o áudio. Ao escolher a tela inteira, marque “Compartilhar áudio do sistema” no seletor do navegador e tente novamente. O filtro Telai/Discord é exclusivo do app Windows."
-      : "O navegador entregou a imagem, mas não o áudio. Ao escolher a janela, marque “Compartilhar áudio” no seletor do navegador e tente novamente.";
-  }
-
   function requestCameraBroadcastStart() {
     requestBroadcastStart("camera");
   }
@@ -4972,7 +4945,7 @@
           }
         } else {
           sourceAudioTrack = broadcastDisplayStream?.getAudioTracks?.()[0] || null;
-          if (!sourceAudioTrack) throw new Error(broadcastMissingAudioMessage());
+          if (!sourceAudioTrack) throw new Error(formatBroadcastMissingAudio({ isDesktop, displaySurface: broadcastDisplaySurface, selectionKind: broadcastSelectionKind }));
           await stopWindowAudioBridge();
         }
       }
@@ -5055,7 +5028,7 @@
         await stopWindowAudioBridge();
       }
       if (audioMode !== "none" && !sourceAudioTrack && !isDesktop) {
-        throw new Error(broadcastMissingAudioMessage());
+        throw new Error(formatBroadcastMissingAudio({ isDesktop, displaySurface: broadcastDisplaySurface, selectionKind: broadcastSelectionKind }));
       }
       nextStream = await buildBroadcastOutputStream({
         displayStream: capturedStream,
@@ -5230,7 +5203,7 @@
         broadcastAudioWarning ||= "O Windows não entregou áudio para esta captura. Verifique o volume do jogo e tente escolher a janela novamente.";
       }
       if (sourceType === "screen" && audioMode !== "none" && !sourceAudioTrack && !isDesktop) {
-        throw new Error(broadcastMissingAudioMessage());
+        throw new Error(formatBroadcastMissingAudio({ isDesktop, displaySurface: broadcastDisplaySurface, selectionKind: broadcastSelectionKind }));
       }
       if (visibility === "public" && sourceType === "screen") await waitForPublicBroadcastReview();
       setBroadcastState({ broadcastCameraEnabled: sourceType === "camera" || Boolean(broadcastCameraEnabled) });
@@ -5288,7 +5261,7 @@
       reportClientError("broadcast_start_error", error, { sourceType, visibility, mediaMode });
       const canceled = ["NotAllowedError", "AbortError"].includes(error?.name);
       await stopRelayRecorder();
-      setBroadcastState({ broadcastError: canceled ? "" : broadcastCaptureErrorMessage(error, sourceType), broadcastState: canceled ? "idle" : "error" });
+      setBroadcastState({ broadcastError: canceled ? "" : formatBroadcastCaptureError(error, sourceType), broadcastState: canceled ? "idle" : "error" });
       if (canceled) {
         notice = sourceType === "camera"
           ? "Acesso à câmera cancelado. Quando quiser, tente iniciar a transmissão novamente."
