@@ -175,6 +175,8 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair sincronização, `replaceTrack` e renegociação do áudio local para `frontend/src/services/media`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
   - [x] Extrair o controlador de relay WebM para `frontend/src/features/broadcast/relay-controller.js`, mantendo o transporte lazy e o shell visual.
+  - [x] Extrair preparação pública, revisão, visibilidade e início de câmera para `frontend/src/features/broadcast/setup-controller.js`, preservando os mesmos diálogos e rotas.
+  - [x] Extrair captura, composição e inicialização da transmissão para `frontend/src/features/broadcast/start-controller.js`, mantendo os fluxos P2P/relay e o layout.
   - [x] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
     - [x] Extrair seleção de telas, abertura do workspace de grupos e navegação da sidebar para `frontend/src/features/shell/navigation-controller.js` em chunk lazy, preservando o layout.
     - [x] Extrair parsing de rotas públicas, visualizador, convites pendentes e canonicalização de login para `frontend/src/features/shell/route-controller.js`, preservando URLs e layout.

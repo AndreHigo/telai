@@ -4664,6 +4664,110 @@
     return "Janela";
   }
 
+  let broadcastStartControllerPromise = null;
+  function getBroadcastStartController() {
+    if (!broadcastStartControllerPromise) {
+      broadcastStartControllerPromise = import("./features/broadcast/start-controller.js").then(({ createBroadcastStartController }) => createBroadcastStartController({
+        api,
+        attachBroadcastPreview,
+        buildBroadcastOutputStream,
+        captureBroadcastCameraStream,
+        captureBroadcastMicrophoneStream,
+        captureDisplayStream,
+        connectBroadcastSocket,
+        formatBroadcastCaptureError,
+        formatBroadcastMissingAudio,
+        getState: () => ({
+          activeDisplayProcessId,
+          audioMode,
+          broadcastAudioProcessId,
+          broadcastAudioSourceName,
+          broadcastAudioWarning,
+          broadcastCameraDeviceId,
+          broadcastCameraEnabled,
+          broadcastCameraStream,
+          broadcastChatDraft,
+          broadcastChatMessageIds,
+          broadcastChatMessages,
+          broadcastDisplaySurface,
+          broadcastDisplayStream,
+          broadcastMicrophoneEnabled,
+          broadcastMicrophoneStream,
+          broadcastRoomId,
+          broadcastSelectionKind,
+          broadcastSocket,
+          broadcastSourceAudioTrack,
+          broadcastState,
+          broadcastStream,
+          broadcastStreamId,
+          broadcastTitle,
+          broadcastError,
+          displaySources,
+          isDesktop,
+          mediaMode,
+          qualityProfiles,
+          returnToBroadcast,
+          selectedDisplayProcessId,
+          selectedInputDeviceId,
+          selectedQuality,
+          selectedRoomId,
+          showDisplayPicker,
+          user,
+        }),
+        handleBroadcastVideoTrackEnded,
+        loadGroup,
+        loadStreams,
+        randomRoom,
+        reportClientError,
+        requestBroadcastAudioSource,
+        sendBroadcast,
+        setGroupState,
+        setNavigationState,
+        setNotice: (value) => { notice = value; },
+        setState: (next) => {
+          if ("activeDisplayProcessId" in next) activeDisplayProcessId = next.activeDisplayProcessId;
+          if ("audioMode" in next) audioMode = next.audioMode;
+          if ("broadcastAudioProcessId" in next) broadcastAudioProcessId = next.broadcastAudioProcessId;
+          if ("broadcastAudioSourceName" in next) broadcastAudioSourceName = next.broadcastAudioSourceName;
+          if ("broadcastAudioWarning" in next) broadcastAudioWarning = next.broadcastAudioWarning;
+          if ("broadcastCameraStream" in next) broadcastCameraStream = next.broadcastCameraStream;
+          if ("broadcastChatDraft" in next) broadcastChatDraft = next.broadcastChatDraft;
+          if ("broadcastChatMessageIds" in next) broadcastChatMessageIds = next.broadcastChatMessageIds;
+          if ("broadcastChatMessages" in next) broadcastChatMessages = next.broadcastChatMessages;
+          if ("broadcastDisplayStream" in next) broadcastDisplayStream = next.broadcastDisplayStream;
+          if ("broadcastMicrophoneStream" in next) broadcastMicrophoneStream = next.broadcastMicrophoneStream;
+          if ("broadcastSocket" in next) broadcastSocket = next.broadcastSocket;
+          if ("broadcastSourceAudioTrack" in next) broadcastSourceAudioTrack = next.broadcastSourceAudioTrack;
+          if ("displaySources" in next) displaySources = next.displaySources;
+          if ("selectedDisplayProcessId" in next) selectedDisplayProcessId = next.selectedDisplayProcessId;
+          if ("showDisplayPicker" in next) showDisplayPicker = next.showDisplayPicker;
+          if ("broadcastError" in next) setBroadcastState({ broadcastError: next.broadcastError });
+          if ("broadcastInvite" in next) setBroadcastState({ broadcastInvite: next.broadcastInvite });
+          if ("broadcastRoomId" in next) setBroadcastState({ broadcastRoomId: next.broadcastRoomId });
+          if ("broadcastSourceType" in next) setBroadcastState({ broadcastSourceType: next.broadcastSourceType });
+          if ("broadcastState" in next) setBroadcastState({ broadcastState: next.broadcastState });
+          if ("broadcastStream" in next) setBroadcastState({ broadcastStream: next.broadcastStream });
+          if ("broadcastStreamId" in next) setBroadcastState({ broadcastStreamId: next.broadcastStreamId });
+          if ("broadcastTitle" in next) setBroadcastState({ broadcastTitle: next.broadcastTitle });
+          if ("broadcastCameraEnabled" in next) setBroadcastState({ broadcastCameraEnabled: next.broadcastCameraEnabled });
+          if ("broadcastDisplaySurface" in next) setBroadcastState({ broadcastDisplaySurface: next.broadcastDisplaySurface });
+          if ("pendingBroadcastContext" in next) setBroadcastState({ pendingBroadcastContext: next.pendingBroadcastContext });
+        },
+        startRelayRecorder,
+        startSystemAudioBridge,
+        startWindowAudioBridge,
+        stopBroadcastAudioMix,
+        stopBroadcastVideoComposition,
+        stopRelayRecorder,
+        stopVoiceInputStream,
+        stopWindowAudioBridge,
+        waitForPublicBroadcastReview,
+      }));
+    }
+    return broadcastStartControllerPromise;
+  }
+  async function beginBroadcast(...args) { return (await getBroadcastStartController()).begin(...args); }
+
   function requestCameraBroadcastStart() {
     requestBroadcastStart("camera");
   }
@@ -5057,201 +5161,6 @@
     setNavigationState({ view: "broadcast" });
     notice = "Escolha uma tela, janela ou aplicativo para iniciar a transmissão.";
     void tick().then(() => beginBroadcast({ sourceType, ...nextContext }));
-  }
-
-  async function beginBroadcast(options = {}) {
-    if (broadcastState === "live") {
-      await returnToBroadcast();
-      notice = "Você já está transmitindo. Encerre a live atual antes de iniciar outra.";
-      return;
-    }
-    if (broadcastState === "starting" || broadcastState === "stopping") {
-      notice = broadcastState === "stopping"
-        ? "A live anterior ainda está sendo encerrada. Aguarde um instante para iniciar outra."
-        : "Sua transmissão ainda está sendo preparada. Aguarde um instante.";
-      return;
-    }
-    const visibility = options.visibility === "private" ? "private" : "public";
-    if (options.title) setBroadcastState({ broadcastTitle: String(options.title).trim().slice(0, 120) });
-    const groupId = visibility === "private" ? options.groupId || null : null;
-    const voiceRoomId = visibility === "private" ? options.voiceRoomId || null : null;
-    const sourceType = options.sourceType === "camera" ? "camera" : "screen";
-    setBroadcastState({ pendingBroadcastContext: null, broadcastError: "" });
-    broadcastAudioWarning = "";
-    broadcastChatMessages = [];
-    broadcastChatMessageIds = new Set();
-    broadcastChatDraft = "";
-    setBroadcastState({ broadcastSourceType: sourceType, broadcastDisplaySurface: null });
-    selectedDisplayProcessId = null;
-    broadcastDisplayStream = null;
-    broadcastCameraStream = null;
-    broadcastSourceAudioTrack = null;
-    broadcastAudioProcessId = null;
-    broadcastAudioSourceName = "";
-    broadcastMicrophoneStream = null;
-    setBroadcastState({ broadcastState: "starting" });
-    setNavigationState({ view: "broadcast" });
-    try {
-      if (!window.isSecureContext && !["localhost", "127.0.0.1"].includes(window.location.hostname)) throw new Error("A captura de tela exige HTTPS ou localhost.");
-      const profile = qualityProfiles[selectedQuality];
-      let sourceAudioTrack = null;
-      if (sourceType === "camera") {
-        broadcastCameraStream = await captureBroadcastCameraStream(profile);
-      } else {
-        broadcastDisplayStream = await captureDisplayStream(profile);
-        const displaySurface = broadcastDisplayStream.getVideoTracks?.()[0]?.getSettings?.().displaySurface;
-        if (displaySurface === "monitor" || displaySurface === "screen") setBroadcastState({ broadcastDisplaySurface: "screen" });
-        else if (displaySurface) setBroadcastState({ broadcastDisplaySurface: "window" });
-        const capturedAudioTracks = broadcastDisplayStream.getAudioTracks();
-        sourceAudioTrack = audioMode === "none" ? null : capturedAudioTracks[0] || null;
-        if (audioMode === "system" && window.miranteDesktop?.isDesktop) {
-          capturedAudioTracks.forEach((track) => track.stop());
-          try {
-            sourceAudioTrack = await startSystemAudioBridge();
-            if (!sourceAudioTrack) throw new Error("O Windows não encontrou aplicativos para incluir no áudio filtrado.");
-          } catch (error) {
-            audioMode = "none";
-            sourceAudioTrack = null;
-            broadcastAudioWarning = `${error.message || "Não foi possível preparar o áudio filtrado."} A transmissão continuará sem áudio do computador.`;
-          }
-        } else if (broadcastDisplaySurface === "screen" && audioMode === "source" && window.miranteDesktop?.isDesktop) {
-          const selectedAudioSource = await requestBroadcastAudioSource();
-          if (selectedAudioSource?.processId) {
-            broadcastAudioProcessId = selectedAudioSource.processId;
-            broadcastAudioSourceName = selectedAudioSource.name;
-            const applicationAudioTrack = await startWindowAudioBridge(selectedAudioSource.processId);
-            capturedAudioTracks.forEach((track) => track.stop());
-            sourceAudioTrack = applicationAudioTrack || null;
-          } else {
-            audioMode = "none";
-            capturedAudioTracks.forEach((track) => track.stop());
-            sourceAudioTrack = null;
-            broadcastAudioWarning = "A transmissão seguirá sem áudio do computador. Escolha um aplicativo para incluir somente o áudio dele.";
-          }
-        }
-        if (window.miranteDesktop?.isDesktop && audioMode === "source" && broadcastDisplaySurface !== "screen") {
-          // No app desktop, o bridge WASAPI is a áudio isolado da janela.
-          // A trilha entregue pelo Chromium é descartada para não vazar o
-          // áudio do computador inteiro para a transmissão.
-          if (selectedDisplayProcessId) {
-            try {
-              const windowAudioTrack = await startWindowAudioBridge(selectedDisplayProcessId);
-              capturedAudioTracks.forEach((track) => track.stop());
-              sourceAudioTrack = windowAudioTrack || null;
-            } catch (error) {
-              capturedAudioTracks.forEach((track) => track.stop());
-              sourceAudioTrack = null;
-              broadcastAudioWarning = error.message || "Não foi possível isolar o áudio da janela escolhida.";
-            }
-          } else {
-            capturedAudioTracks.forEach((track) => track.stop());
-            sourceAudioTrack = null;
-            broadcastAudioWarning = "Não foi possível identificar o processo da janela. A transmissão seguirá sem áudio da fonte para não capturar o computador inteiro.";
-          }
-        } else if (audioMode === "none") {
-          capturedAudioTracks.forEach((track) => track.stop());
-        }
-      }
-      if (sourceType === "screen" && window.miranteDesktop?.isDesktop && audioMode !== "none" && !sourceAudioTrack) {
-        broadcastAudioWarning ||= "O Windows não entregou áudio para esta captura. Verifique o volume do jogo e tente escolher a janela novamente.";
-      }
-      if (sourceType === "screen" && audioMode !== "none" && !sourceAudioTrack && !isDesktop) {
-        throw new Error(formatBroadcastMissingAudio({ isDesktop, displaySurface: broadcastDisplaySurface, selectionKind: broadcastSelectionKind }));
-      }
-      if (visibility === "public" && sourceType === "screen") await waitForPublicBroadcastReview();
-      setBroadcastState({ broadcastCameraEnabled: sourceType === "camera" || Boolean(broadcastCameraEnabled) });
-      if (sourceType === "screen" && broadcastCameraEnabled) {
-        try {
-          broadcastCameraStream = await captureBroadcastCameraStream(profile);
-        } catch (error) {
-          broadcastAudioWarning ||= "A câmera não pôde ser iniciada; a transmissão continuará somente com a tela.";
-          reportClientError("broadcast_camera_capture_error", error, { deviceId: broadcastCameraDeviceId });
-        }
-      }
-      if (broadcastMicrophoneEnabled) {
-        try {
-          await captureBroadcastMicrophoneStream();
-        } catch (error) {
-          if (sourceType === "camera") throw error;
-          broadcastAudioWarning ||= "O microfone não pôde ser iniciado; a transmissão continuará sem sua voz.";
-          reportClientError("broadcast_microphone_capture_error", error, { requestedDeviceId: selectedInputDeviceId });
-        }
-      }
-      const nextBroadcastStream = await buildBroadcastOutputStream({
-        displayStream: broadcastDisplayStream,
-        cameraStream: broadcastCameraStream,
-        sourceAudioTrack,
-        microphoneStream: broadcastMicrophoneStream,
-        profile,
-      });
-      setBroadcastState({ broadcastStream: nextBroadcastStream });
-      broadcastSourceAudioTrack = sourceAudioTrack;
-      const videoTrack = nextBroadcastStream.getVideoTracks()[0];
-      if (!videoTrack) throw new Error("A fonte escolhida não forneceu vídeo.");
-      activeDisplayProcessId = selectedDisplayProcessId;
-      broadcastDisplayStream?.getVideoTracks?.()[0]?.addEventListener("ended", () => { handleBroadcastVideoTrackEnded(broadcastDisplayStream?.getVideoTracks?.()[0]); }, { once: true });
-      broadcastCameraStream?.getVideoTracks?.()[0]?.addEventListener("ended", () => { handleBroadcastVideoTrackEnded(broadcastCameraStream?.getVideoTracks?.()[0]); }, { once: true });
-      if (videoTrack && "contentHint" in videoTrack) videoTrack.contentHint = "detail";
-      videoTrack?.addEventListener("ended", () => { handleBroadcastVideoTrackEnded(videoTrack); }, { once: true });
-      const roomId = randomRoom();
-      const streamResult = await api("/api/streams", { method: "POST", body: JSON.stringify({ roomName: roomId, title: broadcastTitle, visibility, groupId, voiceRoomId }) });
-      setBroadcastState({
-        broadcastRoomId: roomId,
-        broadcastStreamId: streamResult.stream.id,
-        broadcastInvite: `${window.location.origin}${streamResult.stream.publicPath || `/?room=${roomId}&mode=viewer`}`,
-      });
-      await connectBroadcastSocket();
-      sendBroadcast({ type: "join", role: "host", roomId });
-      if (mediaMode === "relay") await startRelayRecorder();
-      setBroadcastState({ broadcastState: "live" });
-      await attachBroadcastPreview();
-      await loadStreams();
-      if (visibility === "private" && groupId) {
-        await loadGroup(groupId);
-        setGroupState({ selectedRoomId: voiceRoomId || selectedRoomId });
-      }
-    } catch (error) {
-      reportClientError("broadcast_start_error", error, { sourceType, visibility, mediaMode });
-      const canceled = ["NotAllowedError", "AbortError"].includes(error?.name);
-      await stopRelayRecorder();
-      setBroadcastState({ broadcastError: canceled ? "" : formatBroadcastCaptureError(error, sourceType), broadcastState: canceled ? "idle" : "error" });
-      if (canceled) {
-        notice = sourceType === "camera"
-          ? "Acesso à câmera cancelado. Quando quiser, tente iniciar a transmissão novamente."
-          : "Seleção da tela cancelada. Quando quiser, escolha uma janela ou tela para iniciar.";
-      }
-      showDisplayPicker = false;
-      displaySources = [];
-      selectedDisplayProcessId = null;
-      activeDisplayProcessId = null;
-      await stopWindowAudioBridge();
-      stopVoiceInputStream(broadcastMicrophoneStream);
-      broadcastMicrophoneStream = null;
-      stopBroadcastVideoComposition();
-      await stopBroadcastAudioMix();
-      broadcastDisplayStream?.getTracks?.().forEach((track) => track.stop());
-      broadcastCameraStream?.getTracks?.().forEach((track) => track.stop());
-      broadcastDisplayStream = null;
-      broadcastCameraStream = null;
-      setBroadcastState({ broadcastCameraEnabled: false });
-      broadcastSourceAudioTrack = null;
-      setBroadcastState({ broadcastDisplaySurface: null });
-      broadcastStream?.getTracks().forEach((track) => track.stop());
-      setBroadcastState({ broadcastStream: null });
-      broadcastAudioWarning = "";
-      if (broadcastStreamId) {
-        const failedStreamId = broadcastStreamId;
-        try {
-          await api(`/api/streams/${failedStreamId}/end`, { method: "POST" });
-          setBroadcastState({ broadcastStreamId: "" });
-        } catch (cleanupError) {
-          reportClientError("broadcast_start_cleanup_error", cleanupError, { streamId: failedStreamId, mediaMode });
-          setBroadcastState({ broadcastError: `${broadcastError || "A transmissão falhou."} O servidor ainda não confirmou o encerramento; tente confirmar novamente.` });
-        }
-      }
-      broadcastSocket?.close();
-      broadcastSocket = null;
-    }
   }
 
   async function stopBroadcast(reason = "user") {
