@@ -71,6 +71,7 @@
   } from "./services/media/voice-device-utils.js";
   import { createClientDiagnostics } from "./services/client-diagnostics.js";
   import { createClientPollingController } from "./services/client-polling.js";
+  import { createGatewaySequenceGuard } from "./services/gateway-sequence.js";
   import { createMaintenanceController } from "./features/shell/maintenance-controller.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
@@ -80,16 +81,7 @@
 
   const APP_VERSION = typeof __MIRANTE_VERSION__ === "string" ? __MIRANTE_VERSION__ : "desconhecida";
   const WEB_VERSION = typeof __MIRANTE_WEB_VERSION__ === "string" ? __MIRANTE_WEB_VERSION__ : "desconhecida";
-  const gatewaySequenceBySocket = new WeakMap();
-
-  function acceptGatewayMessage(socket, message) {
-    const sequence = Number(message?.sequence);
-    if (!Number.isSafeInteger(sequence) || sequence < 1) return true;
-    const previous = gatewaySequenceBySocket.get(socket) || 0;
-    if (sequence <= previous) return false;
-    gatewaySequenceBySocket.set(socket, sequence);
-    return true;
-  }
+  const acceptGatewayMessage = createGatewaySequenceGuard();
 
   const reportClientError = createClientDiagnostics({
     routineKinds: ["voice_activity_sample", "voice_activity_state"],

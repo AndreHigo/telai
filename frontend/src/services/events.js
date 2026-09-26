@@ -1,3 +1,5 @@
+import { createGatewaySequenceGuard } from "./gateway-sequence.js";
+
 const RECONNECT_DELAY_MS = 1_500;
 const PRESENCE_HEARTBEAT_MS = 15_000;
 
@@ -12,7 +14,7 @@ export function createGroupEventGateway({ onMessage, onError } = {}) {
   let reconnectTimer = null;
   let presenceTimer = null;
   let stopped = false;
-  let lastSequence = 0;
+  const acceptGatewayMessage = createGatewaySequenceGuard();
 
   function send(message) {
     if (socket?.readyState !== WebSocket.OPEN) return false;
@@ -34,7 +36,6 @@ export function createGroupEventGateway({ onMessage, onError } = {}) {
 
   function connect() {
     if (stopped || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
-    lastSequence = 0;
     socket = new WebSocket(eventGatewayUrl());
     socket.addEventListener("open", () => {
       if (desiredGroupId) send({ type: "subscribe-group", groupId: desiredGroupId });
@@ -44,11 +45,7 @@ export function createGroupEventGateway({ onMessage, onError } = {}) {
       if (typeof event.data !== "string") return;
       try {
         const message = JSON.parse(event.data);
-        const sequence = Number(message?.sequence);
-        if (Number.isSafeInteger(sequence) && sequence > 0) {
-          if (sequence <= lastSequence) return;
-          lastSequence = sequence;
-        }
+        if (!acceptGatewayMessage(socket, message)) return;
         onMessage?.(message);
       } catch (error) {
         onError?.(error);
