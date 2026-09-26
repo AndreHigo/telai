@@ -5589,7 +5589,7 @@
     const handleBrowserPopState = () => {
       setViewerState({ isViewer: false, viewerRoomId: "", viewerStreamPath: "", viewerStream: null });
       detectViewerRoute();
-      if (!isViewer) view = broadcastState === "live" ? "broadcast" : "home";
+      if (!isViewer) setNavigationState({ view: broadcastState === "live" ? "broadcast" : "home" });
     };
     window.addEventListener("error", handleWindowError);
     window.addEventListener("unhandledrejection", handleUnhandledRejection);
