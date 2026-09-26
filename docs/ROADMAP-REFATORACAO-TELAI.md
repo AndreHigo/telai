@@ -259,6 +259,7 @@ enviada ao GitHub nem publicada em produção.
   - [x] Persistir metadados em SQLite/PostgreSQL, armazenar arquivos fora do banco e servir downloads somente para membros autenticados, com limites de tamanho e tipos permitidos.
   - [x] Extrair um adapter S3/MinIO opcional em `server/media/attachment-storage.mjs`, mantendo local como padrão leve e documentando retenção, expiração, antivírus e custo.
   - [ ] Integrar varredura antivírus e lifecycle operacional antes de ativar S3 em produção.
+    - [x] Integrar scanner de comando opcional antes do storage, desativado por padrão, com timeout, arquivo temporário restrito e limpeza garantida.
 - [x] Threads, busca, não lidas e notificações em tempo real.
   - [x] Persistir cursores de leitura por membro/canal, expor `unreadCount` no overview e atualizar o badge pelo gateway de eventos.
   - [x] Buscar mensagens por grupo/canal com limite de resultados e modal leve no frontend.
