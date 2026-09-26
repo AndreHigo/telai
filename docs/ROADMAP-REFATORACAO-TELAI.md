@@ -278,6 +278,7 @@ enviada ao GitHub nem publicada em produção.
   - [x] Centralizar modos P2P/relay e perfis de qualidade em `shared/media-contract.mjs`, consumido pelo cliente e backend sem alterar o layout.
   - [x] Extrair criação de peers de voz, timeout, faixa remota e callbacks de recuperação para `frontend/src/features/voice/peer-controller.js`, preservando captura e comportamento visual.
 - [ ] Avaliar SFU (LiveKit ou mediasoup) com teste de carga real.
+- [x] Registrar baseline funcional P2P e critérios de benchmark em `docs/MEDIA-BENCHMARK.md` sem trocar a arquitetura atual.
 - [ ] Avaliar codecs, bitrate adaptativo, simulcast/SVC e TURN adequados à VPS, preservando a interface atual.
 - [ ] Substituir o P2P por uma arquitetura de mídia escalável somente após benchmark de custo, latência, CPU e qualidade.
 - [x] Adicionar métricas de jitter, perda, RTT, bitrate e reconexão.

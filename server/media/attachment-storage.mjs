@@ -44,7 +44,13 @@ export function createLocalAttachmentStorage(rootDir) {
         if (!entry.isFile()) continue;
         if (!/^[a-zA-Z0-9_-]+\.[a-z0-9]+$/.test(entry.name)) continue;
         const filePath = path.join(absoluteRoot, entry.name);
-        const stats = await fs.stat(filePath);
+        let stats;
+        try {
+          stats = await fs.stat(filePath);
+        } catch (error) {
+          if (error?.code === "ENOENT") continue;
+          throw error;
+        }
         if (Number.isFinite(olderThan) && stats.mtimeMs > olderThan) continue;
         files.push({ storageKey: entry.name, byteSize: stats.size, modifiedAt: stats.mtimeMs });
       }
