@@ -28,6 +28,19 @@ transmissão pública. A coleta é ativada somente pelo parâmetro interno
 `qaStats=1` usado pelo harness e não cria telemetria adicional para usuários
 normais.
 
+O harness aceita `TELAI_MEDIA_VIEWER_COUNT` entre 1 e 20. O padrão continua
+sendo 2 viewers para manter a regressão rápida. Em PowerShell, por exemplo:
+
+```powershell
+$env:TELAI_MEDIA_VIEWER_COUNT = "5"
+npm run test:media
+Remove-Item Env:TELAI_MEDIA_VIEWER_COUNT
+```
+
+O resultado inclui tempo de carregamento, CPU e RSS do processo Electron que
+executou o teste durante a abertura dos viewers. É uma comparação local do
+harness, não uma medição isolada do servidor.
+
 Na última execução local, o segundo sample do viewer sintético registrou RTT de
 1 ms, jitter de 0 ms, perda de 0 pacotes, 2 streams de mídia e aproximadamente
 91,81 kbps recebidos. Isso confirma que a medição funciona; não é uma meta de

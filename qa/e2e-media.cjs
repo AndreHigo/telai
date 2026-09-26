@@ -752,12 +752,15 @@ async function main() {
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, partition: "qa-multistream" },
     });
     await multistreamWindow.loadURL(`${baseUrl}/login`);
+    const multistreamViewerCount = Math.max(1, Math.min(20, Number(process.env.TELAI_MEDIA_VIEWER_COUNT || 2)));
+    const loadBenchmarkStartedAt = process.hrtime.bigint();
+    const loadBenchmarkCpuBefore = process.cpuUsage();
     const embedInvite = `${cameraResult.invite}${cameraResult.invite.includes("?") ? "&" : "?"}embed=1`;
     await evaluate(multistreamWindow, `() => {
       const container = document.createElement("div");
       container.id = "qa-multistream";
-      container.style.cssText = "display:grid;grid-template-columns:repeat(2,640px);width:1280px;height:360px";
-      for (let index = 0; index < 2; index += 1) {
+      container.style.cssText = "display:grid;grid-template-columns:repeat(2,640px);width:1280px;min-height:360px";
+      for (let index = 0; index < ${multistreamViewerCount}; index += 1) {
         const frame = document.createElement("iframe");
         frame.src = ${JSON.stringify(embedInvite)};
         frame.allow = "autoplay; fullscreen; picture-in-picture";
@@ -767,7 +770,7 @@ async function main() {
       }
       document.body.appendChild(container);
     }`);
-    const multistreamResult = await waitFor("recepção da mídia nos viewers do multistream", () => evaluate(multistreamWindow, () => {
+    const multistreamResult = await waitFor("recepção da mídia nos viewers do multistream", () => evaluate(multistreamWindow, `() => {
       const frames = [...document.querySelectorAll("#qa-multistream iframe")];
       const status = frames.map((frame) => {
         const video = frame.contentDocument?.querySelector("video");
@@ -777,8 +780,19 @@ async function main() {
           hasLiveTrack: Boolean(video?.srcObject?.getVideoTracks().some((track) => track.readyState === "live")),
         };
       });
-      return status.length === 2 && status.every((item) => item.documentReady && item.videoReady && item.hasLiveTrack) ? status : false;
-    }));
+      return status.length === ${multistreamViewerCount} && status.every((item) => item.documentReady && item.videoReady && item.hasLiveTrack) ? status : false;
+    }`));
+    const loadBenchmarkElapsedMs = Number(process.hrtime.bigint() - loadBenchmarkStartedAt) / 1_000_000;
+    const loadBenchmarkCpu = process.cpuUsage(loadBenchmarkCpuBefore);
+    const loadBenchmarkCpuPercent = loadBenchmarkElapsedMs > 0
+      ? Math.round(((loadBenchmarkCpu.user + loadBenchmarkCpu.system) / (loadBenchmarkElapsedMs * 1_000)) * 1000) / 10
+      : null;
+    const loadBenchmark = {
+      viewerCount: multistreamViewerCount,
+      elapsedMs: Math.round(loadBenchmarkElapsedMs),
+      processCpuPercent: loadBenchmarkCpuPercent,
+      processRssBytes: process.memoryUsage().rss,
+    };
     const hostChatLayout = await evaluate(hostWindow, () => ({
       panel: Boolean(document.querySelector(".broadcast-chat-panel")),
       input: Boolean(document.querySelector(".broadcast-chat-form input:not(:disabled)")),
@@ -846,7 +860,7 @@ async function main() {
       display: { calls: displayResult.calls.filter((call) => call.type === "display"), previewHasLiveVideo: displayResult.previewHasLiveVideo, sourceSwitch: displaySwitchResult },
       camera: { calls: cameraResult.calls.filter((call) => call.type === "camera"), previewHasLiveVideo: cameraResult.previewHasLiveVideo },
       viewer: { ...viewerResult, chatLayout: viewerChatLayout, chatCollapsed: viewerChatCollapsed, rtcQuality: { first: viewerQualityFirst, second: viewerQualitySecond } },
-      multistream: { frameCount: multistreamResult.length, allFramesReady: true },
+      multistream: { frameCount: multistreamResult.length, allFramesReady: true, loadBenchmark },
       broadcasterChat: { layout: hostChatLayout, messageReceived: true },
     }));
   } finally {
