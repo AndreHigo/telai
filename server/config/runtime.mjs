@@ -23,6 +23,9 @@ export function createRuntimeConfig({ rootDir, packageVersion = "0.0.0", env = p
   const attachmentStorageRoot = env.TELAI_ATTACHMENT_DIR || path.join(dataDir, "attachments");
   const attachmentScanCommand = String(env.TELAI_ATTACHMENT_SCAN_COMMAND || "").trim();
   const attachmentScanTimeoutMs = Math.max(1_000, Number(env.TELAI_ATTACHMENT_SCAN_TIMEOUT_MS || 15_000));
+  const attachmentOrphanGraceMs = Math.max(60_000, Number(env.TELAI_ATTACHMENT_ORPHAN_GRACE_MS || 24 * 60 * 60_000));
+  const attachmentCleanupIntervalMs = Math.max(60_000, Number(env.TELAI_ATTACHMENT_CLEANUP_INTERVAL_MS || 15 * 60_000));
+  const attachmentCleanupMaxDeletes = Math.max(1, Number(env.TELAI_ATTACHMENT_CLEANUP_MAX_DELETES || 100));
   const attachmentS3 = Object.freeze({
     endpoint: String(env.TELAI_S3_ENDPOINT || "").trim(),
     bucket: String(env.TELAI_S3_BUCKET || "").trim(),
@@ -54,6 +57,9 @@ export function createRuntimeConfig({ rootDir, packageVersion = "0.0.0", env = p
     attachmentStorageRoot,
     attachmentScanCommand,
     attachmentScanTimeoutMs,
+    attachmentOrphanGraceMs,
+    attachmentCleanupIntervalMs,
+    attachmentCleanupMaxDeletes,
     attachmentS3,
     logLevels: DEFAULT_LOG_LEVELS,
     logLevel,

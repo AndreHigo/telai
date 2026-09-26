@@ -7,6 +7,7 @@ import { createAttachmentStorage, createS3AttachmentStorage } from "../server/me
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "telai-attachment-storage-"));
 try {
   const local = createAttachmentStorage({ mode: "local", localRootDir: root });
+  assert.equal(local.supportsListing, true);
   const localKey = await local.write({ attachmentId: "attachment-local", mimeType: "text/plain", buffer: Buffer.from("Telai") });
   assert.equal(localKey, "attachment-local.plain");
   assert.deepEqual(await local.read(localKey), Buffer.from("Telai"));
@@ -27,6 +28,7 @@ try {
     },
   });
   const s3Key = await s3.write({ attachmentId: "attachment-s3", mimeType: "text/plain", buffer: Buffer.from("remote-content") });
+  assert.equal(s3.supportsListing, false);
   assert.equal(s3Key, "qa/attachment-s3.plain");
   assert.match(calls[0].url, /\/telai-files\/qa\/attachment-s3\.plain$/);
   assert.match(calls[0].options.headers.authorization, /^AWS4-HMAC-SHA256 Credential=qa-access\//);
@@ -39,4 +41,4 @@ try {
   await fs.rm(root, { recursive: true, force: true });
 }
 
-console.log(JSON.stringify({ ok: true, checks: 12 }));
+console.log(JSON.stringify({ ok: true, checks: 14 }));

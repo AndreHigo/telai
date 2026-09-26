@@ -18,6 +18,7 @@ export function createLocalAttachmentStorage(rootDir) {
 
   return {
     mode: "local",
+    supportsListing: true,
     async write({ attachmentId, mimeType, buffer }) {
       await fs.mkdir(absoluteRoot, { recursive: true });
       const storageKey = `${attachmentId}${extensionForMimeType(mimeType) || ".bin"}`;
@@ -29,6 +30,27 @@ export function createLocalAttachmentStorage(rootDir) {
     },
     async remove(storageKey) {
       await fs.rm(localStoragePath(absoluteRoot, storageKey), { force: true });
+    },
+    async list({ olderThan = 0, limit = 1000 } = {}) {
+      let entries = [];
+      try {
+        entries = await fs.readdir(absoluteRoot, { withFileTypes: true });
+      } catch (error) {
+        if (error?.code === "ENOENT") return [];
+        throw error;
+      }
+      const files = [];
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        if (!/^[a-zA-Z0-9_-]+\.[a-z0-9]+$/.test(entry.name)) continue;
+        const filePath = path.join(absoluteRoot, entry.name);
+        const stats = await fs.stat(filePath);
+        if (Number.isFinite(olderThan) && stats.mtimeMs > olderThan) continue;
+        files.push({ storageKey: entry.name, byteSize: stats.size, modifiedAt: stats.mtimeMs });
+      }
+      return files
+        .sort((left, right) => left.modifiedAt - right.modifiedAt || left.storageKey.localeCompare(right.storageKey))
+        .slice(0, Math.max(1, Number(limit) || 1000));
     },
   };
 }
@@ -142,6 +164,7 @@ export function createS3AttachmentStorage({
 
   return {
     mode: "s3",
+    supportsListing: false,
     async write({ attachmentId, mimeType, buffer }) {
       const storageKey = keyFor(attachmentId, mimeType);
       await request("write", "PUT", storageKey, buffer, mimeType);

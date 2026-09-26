@@ -73,7 +73,11 @@ export function createGroupAttachmentRepository(database, { createId = randomUUI
     `).all(groupId).map(mapAttachment);
   }
 
-  return { createAttachments, listForMessage, attachToMessages, find, listForGroup };
+  function listStorageKeys() {
+    return database.prepare("SELECT storage_key AS storageKey FROM group_message_attachments").all().map((row) => row.storageKey);
+  }
+
+  return { createAttachments, listForMessage, attachToMessages, find, listForGroup, listStorageKeys };
 }
 
 export function createPostgresGroupAttachmentRepository(database, { createId = randomUUID } = {}) {
@@ -130,5 +134,10 @@ export function createPostgresGroupAttachmentRepository(database, { createId = r
     return result.rows.map(mapAttachment);
   }
 
-  return { createAttachments, listForMessage, attachToMessages, find, listForGroup };
+  async function listStorageKeys() {
+    const result = await database.query("SELECT storage_key AS \"storageKey\" FROM group_message_attachments");
+    return result.rows.map((row) => row.storageKey);
+  }
+
+  return { createAttachments, listForMessage, attachToMessages, find, listForGroup, listStorageKeys };
 }

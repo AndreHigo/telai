@@ -53,6 +53,7 @@
     "test:settings-state": "node qa/test-settings-state.mjs",
     "test:attachment-storage": "node qa/test-attachment-storage.mjs",
     "test:attachment-scanner": "node qa/test-attachment-scanner.mjs",
+    "test:attachment-lifecycle": "node qa/test-attachment-lifecycle.mjs",
     "test:state-store": "node qa/test-state-store.mjs",
     "test:group-room-read-controller": "node qa/test-group-room-read-controller.mjs",
     "test:group-event-runtime": "node qa/test-group-event-runtime.mjs",

@@ -29,6 +29,7 @@ import { createPostgresNotificationSyncService } from "./server/services/postgre
 import { createNotificationRuntime, liveNotificationContext } from "./server/notifications/runtime.mjs";
 import { createNotificationService } from "./server/notifications/service.mjs";
 import { createRuntimeCleanup } from "./server/services/runtime-cleanup.mjs";
+import { createAttachmentLifecycle } from "./server/services/attachment-lifecycle.mjs";
 import { createRuntimeRepositories } from "./server/database/runtime-repositories.mjs";
 import { json, readJson } from "./server/http/body.mjs";
 import { createHttpRateLimit } from "./server/http/rate-limit.mjs";
@@ -84,6 +85,9 @@ const {
   attachmentStorageRoot,
   attachmentScanCommand,
   attachmentScanTimeoutMs,
+  attachmentOrphanGraceMs,
+  attachmentCleanupIntervalMs,
+  attachmentCleanupMaxDeletes,
   attachmentS3,
   logLevels,
   logLevel,
@@ -375,6 +379,14 @@ const { liveNotificationPresentation, syncNotificationsForUser } = createNotific
 const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialRepository, createNotification });
 const attachmentStorage = createAttachmentStorage({ mode: attachmentStorageMode, localRootDir: attachmentStorageRoot, s3: attachmentS3 });
 const attachmentScanner = createAttachmentScanner({ command: attachmentScanCommand, timeoutMs: attachmentScanTimeoutMs, tempDir: dataDir });
+const attachmentLifecycle = createAttachmentLifecycle({
+  groupAttachmentRepository,
+  attachmentStorage,
+  errorLog,
+  infoLog,
+  orphanGraceMs: attachmentOrphanGraceMs,
+  maxDeletesPerRun: attachmentCleanupMaxDeletes,
+});
 const attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${encodeURIComponent(groupId)}/attachments/${encodeURIComponent(attachmentId)}`;
 const handleNotificationRoutes = createNotificationRoutes({
   json,
@@ -647,7 +659,14 @@ const handleAdminRoutes = createAdminRoutes({
   siteAdminGroupMembersPage,
   siteAdminOverview,
 });
-const runtimeCleanup = createRuntimeCleanup({ oauthStates, groupPresence, sessionRepository, errorLog });
+const runtimeCleanup = createRuntimeCleanup({
+  oauthStates,
+  groupPresence,
+  sessionRepository,
+  attachmentLifecycle,
+  errorLog,
+  attachmentIntervalMs: attachmentCleanupIntervalMs,
+});
 runtimeCleanup.start();
 
 const handleAuthRoutes = createAuthRoutes({

@@ -15,6 +15,8 @@ O adapter S3 usa assinatura AWS SigV4, não adiciona o SDK ao bundle do servidor
 - A varredura antivírus é um adapter opcional antes do storage. Configure `TELAI_ATTACHMENT_SCAN_COMMAND=clamdscan` quando a VPS tiver o executável disponível; sem essa variável o modo continua desativado para preservar o footprint leve.
 - `TELAI_ATTACHMENT_SCAN_TIMEOUT_MS` limita cada varredura (padrão: 15 segundos). Falha ou detecção bloqueia o envio; o arquivo temporário é removido sempre.
 - A remoção de mensagem ou grupo remove os objetos correspondentes quando o backend responde; não há expiração automática silenciosa.
+- O storage local executa uma reconciliação periódica de órfãos. Arquivos sem referência no banco só podem ser removidos depois da janela `TELAI_ATTACHMENT_ORPHAN_GRACE_MS` (padrão: 24 horas), com no máximo `TELAI_ATTACHMENT_CLEANUP_MAX_DELETES` por ciclo (padrão: 100). O intervalo é controlado por `TELAI_ATTACHMENT_CLEANUP_INTERVAL_MS` (padrão: 15 minutos).
+- A reconciliação é uma proteção contra queda durante o upload e não substitui backup. Ela nunca remove arquivos ainda referenciados no banco.
 - O download continua privado e sem URL pública/presigned. O cache HTTP é privado e limitado à sessão do usuário.
-- A validação atual é de tamanho, MIME e base64. Antivírus/ClamAV ainda é uma etapa explícita antes de ativar S3 em produção; o adapter não finge oferecer varredura.
-- A política de custo recomendada para S3/MinIO é lifecycle de objetos órfãos e versões antigas administrada pelo operador, sem alterar o comportamento padrão local.
+- A validação atual é de tamanho, MIME e base64. A varredura de comando/ClamAV é opcional, bloqueia o upload quando habilitada e permanece desativada por padrão.
+- No S3/MinIO, a listagem não é feita pelo processo do Telai. O operador deve configurar lifecycle/versionamento no bucket para objetos órfãos e versões antigas, sem alterar o comportamento padrão local.

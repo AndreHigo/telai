@@ -53,4 +53,27 @@ cleanup.stop();
 assert.equal(cleanup.isRunning(), false);
 assert.deepEqual(cleared, [timer]);
 
-console.log(JSON.stringify({ ok: true, oauthPruned: true, presencePruned: true, sessionsDeleted: true, timerUnref: true }));
+const attachmentScheduled = [];
+const attachmentCleared = [];
+const attachmentTimer = { unrefCalled: false, unref() { this.unrefCalled = true; } };
+const attachmentCleanup = createRuntimeCleanup({
+  oauthStates: new Map(),
+  groupPresence: new Map(),
+  sessionRepository: { deleteExpired: () => Promise.resolve(0) },
+  attachmentLifecycle: { pruneOrphanedStorage: () => Promise.resolve({ supported: true, removed: 0 }) },
+  errorLog: () => {},
+  setIntervalFn: (callback, delay) => {
+    attachmentScheduled.push({ callback, delay });
+    return attachmentTimer;
+  },
+  clearIntervalFn: (value) => attachmentCleared.push(value),
+  attachmentIntervalMs: 90_000,
+});
+attachmentCleanup.start();
+assert.equal(attachmentScheduled.length, 2);
+assert.equal(attachmentScheduled[1].delay, 90_000);
+assert.equal(attachmentTimer.unrefCalled, true);
+attachmentCleanup.stop();
+assert.deepEqual(attachmentCleared, [attachmentTimer, attachmentTimer]);
+
+console.log(JSON.stringify({ ok: true, oauthPruned: true, presencePruned: true, sessionsDeleted: true, attachmentTimer: true, timerUnref: true }));
