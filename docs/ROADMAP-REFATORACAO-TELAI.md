@@ -285,6 +285,9 @@ enviada ao GitHub nem publicada em produção.
   - [x] Registrar a comparação arquitetural e o gate de decisão em `docs/SFU-DECISION.md`; o teste de carga em servidor independente continua pendente.
 - [x] Registrar baseline funcional P2P e critérios de benchmark em `docs/MEDIA-BENCHMARK.md` sem trocar a arquitetura atual.
 - [ ] Avaliar codecs, bitrate adaptativo, simulcast/SVC e TURN adequados à VPS, preservando a interface atual.
+  - [x] Registrar Opus/VP8 observados, perfis de `maxBitrate`/`maxFramerate`/`scaleResolutionDownBy` e adaptação nativa do WebRTC em `docs/MEDIA-BENCHMARK.md`.
+  - [x] Manter TURN como fallback por peer e na recuperação, sem forçar relay global ou adicionar dependência pesada.
+  - [ ] Medir simulcast/SVC e perfis alternativos em servidor independente antes de ativá-los no runtime P2P.
 - [ ] Substituir o P2P por uma arquitetura de mídia escalável somente após benchmark de custo, latência, CPU e qualidade.
 - [x] Adicionar métricas de jitter, perda, RTT, bitrate e reconexão.
   - [x] Extrair sumarização leve de `RTCStatsReport` e enviar amostras de qualidade de voz sob demanda, sem aumentar o bundle inicial.

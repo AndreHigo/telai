@@ -35,6 +35,21 @@ transmissão pública. A coleta é ativada somente pelo parâmetro interno
 normais. Além das métricas de rede, o sample QA pode registrar codec, resolução,
 FPS efetivo, frames decodificados/perdidos e limitação do encoder.
 
+## Codec e adaptação atualmente aplicados
+
+O fluxo WebRTC usa a negociação nativa do Chromium e, nas execuções locais,
+negociou Opus para áudio e VP8 para vídeo. O Telai aplica por peer o perfil
+selecionado com `maxBitrate`, `maxFramerate` e `scaleResolutionDownBy` via
+`RTCRtpSender.setParameters`; a adaptação de congestionamento continua sendo
+responsabilidade do WebRTC do navegador, sem um encoder paralelo no cliente.
+
+Simulcast e SVC ainda não são ativados. No P2P atual cada viewer já possui um
+peer independente, então adicionar camadas duplicaria captura, negociação e
+consumo de CPU antes de existir um cenário medido que justifique a
+complexidade. Essa decisão deve ser reavaliada junto com uma SFU e um teste
+externo de 10/20 viewers. TURN permanece disponível como fallback por peer,
+inclusive na recuperação de voz, sem forçar relay para todas as sessões.
+
 O harness aceita `TELAI_MEDIA_VIEWER_COUNT` entre 1 e 20. O padrão continua
 sendo 2 viewers para manter a regressão rápida. Em PowerShell, por exemplo:
 
