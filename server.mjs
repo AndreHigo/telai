@@ -18,6 +18,7 @@ import { createBroadcastMessageHandler } from "./server/gateway/broadcast-messag
 import { createBroadcastRuntime } from "./server/gateway/broadcast-runtime.mjs";
 import { createIceConfiguration } from "./server/media/ice-configuration.mjs";
 import { createAttachmentStorage } from "./server/media/attachment-storage.mjs";
+import { createAttachmentScanner } from "./server/media/attachment-scanner.mjs";
 import { createAuthRuntime } from "./server/auth/runtime.mjs";
 import { createRequireUser } from "./server/auth/guards.mjs";
 import { hashPassword, hashSessionToken } from "./server/auth/crypto.mjs";
@@ -81,6 +82,8 @@ const {
   desktopReleaseDir,
   attachmentStorageMode,
   attachmentStorageRoot,
+  attachmentScanCommand,
+  attachmentScanTimeoutMs,
   attachmentS3,
   logLevels,
   logLevel,
@@ -371,6 +374,7 @@ const { liveNotificationPresentation, syncNotificationsForUser } = createNotific
 });
 const handleSocialRoutes = createSocialRoutes({ json, requireUser, socialRepository, createNotification });
 const attachmentStorage = createAttachmentStorage({ mode: attachmentStorageMode, localRootDir: attachmentStorageRoot, s3: attachmentS3 });
+const attachmentScanner = createAttachmentScanner({ command: attachmentScanCommand, timeoutMs: attachmentScanTimeoutMs, tempDir: dataDir });
 const attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${encodeURIComponent(groupId)}/attachments/${encodeURIComponent(attachmentId)}`;
 const handleNotificationRoutes = createNotificationRoutes({
   json,
@@ -439,6 +443,7 @@ const {
   canGroupAction,
   canGroupRoomAction,
   attachmentStorage,
+  attachmentScanner,
   attachmentUrlFor,
   streamRepository,
   runtimeStreamIsLive,

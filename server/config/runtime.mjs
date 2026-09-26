@@ -21,6 +21,8 @@ export function createRuntimeConfig({ rootDir, packageVersion = "0.0.0", env = p
   const attachmentStorageMode = String(env.TELAI_ATTACHMENT_STORAGE || "local").trim().toLowerCase();
   if (!["local", "s3"].includes(attachmentStorageMode)) throw new Error("attachment-storage-mode-invalid");
   const attachmentStorageRoot = env.TELAI_ATTACHMENT_DIR || path.join(dataDir, "attachments");
+  const attachmentScanCommand = String(env.TELAI_ATTACHMENT_SCAN_COMMAND || "").trim();
+  const attachmentScanTimeoutMs = Math.max(1_000, Number(env.TELAI_ATTACHMENT_SCAN_TIMEOUT_MS || 15_000));
   const attachmentS3 = Object.freeze({
     endpoint: String(env.TELAI_S3_ENDPOINT || "").trim(),
     bucket: String(env.TELAI_S3_BUCKET || "").trim(),
@@ -50,6 +52,8 @@ export function createRuntimeConfig({ rootDir, packageVersion = "0.0.0", env = p
     desktopReleaseDir,
     attachmentStorageMode,
     attachmentStorageRoot,
+    attachmentScanCommand,
+    attachmentScanTimeoutMs,
     attachmentS3,
     logLevels: DEFAULT_LOG_LEVELS,
     logLevel,

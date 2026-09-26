@@ -11,6 +11,7 @@ export function createGroupContentRoutes({
   groupMessageRepository,
   groupAttachmentRepository,
   attachmentStorage,
+  attachmentScanner = { scan: async () => ({ clean: true, skipped: true }) },
   attachmentUrlFor = (groupId, attachmentId) => `/api/groups/${groupId}/attachments/${attachmentId}`,
   groupPermissionRepository,
   groupModerationRepository,
@@ -95,6 +96,7 @@ export function createGroupContentRoutes({
         let createdMessage = null;
         try {
           for (const attachment of attachments) {
+            await attachmentScanner.scan(attachment);
             const id = randomUUID();
             const storageKey = await attachmentStorage.write({ attachmentId: id, mimeType: attachment.mimeType, buffer: attachment.buffer });
             stored.push({ ...attachment, id, storageKey });
