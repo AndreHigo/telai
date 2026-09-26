@@ -25,6 +25,7 @@
     "test:client-polling": "node qa/test-client-polling.mjs",
     "test:maintenance-controller": "node qa/test-maintenance-controller.mjs",
     "test:gateway-sequence": "node qa/test-gateway-sequence.mjs",
+    "test:visual-state": "node qa/test-visual-state.mjs",
     "test:release-notes": "node qa/test-release-notes-controller.mjs",
     "test:broadcast-audio-bridge": "node qa/test-broadcast-audio-bridge.mjs",
     "test:broadcast-audio-mixer": "node qa/test-broadcast-audio-mixer.mjs",

@@ -27,6 +27,7 @@
   import { createRouteController } from "./features/shell/route-controller.js";
   import { createNavigationStateStore } from "./features/shell/navigation-state.js";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
+  import { createVisualStateStore, VISUAL_DEFAULTS, visualStyleFromState } from "./features/settings/visual-state.js";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
@@ -82,6 +83,8 @@
   const APP_VERSION = typeof __MIRANTE_VERSION__ === "string" ? __MIRANTE_VERSION__ : "desconhecida";
   const WEB_VERSION = typeof __MIRANTE_WEB_VERSION__ === "string" ? __MIRANTE_WEB_VERSION__ : "desconhecida";
   const acceptGatewayMessage = createGatewaySequenceGuard();
+  const visualState = createVisualStateStore();
+  const visualDefaults = VISUAL_DEFAULTS;
 
   const reportClientError = createClientDiagnostics({
     routineKinds: ["voice_activity_sample", "voice_activity_state"],
@@ -168,12 +171,15 @@
   let liveNotificationScopes = ["related"];
   let selectedStreams = new Set();
   let multistreamOpen = navigationState.getState().multistreamOpen;
-  let theme = "dark";
+  let theme = visualState.getState().theme;
   let notice = "";
   let maintenanceNotice = null;
   let maintenanceRemainingSeconds = 0;
   let maintenanceReloadKey = "";
   const maintenanceController = createMaintenanceController();
+  let buttonColor = visualState.getState().buttonColor;
+  let inputBackgroundColor = visualState.getState().inputBackgroundColor;
+  let backgroundColor = visualState.getState().backgroundColor;
   let providers = authState.getState().providers;
   let authMode = authState.getState().authMode;
   let authBusy = authState.getState().authBusy;
@@ -258,9 +264,6 @@
   let broadcastPeerNegotiations = new Map();
   let selectedQuality = "balanced";
   let audioMode = "source";
-  let buttonColor = "#5b5fea";
-  let inputBackgroundColor = "#0d1728";
-  let backgroundColor = "#070b16";
   let rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
   let rtcConfigLoadedAt = 0;
   const VOICE_ICE_REFRESH_MS = 45 * 60 * 1000;
@@ -362,6 +365,10 @@
     socialState.setState(next);
   }
 
+  function setVisualState(next) {
+    visualState.setState(next);
+  }
+
   const unsubscribeNavigationState = navigationState.subscribe((next) => {
     view = next.view;
     groupsWorkspaceOpen = next.groupsWorkspaceOpen;
@@ -385,6 +392,13 @@
     registerUsername = next.registerUsername;
     registerPassword = next.registerPassword;
     registerLegalAccepted = next.registerLegalAccepted;
+  });
+
+  const unsubscribeVisualState = visualState.subscribe((next) => {
+    theme = next.theme;
+    buttonColor = next.buttonColor;
+    inputBackgroundColor = next.inputBackgroundColor;
+    backgroundColor = next.backgroundColor;
   });
 
   const unsubscribeMaintenanceState = maintenanceController.subscribe((next) => {
@@ -982,10 +996,6 @@
   let lastAutoMarkedGroupRoomKey = "";
   const maxAvatarFileBytes = 5 * 1024 * 1024;
   const gameOptions = ["League of Legends", "Valorant", "Minecraft", "Fortnite", "Roblox", "GTA V", "CS2", "Outro"];
-  const visualDefaults = {
-    dark: { button: "#5b5fea", input: "#0d1728", background: "#070b16" },
-    light: { button: "#4256d6", input: "#ffffff", background: "#f7f8fc" },
-  };
 
   function setGroupState(next) {
     groupState.setState(next);
@@ -1151,7 +1161,7 @@
   $: visibleNotifications = hideReadNotifications ? notifications.filter((notification) => notification.unread) : notifications;
   $: readNotificationCount = notifications.filter((notification) => !notification.unread).length;
   $: unreadDirectNotification = notifications.find((notification) => notification.unread && notification.type === "direct_message" && notification.directConversationId) || null;
-  $: visualStyle = `--mirante-button-color:${buttonColor};--mirante-input-background:${inputBackgroundColor};--mirante-background:${backgroundColor};`;
+  $: visualStyle = visualStyleFromState({ buttonColor, inputBackgroundColor, backgroundColor });
   $: roomMessages = (groupOverview?.messages || []).filter((message) => !selectedRoom || !message.roomId || message.roomId === selectedRoom.id);
   $: if (selectedGroupId !== groupApplicationCommandsGroupId) {
     void loadGroupApplicationCommands(selectedGroupId);
@@ -1780,7 +1790,7 @@
         }),
         setState: (next) => {
           const setters = {
-            theme: (value) => { theme = value; },
+            theme: (value) => setVisualState({ theme: value }),
             selectedQuality: (value) => { selectedQuality = value; },
             audioMode: (value) => { audioMode = value; },
             selectedInputDeviceId: (value) => { selectedInputDeviceId = value; },
@@ -1793,9 +1803,9 @@
             pushToTalkKey: (value) => { pushToTalkKey = value; },
             pushToTalkEnabled: (value) => { pushToTalkEnabled = value; },
             muteShortcut: (value) => { muteShortcut = value; },
-            buttonColor: (value) => { buttonColor = value; },
-            inputBackgroundColor: (value) => { inputBackgroundColor = value; },
-            backgroundColor: (value) => { backgroundColor = value; },
+            buttonColor: (value) => setVisualState({ buttonColor: value }),
+            inputBackgroundColor: (value) => setVisualState({ inputBackgroundColor: value }),
+            backgroundColor: (value) => setVisualState({ backgroundColor: value }),
             channelDisplayName: (value) => setSettingsState({ channelDisplayName: value }),
             channelAvatarData: (value) => setSettingsState({ channelAvatarData: value }),
             channelGames: (value) => setSettingsState({ channelGames: value }),
@@ -5567,7 +5577,7 @@
     window.addEventListener("focus", handleVoicePlaybackInteraction);
     document.addEventListener("visibilitychange", handleVoicePlaybackInteraction);
     navigator.mediaDevices?.addEventListener?.("devicechange", handleVoiceDeviceChange);
-    theme = localStorage.getItem("mirante-theme") === "light" ? "light" : "dark";
+    setVisualState({ theme: localStorage.getItem("mirante-theme") === "light" ? "light" : "dark" });
     if (window.miranteDesktop?.isDesktop) {
       isDesktop = true;
       desktopPushToTalkUnsubscribe = window.miranteDesktop.onPushToTalk?.(handleDesktopPushToTalk) || null;
@@ -5624,6 +5634,7 @@
   onDestroy(() => {
     unsubscribeNavigationState();
     unsubscribeAuthState();
+    unsubscribeVisualState();
     unsubscribeMaintenanceState();
     unsubscribeNotificationState();
     unsubscribeSocialState();
@@ -5677,10 +5688,12 @@
   function setTheme(nextTheme) {
     const previousDefaults = visualDefaults[theme];
     const nextDefaults = visualDefaults[nextTheme];
-    if (buttonColor === previousDefaults.button) buttonColor = nextDefaults.button;
-    if (inputBackgroundColor === previousDefaults.input) inputBackgroundColor = nextDefaults.input;
-    if (backgroundColor === previousDefaults.background) backgroundColor = nextDefaults.background;
-    theme = nextTheme;
+    setVisualState({
+      theme: nextTheme,
+      buttonColor: buttonColor === previousDefaults.button ? nextDefaults.button : buttonColor,
+      inputBackgroundColor: inputBackgroundColor === previousDefaults.input ? nextDefaults.input : inputBackgroundColor,
+      backgroundColor: backgroundColor === previousDefaults.background ? nextDefaults.background : backgroundColor,
+    });
   }
 
   function toggleTheme() {
@@ -6025,12 +6038,16 @@
           settingsDisplayName={settingsDisplayName}
           on:settingsDisplayName={(event) => setSettingsState({ settingsDisplayName: event.detail })}
           {avatarError}
-          bind:theme
+          theme={theme}
+          on:theme={(event) => setVisualState({ theme: event.detail })}
           bind:selectedQuality
           bind:audioMode
-          bind:buttonColor
-          bind:inputBackgroundColor
-          bind:backgroundColor
+          buttonColor={buttonColor}
+          on:buttonColor={(event) => setVisualState({ buttonColor: event.detail })}
+          inputBackgroundColor={inputBackgroundColor}
+          on:inputBackgroundColor={(event) => setVisualState({ inputBackgroundColor: event.detail })}
+          backgroundColor={backgroundColor}
+          on:backgroundColor={(event) => setVisualState({ backgroundColor: event.detail })}
           {providers}
           {selectedGroup}
           bind:groupSettingsName

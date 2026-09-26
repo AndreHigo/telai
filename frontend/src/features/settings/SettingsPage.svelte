@@ -226,7 +226,20 @@
           onAvatarChange={onAvatarChange}
           onClearAvatar={onClearAvatar}
         />
-        <PreferencesSettings {settingsBusy} bind:theme bind:selectedQuality bind:audioMode bind:buttonColor bind:inputBackgroundColor bind:backgroundColor onSave={onSavePreferences} />
+        <PreferencesSettings
+          {settingsBusy}
+          bind:theme
+          bind:selectedQuality
+          bind:audioMode
+          bind:buttonColor
+          bind:inputBackgroundColor
+          bind:backgroundColor
+          on:theme={(event) => dispatch("theme", event.detail)}
+          on:buttonColor={(event) => dispatch("buttonColor", event.detail)}
+          on:inputBackgroundColor={(event) => dispatch("inputBackgroundColor", event.detail)}
+          on:backgroundColor={(event) => dispatch("backgroundColor", event.detail)}
+          onSave={onSavePreferences}
+        />
         <LinkedAccountsSettings {user} {providers} />
       {:else}
         <GroupAdministrationSettings {selectedGroup} {settingsBusy} bind:groupSettingsName onSave={onSaveGroupSettings} />

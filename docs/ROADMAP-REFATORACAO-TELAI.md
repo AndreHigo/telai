@@ -181,6 +181,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair polling condicionado por visibilidade, manutenção e countdown para `frontend/src/services/client-polling.js`, preservando frequências e condições do shell.
     - [x] Extrair o controller de manutenção programada, countdown e reload protegido para `frontend/src/features/shell/maintenance-controller.js`, preservando o banner existente.
     - [x] Centralizar a deduplicação monotônica de eventos WebSocket em `frontend/src/services/gateway-sequence.js`, preservando a ordem dos gateways.
+    - [x] Extrair tema, cores personalizadas e defaults visuais para `frontend/src/features/settings/visual-state.js`, preservando bindings e identidade visual.
     - [x] Extrair submissão de login/cadastro e início de OAuth para `frontend/src/features/auth/controller.js`, preservando payloads e navegação existentes.
     - [x] Extrair o estado do formulário de autenticação para `frontend/src/features/auth/auth-state.js`, mantendo o `AuthPage` controlado sem alterar o layout.
     - [x] Extrair notificações, badge, preferência de leitura e carregamento concorrente para `frontend/src/features/notifications/notification-state.js`, preservando o controlador e o layout.
