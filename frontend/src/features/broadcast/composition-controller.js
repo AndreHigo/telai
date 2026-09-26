@@ -72,6 +72,16 @@ export function createBroadcastCompositionController({
     const canvas = document.createElement("canvas");
     let outputStream = null;
     let composition = null;
+    const inputTracks = [];
+    const cloneInputTrack = (track) => {
+      const cloned = track?.clone?.();
+      if (cloned && cloned !== track) inputTracks.push(cloned);
+      return cloned || track;
+    };
+    const displayInputTrack = cloneInputTrack(displayTrack);
+    const cameraInputTrack = cloneInputTrack(cameraTrack);
+    const displayInputStream = displayInputTrack ? new MediaStream([displayInputTrack]) : null;
+    const cameraInputStream = cameraInputTrack ? new MediaStream([cameraInputTrack]) : null;
     const width = Math.max(320, Math.round(profile.width));
     const height = Math.max(180, Math.round(profile.height));
     canvas.width = width;
@@ -92,8 +102,8 @@ export function createBroadcastCompositionController({
       document.body.appendChild(video);
     }
     try {
-      if (displayTrack) displayVideo.srcObject = displayStream;
-      if (cameraTrack) cameraVideo.srcObject = cameraStream;
+      if (displayInputStream) displayVideo.srcObject = displayInputStream;
+      if (cameraInputStream) cameraVideo.srcObject = cameraInputStream;
       await Promise.all(compositionVideos.map((video) => video.play()));
       await Promise.all([
         ...(displayTrack ? [waitForBroadcastVideoFrame(displayVideo, "a tela compartilhada")] : []),
@@ -136,7 +146,7 @@ export function createBroadcastCompositionController({
       };
       outputStream = canvas.captureStream(profile.maxFramerate);
       const outputTrack = outputStream.getVideoTracks()[0];
-      composition = { canvas, context, displayVideo, cameraVideo, videos: compositionVideos, outputStream, outputTrack, rafId: 0 };
+      composition = { canvas, context, displayVideo, cameraVideo, videos: compositionVideos, inputTracks, outputStream, outputTrack, rafId: 0 };
       stopBroadcastVideoComposition(composition);
       setState({ broadcastVideoComposition: composition });
       draw();
@@ -148,6 +158,7 @@ export function createBroadcastCompositionController({
         try { composition.outputStream?.getTracks?.().forEach((track) => track.stop()); } catch {}
       }
       try { outputStream?.getTracks?.().forEach((track) => track.stop()); } catch {}
+      inputTracks.forEach((track) => { try { track.stop(); } catch {} });
       for (const video of compositionVideos) {
         try { video.pause(); video.srcObject = null; video.remove(); } catch {}
       }
@@ -161,6 +172,7 @@ export function createBroadcastCompositionController({
     if (composition && composition !== preserve) {
       if (composition.rafId) window.cancelAnimationFrame(composition.rafId);
       try { composition.outputStream?.getTracks?.().forEach((track) => track.stop()); } catch {}
+      composition.inputTracks?.forEach((track) => { try { track.stop(); } catch {} });
     }
     const videos = new Set([
       ...(composition && composition !== preserve ? composition.videos || [composition.displayVideo, composition.cameraVideo] : []),
