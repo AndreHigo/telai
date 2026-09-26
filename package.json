@@ -75,6 +75,7 @@
     "test:presentation": "node qa/test-presentation.mjs",
     "test:web-audit": "electron --no-sandbox qa/e2e-web-audit.cjs",
     "test:media": "electron --no-sandbox qa/e2e-media.cjs",
+    "test:media:matrix": "node qa/media-load-matrix.cjs",
     "test:voice-reconnect": "electron --no-sandbox qa/e2e-voice-reconnect.cjs",
     "test:seo": "node qa/e2e-seo.cjs",
     "test:social-state": "node qa/test-social-state.mjs",

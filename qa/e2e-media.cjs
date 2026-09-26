@@ -7,11 +7,27 @@ const rootDir = path.resolve(__dirname, "..");
 const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const databasePath = path.join(rootDir, `.tmp-media-harness-${process.pid}-${runId}.sqlite`);
 const expectedMediaMode = process.env.MEDIA_MODE === "relay" ? "relay" : "p2p";
+let mediaResultWritten = false;
+process.on("exit", (code) => {
+  if (mediaResultWritten || !process.env.TELAI_MEDIA_RESULT_FILE) return;
+  try {
+    fs.writeFileSync(process.env.TELAI_MEDIA_RESULT_FILE, JSON.stringify({ ok: false, error: `harness encerrou antes do resultado final (exit=${code})` }), "utf8");
+  } catch {}
+});
 process.env.MIRANTE_DB_PATH = databasePath;
 process.env.REQUIRE_LOGIN = "true";
 app.commandLine.appendSwitch("use-fake-device-for-media-stream");
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+function monitorElectronWindow(window, label) {
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error(JSON.stringify({ event: "qa_render_process_gone", label, reason: details.reason, exitCode: details.exitCode }));
+  });
+  window.webContents.on("crashed", () => {
+    console.error(JSON.stringify({ event: "qa_render_process_crashed", label }));
+  });
+}
 
 async function waitFor(label, check, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
@@ -321,8 +337,10 @@ async function main() {
       height: 360,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
+    monitorElectronWindow(captureProbeWindow, "capture-probe");
     await captureProbeWindow.loadURL(`${baseUrl}/svelte/`);
     captureTargetWindow = new BrowserWindow({ show: true, width: 640, height: 360, title: "Mirante QA Capture Target" });
+    monitorElectronWindow(captureTargetWindow, "capture-target");
     await captureTargetWindow.loadURL("data:text/html,<title>Mirante%20QA%20Capture%20Target</title><body style='margin:0;background:%23253b80;color:white;font:32px sans-serif'>Mirante QA Capture Target</body>");
     const realCamera = await captureRealCameraProbe(captureProbeWindow);
     const realScreen = await captureRealDisplayProbe(captureProbeWindow, "screen");
@@ -343,6 +361,7 @@ async function main() {
       height: 800,
       webPreferences: { preload: path.join(__dirname, "media-preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
+    monitorElectronWindow(hostWindow, "host");
     await hostWindow.loadURL(`${baseUrl}/`);
     await waitFor("sessão do host", () => evaluate(hostWindow, () => document.body.innerText.includes("QA Media")));
     await installSyntheticMedia(hostWindow);
@@ -544,6 +563,7 @@ async function main() {
       height: 800,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, partition: "qa-screen-viewer" },
     });
+    monitorElectronWindow(viewerWindow, "screen-viewer");
     await viewerWindow.loadURL(screenInvite);
     await waitFor("vídeo da live de tela no espectador", () => evaluate(viewerWindow, `() => {
       const video = document.querySelector("video");
@@ -751,6 +771,7 @@ async function main() {
       height: 800,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, partition: "qa-viewer" },
     });
+    monitorElectronWindow(viewerWindow, "benchmark-viewer");
     const benchmarkViewerUrl = new URL(cameraResult.invite);
     benchmarkViewerUrl.searchParams.set("qaStats", "1");
     await viewerWindow.loadURL(benchmarkViewerUrl.href);
@@ -772,6 +793,7 @@ async function main() {
       height: 800,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, partition: "qa-multistream" },
     });
+    monitorElectronWindow(multistreamWindow, "multistream");
     await multistreamWindow.loadURL(`${baseUrl}/login`);
     const multistreamViewerCount = Math.max(1, Math.min(20, Number(process.env.TELAI_MEDIA_VIEWER_COUNT || 2)));
     const loadBenchmarkStartedAt = process.hrtime.bigint();
@@ -876,7 +898,7 @@ async function main() {
       return !page?.classList.contains('chat-collapsed') && panel && panel.getBoundingClientRect().width > 250;
     }));
 
-    console.log(JSON.stringify({
+    const result = {
       ok: true,
       realCapture: { camera: realCamera, screen: realScreen, window: realWindow, legacyScreen: realLegacyScreen },
       display: { calls: displayResult.calls.filter((call) => call.type === "display"), previewHasLiveVideo: displayResult.previewHasLiveVideo, sourceSwitch: displaySwitchResult },
@@ -885,7 +907,13 @@ async function main() {
       mediaMode: expectedMediaMode,
       multistream: { frameCount: multistreamResult.length, allFramesReady: true, loadBenchmark },
       broadcasterChat: { layout: hostChatLayout, messageReceived: true },
-    }));
+    };
+    const serializedResult = JSON.stringify(result);
+    if (process.env.TELAI_MEDIA_RESULT_FILE) {
+      fs.writeFileSync(process.env.TELAI_MEDIA_RESULT_FILE, serializedResult, "utf8");
+      mediaResultWritten = true;
+    }
+    console.log(serializedResult);
   } finally {
     if (viewerWindow && !viewerWindow.isDestroyed()) viewerWindow.destroy();
     if (multistreamWindow && !multistreamWindow.isDestroyed()) multistreamWindow.destroy();
@@ -906,4 +934,9 @@ app.whenReady().then(async () => {
     console.error(JSON.stringify({ ok: false, error: error.message, stack: error.stack }));
     app.exit(1);
   }
+});
+
+app.on("window-all-closed", () => {
+  console.error(JSON.stringify({ event: "qa_window_all_closed" }));
+  app.quit();
 });

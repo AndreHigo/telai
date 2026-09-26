@@ -62,6 +62,43 @@ npm run test:media
 Remove-Item Env:MEDIA_MODE
 ```
 
+Para medir a matriz P2P local completa, o comando executa cenários isolados de
+1, 5, 10 e 20 viewers e imprime uma tabela JSON sem criar arquivos temporários:
+
+```powershell
+npm run test:media:matrix
+```
+
+Na execução local de 26/09/2026, os cenários de 1 e 5 viewers concluíram com
+todos os frames e codecs esperados. Os cenários de 10 e 20 viewers fizeram o
+Electron encerrar o harness antes de emitir o resultado final; por isso eles
+ficam registrados como limite/inconclusivos, não como capacidade aprovada da
+VPS. Durante esses cenários, alguns diagnósticos auxiliares receberam `429`
+por rate limit, sem interromper os fluxos de mídia que chegaram a concluir.
+Esse resultado é suficiente para não aumentar o limite P2P por suposição, mas
+ainda não substitui um teste de servidor dedicado ou uma SFU.
+
+Resumo da última execução da matriz; CPU e RSS são do processo Electron do
+harness, não do servidor:
+
+| modo | viewers | carregamento | CPU | RSS | resultado |
+| --- | ---: | ---: | ---: | ---: | --- |
+| P2P | 1 | 877 ms | 14,4% | 139,8 MiB | passou |
+| P2P | 5 | 932 ms | 26,8% | 140,4 MiB | passou |
+| relay | 1 | 228 ms | 20,6% | 143,7 MiB | passou |
+| relay | 5 | 344 ms | 59,0% | 141,0 MiB | passou |
+| P2P | 10 | — | — | — | Electron encerrou sem resultado |
+| P2P | 20 | — | — | — | Electron encerrou sem resultado |
+
+É possível selecionar cenários ou medir o caminho relay:
+
+```powershell
+$env:TELAI_MEDIA_MATRIX = "1,5"
+$env:TELAI_MEDIA_MATRIX_MODE = "relay"
+npm run test:media:matrix
+Remove-Item Env:TELAI_MEDIA_MATRIX, Env:TELAI_MEDIA_MATRIX_MODE
+```
+
 ## O que ainda não está medido
 
 A suíte atual confirma fluxo e regressão e agora coleta métricas de múltiplos
