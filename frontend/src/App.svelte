@@ -13,6 +13,7 @@
   import DirectMessagesPage from "./features/direct/DirectMessagesPage.svelte";
   import BroadcastPage from "./features/broadcast/BroadcastPage.svelte";
   import LivePage from "./features/live/LivePage.svelte";
+  import { createLiveStateStore } from "./features/live/live-state.js";
   import HomePage from "./features/home/HomePage.svelte";
   import GroupPickerPage from "./features/groups/GroupPickerPage.svelte";
   import GroupMemberRail from "./features/groups/GroupMemberRail.svelte";
@@ -144,8 +145,9 @@
   const authState = createAuthStateStore();
   const notificationState = createNotificationStateStore();
   const socialState = createSocialStateStore();
+  const liveState = createLiveStateStore();
   let groups = groupState.getState().groups;
-  let streams = [];
+  let streams = liveState.getState().streams;
   const navigationState = createNavigationStateStore();
   let view = navigationState.getState().view;
   let groupsWorkspaceOpen = navigationState.getState().groupsWorkspaceOpen;
@@ -168,10 +170,10 @@
   let selectedRoomId = groupState.getState().selectedRoomId;
   let watchingGroupLiveStreamId = groupState.getState().watchingGroupLiveStreamId;
   let groupLoading = groupState.getState().groupLoading;
-  let followingOnly = false;
-  let liveNotificationScope = "related";
-  let liveNotificationScopes = ["related"];
-  let selectedStreams = new Set();
+  let followingOnly = liveState.getState().followingOnly;
+  let liveNotificationScope = liveState.getState().liveNotificationScope;
+  let liveNotificationScopes = liveState.getState().liveNotificationScopes;
+  let selectedStreams = liveState.getState().selectedStreams;
   let multistreamOpen = navigationState.getState().multistreamOpen;
   let theme = visualState.getState().theme;
   let notice = "";
@@ -375,6 +377,10 @@
     viewerState.setState(next);
   }
 
+  function setLiveState(next) {
+    liveState.setState(next);
+  }
+
   const unsubscribeNavigationState = navigationState.subscribe((next) => {
     view = next.view;
     groupsWorkspaceOpen = next.groupsWorkspaceOpen;
@@ -413,6 +419,14 @@
     viewerRoomId = next.viewerRoomId;
     viewerStreamPath = next.viewerStreamPath;
     viewerStream = next.viewerStream;
+  });
+
+  const unsubscribeLiveState = liveState.subscribe((next) => {
+    streams = next.streams;
+    followingOnly = next.followingOnly;
+    liveNotificationScope = next.liveNotificationScope;
+    liveNotificationScopes = next.liveNotificationScopes;
+    selectedStreams = next.selectedStreams;
   });
 
   const unsubscribeMaintenanceState = maintenanceController.subscribe((next) => {
@@ -954,7 +968,6 @@
   let knownNotificationIds = notificationState.getState().knownNotificationIds;
   let notificationsLoading = notificationState.getState().notificationsLoading;
   let notificationsError = notificationState.getState().notificationsError;
-  let streamsRefreshInFlight = false;
   let notificationsRefreshInFlight = notificationState.getState().notificationsRefreshInFlight;
   let groupOverviewRefreshInFlight = groupState.getState().groupOverviewRefreshInFlight;
   let groupPresenceRefreshInFlight = groupState.getState().groupPresenceRefreshInFlight;
@@ -1812,8 +1825,8 @@
             selectedOutputDeviceId: (value) => { selectedOutputDeviceId = value; },
             voiceMicrophoneVolume: (value) => { voiceMicrophoneVolume = value; },
             voiceOutputVolume: (value) => { voiceOutputVolume = value; },
-            liveNotificationScope: (value) => { liveNotificationScope = value; },
-            liveNotificationScopes: (value) => { liveNotificationScopes = value; },
+            liveNotificationScope: (value) => setLiveState({ liveNotificationScope: value }),
+            liveNotificationScopes: (value) => setLiveState({ liveNotificationScopes: value }),
             pushToTalkKey: (value) => { pushToTalkKey = value; },
             pushToTalkEnabled: (value) => { pushToTalkEnabled = value; },
             muteShortcut: (value) => { muteShortcut = value; },
@@ -1869,7 +1882,7 @@
           const socialKeys = ["social", "socialSearchQuery", "socialSearchOpen", "socialRequestsOpen", "socialSearchResults", "socialSearchBusy", "socialError", "socialActionId", "socialRefreshInFlight"];
           const socialPatch = Object.fromEntries(socialKeys.filter((key) => key in next).map((key) => [key, next[key]]));
           if (Object.keys(socialPatch).length) setSocialState(socialPatch);
-          if ("streams" in next) streams = next.streams;
+          if ("streams" in next) setLiveState({ streams: next.streams });
         },
       }));
     }
@@ -1898,21 +1911,21 @@
           multistreamOpen,
           selectedStreams,
           streams,
-          streamsRefreshInFlight,
+          streamsRefreshInFlight: liveState.getState().streamsRefreshInFlight,
           viewerRoomId,
           viewerStream,
           viewerStreamPath,
           view,
         }),
         setState: (next) => {
-          if ("followingOnly" in next) followingOnly = next.followingOnly;
+          if ("followingOnly" in next) setLiveState({ followingOnly: next.followingOnly });
           if ("isViewer" in next) setViewerState({ isViewer: next.isViewer });
-          if ("liveNotificationScope" in next) liveNotificationScope = next.liveNotificationScope;
-          if ("liveNotificationScopes" in next) liveNotificationScopes = next.liveNotificationScopes;
+          if ("liveNotificationScope" in next) setLiveState({ liveNotificationScope: next.liveNotificationScope });
+          if ("liveNotificationScopes" in next) setLiveState({ liveNotificationScopes: next.liveNotificationScopes });
           if ("multistreamOpen" in next) setNavigationState({ multistreamOpen: next.multistreamOpen });
-          if ("selectedStreams" in next) selectedStreams = next.selectedStreams;
-          if ("streams" in next) streams = next.streams;
-          if ("streamsRefreshInFlight" in next) streamsRefreshInFlight = next.streamsRefreshInFlight;
+          if ("selectedStreams" in next) setLiveState({ selectedStreams: next.selectedStreams });
+          if ("streams" in next) setLiveState({ streams: next.streams });
+          if ("streamsRefreshInFlight" in next) setLiveState({ streamsRefreshInFlight: next.streamsRefreshInFlight });
           if ("view" in next) setNavigationState({ view: next.view });
           if ("viewerRoomId" in next) setViewerState({ viewerRoomId: next.viewerRoomId });
           if ("viewerStream" in next) setViewerState({ viewerStream: next.viewerStream });
@@ -2803,7 +2816,7 @@
       await api("/api/auth/logout", { method: "POST" });
       user = null;
       setGroupState({ groups: [], groupOverview: null, selectedGroupId: null, selectedRoomId: null });
-      streams = [];
+      setLiveState({ streams: [], selectedStreams: new Set(), followingOnly: false });
       setNavigationState({ view: "home" });
       replaceBrowserPath("/login", { preserveQuery: false });
       notice = "Você saiu da sua conta.";
@@ -5641,6 +5654,7 @@
     unsubscribeAuthState();
     unsubscribeVisualState();
     unsubscribeViewerState();
+    unsubscribeLiveState();
     unsubscribeMaintenanceState();
     unsubscribeNotificationState();
     unsubscribeSocialState();
@@ -6205,7 +6219,7 @@
           {selectedStreams}
           {followingOnly}
           {socialActionId}
-          onToggleFollowing={() => { followingOnly = !followingOnly; void loadStreams().catch((error) => { notice = error.message; }); }}
+          onToggleFollowing={() => { setLiveState({ followingOnly: !followingOnly }); void loadStreams().catch((error) => { notice = error.message; }); }}
           onOpenMultistream={openMultistream}
           onStreamCardClick={handleStreamCardClick}
           onStreamCardKeydown={handleStreamCardKeydown}

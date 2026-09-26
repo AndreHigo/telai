@@ -27,6 +27,7 @@
     "test:gateway-sequence": "node qa/test-gateway-sequence.mjs",
     "test:visual-state": "node qa/test-visual-state.mjs",
     "test:viewer-state": "node qa/test-viewer-state.mjs",
+    "test:live-state": "node qa/test-live-state.mjs",
     "test:release-notes": "node qa/test-release-notes-controller.mjs",
     "test:broadcast-audio-bridge": "node qa/test-broadcast-audio-bridge.mjs",
     "test:broadcast-audio-mixer": "node qa/test-broadcast-audio-mixer.mjs",
