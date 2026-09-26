@@ -2171,6 +2171,47 @@
   async function stopRelayRecorder(...args) { return (await getBroadcastRelayController()).stop(...args); }
   async function isRelayRecorderActive(...args) { return (await getBroadcastRelayController()).isRecording(...args); }
 
+  let broadcastSetupControllerPromise = null;
+  function getBroadcastSetupController() {
+    if (!broadcastSetupControllerPromise) {
+      broadcastSetupControllerPromise = import("./features/broadcast/setup-controller.js").then(({ createBroadcastSetupController }) => createBroadcastSetupController({
+        beginBroadcast,
+        getState: () => ({
+          broadcastCameraDeviceId,
+          broadcastState,
+          broadcastTitle,
+          publicBroadcastCameraDeviceId,
+          publicBroadcastCameraEnabled,
+          publicBroadcastMicrophoneEnabled,
+          publicBroadcastQuality,
+          publicBroadcastReviewSelection,
+          publicBroadcastSourceKind,
+          publicBroadcastTitle,
+          selectedGroupId,
+          selectedQuality,
+          selectedRoom,
+          user,
+          view,
+          pendingBroadcastSourceType,
+        }),
+        publicBroadcastSourceLabel,
+        setAudioMode: (value) => { audioMode = value; },
+        setNavigationState,
+        setNotice: (value) => { notice = value; },
+        setSelectedQuality: (value) => { selectedQuality = value; },
+        setState: setBroadcastState,
+      }));
+    }
+    return broadcastSetupControllerPromise;
+  }
+  function requestBroadcastStart(...args) { void getBroadcastSetupController().then((controller) => controller.requestBroadcastStart(...args)); }
+  function openPublicBroadcastSetup(...args) { void getBroadcastSetupController().then((controller) => controller.openPublicBroadcastSetup(...args)); }
+  function cancelPublicBroadcastSetup(...args) { void getBroadcastSetupController().then((controller) => controller.cancelPublicBroadcastSetup(...args)); }
+  async function confirmPublicBroadcastSetup(...args) { return (await getBroadcastSetupController()).confirmPublicBroadcastSetup(...args); }
+  async function waitForPublicBroadcastReview(...args) { return (await getBroadcastSetupController()).waitForPublicBroadcastReview(...args); }
+  function confirmPublicBroadcastReview(...args) { void getBroadcastSetupController().then((controller) => controller.confirmPublicBroadcastReview(...args)); }
+  function cancelPublicBroadcastReview(...args) { void getBroadcastSetupController().then((controller) => controller.cancelPublicBroadcastReview(...args)); }
+
   let broadcastCompositionControllerPromise = null;
   function getBroadcastCompositionController() {
     if (!broadcastCompositionControllerPromise) {
@@ -4611,50 +4652,6 @@
     }
   }
 
-  function requestBroadcastStart(sourceType = "screen") {
-    if (broadcastState === "live") {
-      setNavigationState({ view: "broadcast" });
-      notice = "Você já está transmitindo. Use “Voltar à live” ou encerre a transmissão antes de iniciar outra.";
-      return;
-    }
-    if (broadcastState === "starting" || broadcastState === "stopping") {
-      notice = broadcastState === "stopping"
-        ? "A live anterior ainda está sendo encerrada. Aguarde um instante para iniciar outra."
-        : "Sua transmissão ainda está sendo preparada. Aguarde um instante.";
-      return;
-    }
-    if (sourceType !== "camera" && !(view === "groups" && selectedRoom?.kind === "voice" && selectedGroupId)) {
-      openPublicBroadcastSetup();
-      return;
-    }
-    setBroadcastState({ pendingBroadcastSourceType: sourceType === "camera" ? "camera" : "screen" });
-    if (view === "groups" && selectedRoom?.kind === "voice" && selectedGroupId) {
-      setBroadcastState({ broadcastVisibility: "private", pendingBroadcastContext: { groupId: selectedGroupId, voiceRoomId: selectedRoom.id }, showBroadcastVisibilityDialog: true });
-      return;
-    }
-    setBroadcastState({ pendingBroadcastContext: null, broadcastSourceType: pendingBroadcastSourceType, broadcastState: "idle" });
-    setNavigationState({ view: "broadcast" });
-    notice = "Escolha o áudio, a câmera e o microfone. Depois clique em iniciar a transmissão.";
-  }
-
-  function openPublicBroadcastSetup() {
-    setBroadcastState({
-      broadcastVisibility: "public",
-      publicBroadcastTitle: broadcastTitle || `Transmissão de ${user?.displayName || user?.username || "usuário"}`,
-      publicBroadcastSourceKind: "screen",
-      publicBroadcastMicrophoneEnabled: false,
-      publicBroadcastCameraEnabled: false,
-      publicBroadcastCameraDeviceId: broadcastCameraDeviceId || "",
-      publicBroadcastQuality: selectedQuality === "high" ? "balanced" : selectedQuality,
-      showPublicBroadcastSetup: true,
-    });
-  }
-
-  function cancelPublicBroadcastSetup() {
-    if (broadcastState === "starting") return;
-    setBroadcastState({ showPublicBroadcastSetup: false });
-  }
-
   function publicBroadcastAudioLabel(sourceKind = publicBroadcastSourceKind) {
     if (sourceKind === "screen") return isDesktop ? "Áudio do computador, com Telai e Discord excluídos" : "Áudio do computador, conforme o seletor do navegador";
     if (sourceKind === "app") return "Áudio somente do aplicativo escolhido";
@@ -4665,50 +4662,6 @@
     if (sourceKind === "screen") return "Tela inteira";
     if (sourceKind === "app") return "Aplicativo";
     return "Janela";
-  }
-
-  async function confirmPublicBroadcastSetup() {
-    const title = publicBroadcastTitle.trim();
-    if (!title) {
-      setBroadcastState({ broadcastError: "Informe um título para a transmissão." });
-      return;
-    }
-    setBroadcastState({ broadcastError: "", broadcastTitle: title });
-    selectedQuality = publicBroadcastQuality;
-    audioMode = publicBroadcastSourceKind === "screen" ? "system" : "source";
-    setBroadcastState({
-      broadcastMicrophoneEnabled: publicBroadcastMicrophoneEnabled,
-      broadcastCameraEnabled: publicBroadcastCameraEnabled,
-      broadcastCameraDeviceId: publicBroadcastCameraEnabled ? publicBroadcastCameraDeviceId : "",
-      broadcastSelectionKind: publicBroadcastSourceKind,
-      showPublicBroadcastSetup: false,
-      pendingBroadcastContext: null,
-      pendingBroadcastSourceType: "screen",
-      broadcastSourceType: "screen",
-      broadcastState: "idle",
-    });
-    setNavigationState({ view: "broadcast" });
-    notice = `Escolha a fonte de vídeo para ${publicBroadcastSourceLabel(publicBroadcastSourceKind).toLocaleLowerCase()}.`;
-    await beginBroadcast({ sourceType: "screen", visibility: "public", title });
-  }
-
-  function waitForPublicBroadcastReview() {
-    setBroadcastState({ showPublicBroadcastReview: true });
-    return new Promise((resolve, reject) => {
-      setBroadcastState({ publicBroadcastReviewSelection: { resolve, reject } });
-    });
-  }
-
-  function confirmPublicBroadcastReview() {
-    setBroadcastState({ showPublicBroadcastReview: false });
-    publicBroadcastReviewSelection?.resolve(true);
-    setBroadcastState({ publicBroadcastReviewSelection: null });
-  }
-
-  function cancelPublicBroadcastReview() {
-    setBroadcastState({ showPublicBroadcastReview: false });
-    publicBroadcastReviewSelection?.reject(new DOMException("Revisão da transmissão cancelada.", "AbortError"));
-    setBroadcastState({ publicBroadcastReviewSelection: null });
   }
 
   function requestCameraBroadcastStart() {

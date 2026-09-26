@@ -34,6 +34,7 @@
     "test:broadcast-relay-controller": "node qa/test-broadcast-relay-controller.mjs",
     "test:broadcast-capture": "node qa/test-broadcast-capture-controller.mjs",
     "test:broadcast-capture-errors": "node qa/test-broadcast-capture-errors.mjs",
+    "test:broadcast-setup-controller": "node qa/test-broadcast-setup-controller.mjs",
     "test:broadcast-track": "node qa/test-broadcast-track-controller.mjs",
     "test:broadcast-state": "node qa/test-broadcast-state.mjs",
     "test:events": "node qa/e2e-events.cjs",
