@@ -26,6 +26,7 @@
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
   import { createNavigationStateStore } from "./features/shell/navigation-state.js";
+  import { createViewerStateStore } from "./features/shell/viewer-state.js";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
   import { createVisualStateStore, VISUAL_DEFAULTS, visualStyleFromState } from "./features/settings/visual-state.js";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
@@ -85,6 +86,7 @@
   const acceptGatewayMessage = createGatewaySequenceGuard();
   const visualState = createVisualStateStore();
   const visualDefaults = VISUAL_DEFAULTS;
+  const viewerState = createViewerStateStore();
 
   const reportClientError = createClientDiagnostics({
     routineKinds: ["voice_activity_sample", "voice_activity_state"],
@@ -153,11 +155,11 @@
   let compactViewport = navigationState.getState().compactViewport;
   let showMobileChannels = navigationState.getState().showMobileChannels;
   let showMobileMembers = navigationState.getState().showMobileMembers;
-  let isViewer = false;
-  let viewerParentFullscreen = false;
-  let viewerRoomId = "";
-  let viewerStreamPath = "";
-  let viewerStream = null;
+  let isViewer = viewerState.getState().isViewer;
+  let viewerParentFullscreen = viewerState.getState().viewerParentFullscreen;
+  let viewerRoomId = viewerState.getState().viewerRoomId;
+  let viewerStreamPath = viewerState.getState().viewerStreamPath;
+  let viewerStream = viewerState.getState().viewerStream;
   let selectedGroupId = groupState.getState().selectedGroupId;
   let groupApplicationCommands = applicationCommandState.getState().commands;
   let groupApplicationCommandsGroupId = applicationCommandState.getState().groupId;
@@ -369,6 +371,10 @@
     visualState.setState(next);
   }
 
+  function setViewerState(next) {
+    viewerState.setState(next);
+  }
+
   const unsubscribeNavigationState = navigationState.subscribe((next) => {
     view = next.view;
     groupsWorkspaceOpen = next.groupsWorkspaceOpen;
@@ -399,6 +405,14 @@
     buttonColor = next.buttonColor;
     inputBackgroundColor = next.inputBackgroundColor;
     backgroundColor = next.backgroundColor;
+  });
+
+  const unsubscribeViewerState = viewerState.subscribe((next) => {
+    isViewer = next.isViewer;
+    viewerParentFullscreen = next.viewerParentFullscreen;
+    viewerRoomId = next.viewerRoomId;
+    viewerStreamPath = next.viewerStreamPath;
+    viewerStream = next.viewerStream;
   });
 
   const unsubscribeMaintenanceState = maintenanceController.subscribe((next) => {
@@ -1063,15 +1077,15 @@
   });
 
   const routeController = createRouteController({
-    getState: () => ({ isViewer }),
+    getState: () => ({ isViewer: viewerState.getState().isViewer }),
     setState: (next) => {
       if ("authError" in next) setAuthState({ authError: next.authError });
-      if ("isViewer" in next) isViewer = next.isViewer;
+      if ("isViewer" in next) setViewerState({ isViewer: next.isViewer });
       if ("pendingInviteToken" in next) pendingInviteToken = next.pendingInviteToken;
       if ("pendingGroupRouteId" in next) pendingGroupRouteId = next.pendingGroupRouteId;
       if ("pendingRoomRouteId" in next) pendingRoomRouteId = next.pendingRoomRouteId;
-      if ("viewerRoomId" in next) viewerRoomId = next.viewerRoomId;
-      if ("viewerStreamPath" in next) viewerStreamPath = next.viewerStreamPath;
+      if ("viewerRoomId" in next) setViewerState({ viewerRoomId: next.viewerRoomId });
+      if ("viewerStreamPath" in next) setViewerState({ viewerStreamPath: next.viewerStreamPath });
     },
   });
   const { canonicalizeAuthenticatedRoute, detectViewerRoute, replaceBrowserPath } = routeController;
@@ -1892,7 +1906,7 @@
         }),
         setState: (next) => {
           if ("followingOnly" in next) followingOnly = next.followingOnly;
-          if ("isViewer" in next) isViewer = next.isViewer;
+          if ("isViewer" in next) setViewerState({ isViewer: next.isViewer });
           if ("liveNotificationScope" in next) liveNotificationScope = next.liveNotificationScope;
           if ("liveNotificationScopes" in next) liveNotificationScopes = next.liveNotificationScopes;
           if ("multistreamOpen" in next) setNavigationState({ multistreamOpen: next.multistreamOpen });
@@ -1900,9 +1914,9 @@
           if ("streams" in next) streams = next.streams;
           if ("streamsRefreshInFlight" in next) streamsRefreshInFlight = next.streamsRefreshInFlight;
           if ("view" in next) setNavigationState({ view: next.view });
-          if ("viewerRoomId" in next) viewerRoomId = next.viewerRoomId;
-          if ("viewerStream" in next) viewerStream = next.viewerStream;
-          if ("viewerStreamPath" in next) viewerStreamPath = next.viewerStreamPath;
+          if ("viewerRoomId" in next) setViewerState({ viewerRoomId: next.viewerRoomId });
+          if ("viewerStream" in next) setViewerState({ viewerStream: next.viewerStream });
+          if ("viewerStreamPath" in next) setViewerState({ viewerStreamPath: next.viewerStreamPath });
         },
         markNotificationRead,
         returnToBroadcast: () => returnToBroadcast(),
@@ -5418,20 +5432,14 @@
   }
 
   async function returnFromViewer() {
-    isViewer = false;
-    viewerRoomId = "";
-    viewerStreamPath = "";
-    viewerStream = null;
+    setViewerState({ isViewer: false, viewerRoomId: "", viewerStreamPath: "", viewerStream: null });
     window.history.pushState({}, "", "/");
     setNavigationState({ view: broadcastState === "live" ? "broadcast" : "home" });
     if (broadcastState === "live") await attachBroadcastPreview();
   }
 
   async function navigateFromViewer(nextView) {
-    isViewer = false;
-    viewerRoomId = "";
-    viewerStreamPath = "";
-    viewerStream = null;
+    setViewerState({ isViewer: false, viewerRoomId: "", viewerStreamPath: "", viewerStream: null });
     window.history.pushState({}, "", "/");
     setNavigationState({ view: nextView });
     if (nextView === "live") await loadStreams().catch(() => {});
@@ -5530,7 +5538,7 @@
   function handleViewerFullscreenMessage(event) {
     if (event.origin !== window.location.origin) return;
     if (event.data?.type !== "telai-viewer-fullscreen") return;
-    viewerParentFullscreen = Boolean(event.data.active);
+    setViewerState({ viewerParentFullscreen: Boolean(event.data.active) });
   }
 
   onMount(async () => {
@@ -5543,10 +5551,7 @@
     const handleWindowError = (event) => reportClientError("window_error", event.error || event.message, { filename: event.filename, line: event.lineno, column: event.colno });
     const handleUnhandledRejection = (event) => reportClientError("unhandled_rejection", event.reason);
     const handleBrowserPopState = () => {
-      isViewer = false;
-      viewerRoomId = "";
-      viewerStreamPath = "";
-      viewerStream = null;
+      setViewerState({ isViewer: false, viewerRoomId: "", viewerStreamPath: "", viewerStream: null });
       detectViewerRoute();
       if (!isViewer) view = broadcastState === "live" ? "broadcast" : "home";
     };
@@ -5635,6 +5640,7 @@
     unsubscribeNavigationState();
     unsubscribeAuthState();
     unsubscribeVisualState();
+    unsubscribeViewerState();
     unsubscribeMaintenanceState();
     unsubscribeNotificationState();
     unsubscribeSocialState();
