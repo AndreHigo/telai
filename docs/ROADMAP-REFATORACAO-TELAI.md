@@ -174,6 +174,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair captura, fallback e seleção do microfone para `frontend/src/services/media`.
 - [x] Extrair sincronização, `replaceTrack` e renegociação do áudio local para `frontend/src/services/media`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
+  - [x] Extrair o controlador de relay WebM para `frontend/src/features/broadcast/relay-controller.js`, mantendo o transporte lazy e o shell visual.
   - [x] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
     - [x] Extrair seleção de telas, abertura do workspace de grupos e navegação da sidebar para `frontend/src/features/shell/navigation-controller.js` em chunk lazy, preservando o layout.
     - [x] Extrair parsing de rotas públicas, visualizador, convites pendentes e canonicalização de login para `frontend/src/features/shell/route-controller.js`, preservando URLs e layout.
@@ -278,6 +279,7 @@ enviada ao GitHub nem publicada em produção.
   - [x] Centralizar modos P2P/relay e perfis de qualidade em `shared/media-contract.mjs`, consumido pelo cliente e backend sem alterar o layout.
   - [x] Extrair criação de peers de voz, timeout, faixa remota e callbacks de recuperação para `frontend/src/features/voice/peer-controller.js`, preservando captura e comportamento visual.
 - [ ] Avaliar SFU (LiveKit ou mediasoup) com teste de carga real.
+  - [x] Registrar a comparação arquitetural e o gate de decisão em `docs/SFU-DECISION.md`; o teste de carga em servidor independente continua pendente.
 - [x] Registrar baseline funcional P2P e critérios de benchmark em `docs/MEDIA-BENCHMARK.md` sem trocar a arquitetura atual.
 - [ ] Avaliar codecs, bitrate adaptativo, simulcast/SVC e TURN adequados à VPS, preservando a interface atual.
 - [ ] Substituir o P2P por uma arquitetura de mídia escalável somente após benchmark de custo, latência, CPU e qualidade.
