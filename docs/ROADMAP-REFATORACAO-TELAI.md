@@ -217,6 +217,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair carregamento, visualização pública, seleção e multistream para `frontend/src/features/live/controller.js` em chunk lazy, preservando rotas e layout.
     - [x] Extrair a tela “Ao vivo agora” para `frontend/src/features/live/LivePage.svelte`, preservando classes, ações, seleção e multistream.
     - [x] Extrair a central de multistream para `frontend/src/features/live/MultistreamPage.svelte`, com carregamento sob demanda e contratos de seleção preservados.
+    - [x] Centralizar streams públicos, filtro de seguindo, multistream selecionado e preferências de lives em `frontend/src/features/live/live-state.js`, preservando contratos e identidade visual.
     - [x] Extrair menus contextuais de grupo, canal, voz e preview de perfil para `frontend/src/features/shell/ContextMenus.svelte`, carregados apenas quando necessários.
     - [x] Extrair diálogos de convite, descoberta, criação, saída e exclusão de grupos/canais para `frontend/src/features/groups/GroupDialogs.svelte`, carregados apenas quando necessários.
     - [x] Extrair operações de mensagens, anexos, edição, exclusão e busca para `frontend/src/features/groups/message-controller.js` em chunk lazy.

@@ -12,6 +12,7 @@
   import { createSocialStateStore } from "./features/social/social-state.js";
   import DirectMessagesPage from "./features/direct/DirectMessagesPage.svelte";
   import BroadcastPage from "./features/broadcast/BroadcastPage.svelte";
+  import { createBroadcastStateStore } from "./features/broadcast/broadcast-state.js";
   import LivePage from "./features/live/LivePage.svelte";
   import { createLiveStateStore } from "./features/live/live-state.js";
   import HomePage from "./features/home/HomePage.svelte";
@@ -146,6 +147,7 @@
   const notificationState = createNotificationStateStore();
   const socialState = createSocialStateStore();
   const liveState = createLiveStateStore();
+  const broadcastStateStore = createBroadcastStateStore();
   let groups = groupState.getState().groups;
   let streams = liveState.getState().streams;
   const navigationState = createNavigationStateStore();
@@ -202,21 +204,21 @@
   let mentionSuggestions = messageState.getState().mentionSuggestions;
   let mentionStartIndex = messageState.getState().mentionStartIndex;
   let mentionActiveIndex = messageState.getState().mentionActiveIndex;
-  let broadcastState = "idle";
-  let broadcastError = "";
-  let broadcastTitle = "";
-  let broadcastInvite = "";
-  let broadcastRoomId = "";
-  let broadcastStreamId = "";
-  let broadcastStream = null;
+  let broadcastState = broadcastStateStore.getState().broadcastState;
+  let broadcastError = broadcastStateStore.getState().broadcastError;
+  let broadcastTitle = broadcastStateStore.getState().broadcastTitle;
+  let broadcastInvite = broadcastStateStore.getState().broadcastInvite;
+  let broadcastRoomId = broadcastStateStore.getState().broadcastRoomId;
+  let broadcastStreamId = broadcastStateStore.getState().broadcastStreamId;
+  let broadcastStream = broadcastStateStore.getState().broadcastStream;
   let broadcastMicrophoneStream = null;
   let broadcastDisplayStream = null;
   let broadcastCameraStream = null;
   let broadcastSourceAudioTrack = null;
-  let broadcastCameraDeviceId = "";
-  let broadcastCameraPosition = "bottom-right";
-  let broadcastCameraEnabled = false;
-  let broadcastMicrophoneEnabled = true;
+  let broadcastCameraDeviceId = broadcastStateStore.getState().broadcastCameraDeviceId;
+  let broadcastCameraPosition = broadcastStateStore.getState().broadcastCameraPosition;
+  let broadcastCameraEnabled = broadcastStateStore.getState().broadcastCameraEnabled;
+  let broadcastMicrophoneEnabled = broadcastStateStore.getState().broadcastMicrophoneEnabled;
   let broadcastVideoComposition = null;
   let broadcastSocket = null;
   let broadcastChatMessageIds = new Set();
@@ -225,28 +227,28 @@
   let broadcastChatListElement;
   let broadcastStopPromise = null;
   let broadcastCaptureRecoveryTimer = null;
-  let broadcastSourceType = "screen";
-  let broadcastDisplaySurface = null;
+  let broadcastSourceType = broadcastStateStore.getState().broadcastSourceType;
+  let broadcastDisplaySurface = broadcastStateStore.getState().broadcastDisplaySurface;
   let mediaMode = "p2p";
   let relayRecorder = null;
   let relaySendChain = Promise.resolve();
   let broadcastVideo;
   let broadcastAudioWarning = "";
-  let broadcastVisibility = "private";
-  let showBroadcastVisibilityDialog = false;
-  let showPublicBroadcastSetup = false;
-  let showPublicBroadcastReview = false;
-  let publicBroadcastTitle = "";
-  let publicBroadcastSourceKind = "screen";
-  let publicBroadcastMicrophoneEnabled = false;
-  let publicBroadcastCameraEnabled = false;
-  let publicBroadcastCameraDeviceId = "";
-  let publicBroadcastQuality = "balanced";
-  let publicBroadcastReviewSelection = null;
-  let broadcastSelectedSourceName = "";
-  let broadcastSelectionKind = "screen";
-  let pendingBroadcastContext = null;
-  let pendingBroadcastSourceType = "screen";
+  let broadcastVisibility = broadcastStateStore.getState().broadcastVisibility;
+  let showBroadcastVisibilityDialog = broadcastStateStore.getState().showBroadcastVisibilityDialog;
+  let showPublicBroadcastSetup = broadcastStateStore.getState().showPublicBroadcastSetup;
+  let showPublicBroadcastReview = broadcastStateStore.getState().showPublicBroadcastReview;
+  let publicBroadcastTitle = broadcastStateStore.getState().publicBroadcastTitle;
+  let publicBroadcastSourceKind = broadcastStateStore.getState().publicBroadcastSourceKind;
+  let publicBroadcastMicrophoneEnabled = broadcastStateStore.getState().publicBroadcastMicrophoneEnabled;
+  let publicBroadcastCameraEnabled = broadcastStateStore.getState().publicBroadcastCameraEnabled;
+  let publicBroadcastCameraDeviceId = broadcastStateStore.getState().publicBroadcastCameraDeviceId;
+  let publicBroadcastQuality = broadcastStateStore.getState().publicBroadcastQuality;
+  let publicBroadcastReviewSelection = broadcastStateStore.getState().publicBroadcastReviewSelection;
+  let broadcastSelectedSourceName = broadcastStateStore.getState().broadcastSelectedSourceName;
+  let broadcastSelectionKind = broadcastStateStore.getState().broadcastSelectionKind;
+  let pendingBroadcastContext = broadcastStateStore.getState().pendingBroadcastContext;
+  let pendingBroadcastSourceType = broadcastStateStore.getState().pendingBroadcastSourceType;
   let displaySources = [];
   let showDisplayPicker = false;
   let displaySourceSelection = null;
@@ -381,6 +383,10 @@
     liveState.setState(next);
   }
 
+  function setBroadcastState(next) {
+    broadcastStateStore.setState(next);
+  }
+
   const unsubscribeNavigationState = navigationState.subscribe((next) => {
     view = next.view;
     groupsWorkspaceOpen = next.groupsWorkspaceOpen;
@@ -427,6 +433,37 @@
     liveNotificationScope = next.liveNotificationScope;
     liveNotificationScopes = next.liveNotificationScopes;
     selectedStreams = next.selectedStreams;
+  });
+
+  const unsubscribeBroadcastState = broadcastStateStore.subscribe((next) => {
+    broadcastState = next.broadcastState;
+    broadcastError = next.broadcastError;
+    broadcastTitle = next.broadcastTitle;
+    broadcastInvite = next.broadcastInvite;
+    broadcastRoomId = next.broadcastRoomId;
+    broadcastStreamId = next.broadcastStreamId;
+    broadcastStream = next.broadcastStream;
+    broadcastCameraDeviceId = next.broadcastCameraDeviceId;
+    broadcastCameraPosition = next.broadcastCameraPosition;
+    broadcastCameraEnabled = next.broadcastCameraEnabled;
+    broadcastMicrophoneEnabled = next.broadcastMicrophoneEnabled;
+    broadcastSourceType = next.broadcastSourceType;
+    broadcastDisplaySurface = next.broadcastDisplaySurface;
+    broadcastSelectedSourceName = next.broadcastSelectedSourceName;
+    broadcastSelectionKind = next.broadcastSelectionKind;
+    broadcastVisibility = next.broadcastVisibility;
+    showBroadcastVisibilityDialog = next.showBroadcastVisibilityDialog;
+    showPublicBroadcastSetup = next.showPublicBroadcastSetup;
+    showPublicBroadcastReview = next.showPublicBroadcastReview;
+    publicBroadcastTitle = next.publicBroadcastTitle;
+    publicBroadcastSourceKind = next.publicBroadcastSourceKind;
+    publicBroadcastMicrophoneEnabled = next.publicBroadcastMicrophoneEnabled;
+    publicBroadcastCameraEnabled = next.publicBroadcastCameraEnabled;
+    publicBroadcastCameraDeviceId = next.publicBroadcastCameraDeviceId;
+    publicBroadcastQuality = next.publicBroadcastQuality;
+    publicBroadcastReviewSelection = next.publicBroadcastReviewSelection;
+    pendingBroadcastContext = next.pendingBroadcastContext;
+    pendingBroadcastSourceType = next.pendingBroadcastSourceType;
   });
 
   const unsubscribeMaintenanceState = maintenanceController.subscribe((next) => {
@@ -2034,8 +2071,8 @@
         setState: (next) => {
           if ("broadcastAudioSelection" in next) broadcastAudioSelection = next.broadcastAudioSelection;
           if ("broadcastAudioSources" in next) broadcastAudioSources = next.broadcastAudioSources;
-          if ("broadcastDisplaySurface" in next) broadcastDisplaySurface = next.broadcastDisplaySurface;
-          if ("broadcastSelectedSourceName" in next) broadcastSelectedSourceName = next.broadcastSelectedSourceName;
+          if ("broadcastDisplaySurface" in next) setBroadcastState({ broadcastDisplaySurface: next.broadcastDisplaySurface });
+          if ("broadcastSelectedSourceName" in next) setBroadcastState({ broadcastSelectedSourceName: next.broadcastSelectedSourceName });
           if ("desktopUpdate" in next) desktopUpdate = next.desktopUpdate;
           if ("desktopVersion" in next) desktopVersion = next.desktopVersion;
           if ("displaySourceFilter" in next) displaySourceFilter = next.displaySourceFilter;
@@ -2104,9 +2141,9 @@
         setState: (next) => {
           if ("broadcastChatMessageIds" in next) broadcastChatMessageIds = next.broadcastChatMessageIds;
           if ("broadcastChatMessages" in next) broadcastChatMessages = next.broadcastChatMessages;
-          if ("broadcastError" in next) broadcastError = next.broadcastError;
+          if ("broadcastError" in next) setBroadcastState({ broadcastError: next.broadcastError });
           if ("broadcastSocket" in next) broadcastSocket = next.broadcastSocket;
-          if ("broadcastState" in next) broadcastState = next.broadcastState;
+          if ("broadcastState" in next) setBroadcastState({ broadcastState: next.broadcastState });
           if ("viewerCount" in next) viewerCount = next.viewerCount;
         },
         tick,
@@ -2122,7 +2159,7 @@
   function getBroadcastCompositionController() {
     if (!broadcastCompositionControllerPromise) {
       broadcastCompositionControllerPromise = import("./features/broadcast/composition-controller.js").then(({ createBroadcastCompositionController }) => createBroadcastCompositionController({
-        getState: () => ({ broadcastCameraPosition, broadcastVideoComposition }),
+        getState: () => ({ broadcastCameraPosition: broadcastStateStore.getState().broadcastCameraPosition, broadcastVideoComposition }),
         mixBroadcastAudio,
         reportClientError,
         setState: (next) => {
@@ -4586,7 +4623,7 @@
         profile: qualityProfiles[selectedQuality],
       });
       await replaceBroadcastTracks(fallbackStream);
-      if (broadcastStream === currentStream) broadcastStream = fallbackStream;
+      if (broadcastStream === currentStream) setBroadcastState({ broadcastStream: fallbackStream });
       broadcastAudioWarning = status.status === "ended"
         ? "A captura de áudio da janela foi encerrada. A transmissão de vídeo continua ativa."
         : "A captura de áudio da janela falhou. A transmissão de vídeo continua ativa.";
@@ -4612,34 +4649,32 @@
       openPublicBroadcastSetup();
       return;
     }
-    pendingBroadcastSourceType = sourceType === "camera" ? "camera" : "screen";
+    setBroadcastState({ pendingBroadcastSourceType: sourceType === "camera" ? "camera" : "screen" });
     if (view === "groups" && selectedRoom?.kind === "voice" && selectedGroupId) {
-      broadcastVisibility = "private";
-      pendingBroadcastContext = { groupId: selectedGroupId, voiceRoomId: selectedRoom.id };
-      showBroadcastVisibilityDialog = true;
+      setBroadcastState({ broadcastVisibility: "private", pendingBroadcastContext: { groupId: selectedGroupId, voiceRoomId: selectedRoom.id }, showBroadcastVisibilityDialog: true });
       return;
     }
-    pendingBroadcastContext = null;
-    broadcastSourceType = pendingBroadcastSourceType;
-    broadcastState = "idle";
+    setBroadcastState({ pendingBroadcastContext: null, broadcastSourceType: pendingBroadcastSourceType, broadcastState: "idle" });
     setNavigationState({ view: "broadcast" });
     notice = "Escolha o áudio, a câmera e o microfone. Depois clique em iniciar a transmissão.";
   }
 
   function openPublicBroadcastSetup() {
-    broadcastVisibility = "public";
-    publicBroadcastTitle = broadcastTitle || `Transmissão de ${user?.displayName || user?.username || "usuário"}`;
-    publicBroadcastSourceKind = "screen";
-    publicBroadcastMicrophoneEnabled = false;
-    publicBroadcastCameraEnabled = false;
-    publicBroadcastCameraDeviceId = broadcastCameraDeviceId || "";
-    publicBroadcastQuality = selectedQuality === "high" ? "balanced" : selectedQuality;
-    showPublicBroadcastSetup = true;
+    setBroadcastState({
+      broadcastVisibility: "public",
+      publicBroadcastTitle: broadcastTitle || `Transmissão de ${user?.displayName || user?.username || "usuário"}`,
+      publicBroadcastSourceKind: "screen",
+      publicBroadcastMicrophoneEnabled: false,
+      publicBroadcastCameraEnabled: false,
+      publicBroadcastCameraDeviceId: broadcastCameraDeviceId || "",
+      publicBroadcastQuality: selectedQuality === "high" ? "balanced" : selectedQuality,
+      showPublicBroadcastSetup: true,
+    });
   }
 
   function cancelPublicBroadcastSetup() {
     if (broadcastState === "starting") return;
-    showPublicBroadcastSetup = false;
+    setBroadcastState({ showPublicBroadcastSetup: false });
   }
 
   function publicBroadcastAudioLabel(sourceKind = publicBroadcastSourceKind) {
@@ -4657,44 +4692,45 @@
   async function confirmPublicBroadcastSetup() {
     const title = publicBroadcastTitle.trim();
     if (!title) {
-      broadcastError = "Informe um título para a transmissão.";
+      setBroadcastState({ broadcastError: "Informe um título para a transmissão." });
       return;
     }
-    broadcastError = "";
-    broadcastTitle = title;
+    setBroadcastState({ broadcastError: "", broadcastTitle: title });
     selectedQuality = publicBroadcastQuality;
     audioMode = publicBroadcastSourceKind === "screen" ? "system" : "source";
-    broadcastMicrophoneEnabled = publicBroadcastMicrophoneEnabled;
-    broadcastCameraEnabled = publicBroadcastCameraEnabled;
-    broadcastCameraDeviceId = publicBroadcastCameraEnabled ? publicBroadcastCameraDeviceId : "";
-    broadcastSelectionKind = publicBroadcastSourceKind;
-    showPublicBroadcastSetup = false;
-    pendingBroadcastContext = null;
-    pendingBroadcastSourceType = "screen";
-    broadcastSourceType = "screen";
-    broadcastState = "idle";
+    setBroadcastState({
+      broadcastMicrophoneEnabled: publicBroadcastMicrophoneEnabled,
+      broadcastCameraEnabled: publicBroadcastCameraEnabled,
+      broadcastCameraDeviceId: publicBroadcastCameraEnabled ? publicBroadcastCameraDeviceId : "",
+      broadcastSelectionKind: publicBroadcastSourceKind,
+      showPublicBroadcastSetup: false,
+      pendingBroadcastContext: null,
+      pendingBroadcastSourceType: "screen",
+      broadcastSourceType: "screen",
+      broadcastState: "idle",
+    });
     setNavigationState({ view: "broadcast" });
     notice = `Escolha a fonte de vídeo para ${publicBroadcastSourceLabel(publicBroadcastSourceKind).toLocaleLowerCase()}.`;
     await beginBroadcast({ sourceType: "screen", visibility: "public", title });
   }
 
   function waitForPublicBroadcastReview() {
-    showPublicBroadcastReview = true;
+    setBroadcastState({ showPublicBroadcastReview: true });
     return new Promise((resolve, reject) => {
-      publicBroadcastReviewSelection = { resolve, reject };
+      setBroadcastState({ publicBroadcastReviewSelection: { resolve, reject } });
     });
   }
 
   function confirmPublicBroadcastReview() {
-    showPublicBroadcastReview = false;
+    setBroadcastState({ showPublicBroadcastReview: false });
     publicBroadcastReviewSelection?.resolve(true);
-    publicBroadcastReviewSelection = null;
+    setBroadcastState({ publicBroadcastReviewSelection: null });
   }
 
   function cancelPublicBroadcastReview() {
-    showPublicBroadcastReview = false;
+    setBroadcastState({ showPublicBroadcastReview: false });
     publicBroadcastReviewSelection?.reject(new DOMException("Revisão da transmissão cancelada.", "AbortError"));
-    publicBroadcastReviewSelection = null;
+    setBroadcastState({ publicBroadcastReviewSelection: null });
   }
 
   function broadcastCaptureErrorMessage(error, sourceType = "screen") {
@@ -4777,7 +4813,7 @@
       if (!cameraStream && previousComposition) stopBroadcastVideoComposition();
       if (wasRelay) await stopRelayRecorder();
       await replaceBroadcastTracks(nextStream);
-      broadcastStream = nextStream;
+      setBroadcastState({ broadcastStream: nextStream });
       broadcastSourceAudioTrack = sourceAudioTrack;
       await attachBroadcastPreview();
       if (wasRelay) await startRelayRecorder();
@@ -4795,7 +4831,7 @@
         try { await startRelayRecorder(); } catch (relayError) { reportClientError("broadcast_relay_restart_error", relayError, { mediaMode }); }
       }
       nextStream?.getTracks?.().forEach((track) => track.stop());
-      broadcastError = error.message || "Não foi possível atualizar os dispositivos da transmissão.";
+      setBroadcastState({ broadcastError: error.message || "Não foi possível atualizar os dispositivos da transmissão." });
       reportClientError("broadcast_media_switch_error", error, { camera: Boolean(cameraStream), microphone: Boolean(microphoneStream) });
       return false;
     } finally {
@@ -4807,11 +4843,10 @@
     const requestedDeviceId = String(event.currentTarget?.value || "");
     const previousCameraDeviceId = broadcastCameraDeviceId;
     const previousCameraEnabled = broadcastCameraEnabled;
-    broadcastCameraDeviceId = requestedDeviceId;
-    if (!requestedDeviceId && broadcastSourceType === "screen") broadcastCameraEnabled = false;
+    setBroadcastState({ broadcastCameraDeviceId: requestedDeviceId, ...(!requestedDeviceId && broadcastSourceType === "screen" ? { broadcastCameraEnabled: false } : {}) });
     if (broadcastState !== "live") return;
     if (broadcastSourceType === "camera" && !requestedDeviceId) {
-      broadcastError = "A transmissão por câmera precisa manter uma câmera selecionada.";
+      setBroadcastState({ broadcastError: "A transmissão por câmera precisa manter uma câmera selecionada." });
       return;
     }
     if (broadcastSourceType === "screen" && !broadcastCameraEnabled && requestedDeviceId) {
@@ -4825,7 +4860,7 @@
       const applied = await rebuildBroadcastOutput({ cameraStream: nextCameraStream });
       if (!applied) {
         if (nextCameraStream) nextCameraStream.getTracks().forEach((track) => track.stop());
-        broadcastCameraEnabled = previousCameraEnabled;
+        setBroadcastState({ broadcastCameraEnabled: previousCameraEnabled });
         return;
       }
       broadcastCameraStream = nextCameraStream;
@@ -4833,9 +4868,7 @@
       notice = requestedDeviceId ? "Câmera trocada sem interromper a live." : "Câmera removida sem interromper a live.";
     } catch (error) {
       nextCameraStream?.getTracks?.().forEach((track) => track.stop());
-      broadcastCameraDeviceId = previousCameraDeviceId;
-      broadcastCameraEnabled = previousCameraEnabled;
-      broadcastError = error.message || "Não foi possível trocar a câmera.";
+      setBroadcastState({ broadcastCameraDeviceId: previousCameraDeviceId, broadcastCameraEnabled: previousCameraEnabled, broadcastError: error.message || "Não foi possível trocar a câmera." });
       reportClientError("broadcast_camera_switch_error", error, { deviceId: requestedDeviceId });
     }
   }
@@ -4844,14 +4877,14 @@
     const requestedEnabled = Boolean(event.currentTarget?.checked);
     const previousEnabled = broadcastCameraEnabled;
     const previousCameraStream = broadcastCameraStream;
-    broadcastCameraEnabled = requestedEnabled;
+    setBroadcastState({ broadcastCameraEnabled: requestedEnabled });
     if (broadcastState !== "live") return;
     let nextCameraStream = null;
     try {
       if (requestedEnabled) nextCameraStream = await captureBroadcastCameraStream(qualityProfiles[selectedQuality]);
       const applied = await rebuildBroadcastOutput({ cameraStream: nextCameraStream });
       if (!applied) {
-        broadcastCameraEnabled = previousEnabled;
+        setBroadcastState({ broadcastCameraEnabled: previousEnabled });
         nextCameraStream?.getTracks?.().forEach((track) => track.stop());
         return;
       }
@@ -4859,9 +4892,9 @@
       previousCameraStream?.getTracks?.().forEach((track) => track.stop());
       notice = requestedEnabled ? "Câmera incluída na transmissão." : "Câmera removida da transmissão.";
     } catch (error) {
-      broadcastCameraEnabled = previousEnabled;
+      setBroadcastState({ broadcastCameraEnabled: previousEnabled });
       nextCameraStream?.getTracks?.().forEach((track) => track.stop());
-      broadcastError = error.message || "Não foi possível atualizar a câmera.";
+      setBroadcastState({ broadcastError: error.message || "Não foi possível atualizar a câmera." });
       reportClientError("broadcast_camera_toggle_error", error, { enabled: requestedEnabled, deviceId: broadcastCameraDeviceId });
     }
   }
@@ -4871,11 +4904,11 @@
     const requestedPosition = String(event.currentTarget?.value || "bottom-right");
     if (!positions.has(requestedPosition)) return;
     const previousPosition = broadcastCameraPosition;
-    broadcastCameraPosition = requestedPosition;
+    setBroadcastState({ broadcastCameraPosition: requestedPosition });
     if (broadcastState !== "live" || broadcastSourceType !== "screen" || !broadcastCameraStream) return;
     const applied = await rebuildBroadcastOutput({ cameraPosition: requestedPosition });
     if (!applied) {
-      broadcastCameraPosition = previousPosition;
+      setBroadcastState({ broadcastCameraPosition: previousPosition });
       return;
     }
     notice = "Posição da câmera atualizada sem interromper a live.";
@@ -4883,7 +4916,7 @@
 
   async function handleBroadcastMicrophoneChange(event) {
     if (event.currentTarget?.classList?.contains("broadcast-microphone-enabled")) {
-      broadcastMicrophoneEnabled = Boolean(event.currentTarget.checked);
+      setBroadcastState({ broadcastMicrophoneEnabled: Boolean(event.currentTarget.checked) });
     } else {
       selectedInputDeviceId = String(event.currentTarget?.value || "");
     }
@@ -4905,8 +4938,7 @@
     } catch (error) {
       nextMicrophoneStream && stopVoiceInputStream(nextMicrophoneStream);
       broadcastMicrophoneStream = previousMicrophoneStream;
-      broadcastMicrophoneEnabled = Boolean(previousMicrophoneStream);
-      broadcastError = error.message || "Não foi possível trocar o microfone.";
+      setBroadcastState({ broadcastMicrophoneEnabled: Boolean(previousMicrophoneStream), broadcastError: error.message || "Não foi possível trocar o microfone." });
       reportClientError("broadcast_microphone_switch_error", error, { requestedDeviceId: selectedInputDeviceId });
     }
   }
@@ -4977,7 +5009,7 @@
       return applied;
     } catch (error) {
       reportClientError("broadcast_audio_switch_error", error, { audioMode });
-      broadcastError = error.message || "Não foi possível trocar o áudio da transmissão.";
+      setBroadcastState({ broadcastError: error.message || "Não foi possível trocar o áudio da transmissão." });
       return false;
     }
   }
@@ -4985,7 +5017,7 @@
   async function switchBroadcastSource() {
     if (broadcastState !== "live" || broadcastSourceType !== "screen" || broadcastSourceSwitching) return;
     broadcastSourceSwitching = true;
-    broadcastError = "";
+    setBroadcastState({ broadcastError: "" });
     broadcastAudioWarning = "";
     const previousStream = broadcastStream;
     const previousDisplayStream = broadcastDisplayStream;
@@ -5002,9 +5034,9 @@
       if (!nextVideoTrack) throw new Error("A nova fonte não forneceu vídeo.");
       const displaySurface = nextVideoTrack.getSettings?.().displaySurface;
       if (displaySurface === "monitor" || displaySurface === "screen") {
-        broadcastDisplaySurface = "screen";
+        setBroadcastState({ broadcastDisplaySurface: "screen" });
       } else if (displaySurface) {
-        broadcastDisplaySurface = "window";
+        setBroadcastState({ broadcastDisplaySurface: "window" });
       }
       const nextProcessId = selectedDisplayProcessId;
       let sourceAudioTrack = audioMode === "none" ? null : capturedStream.getAudioTracks()[0] || null;
@@ -5057,7 +5089,7 @@
       });
       if (wasRelay) await stopRelayRecorder();
       await replaceBroadcastTracks(nextStream);
-      broadcastStream = nextStream;
+      setBroadcastState({ broadcastStream: nextStream });
       broadcastDisplayStream = capturedStream;
       broadcastSourceAudioTrack = sourceAudioTrack;
       activeDisplayProcessId = nextProcessId;
@@ -5089,7 +5121,7 @@
             profile: qualityProfiles[selectedQuality],
           });
           await replaceBroadcastTracks(restoredStream);
-          broadcastStream = restoredStream;
+          setBroadcastState({ broadcastStream: restoredStream });
           broadcastDisplayStream = previousDisplayStream;
           broadcastSourceAudioTrack = restoredSourceAudioTrack;
           broadcastCameraStream = previousCameraStream;
@@ -5097,10 +5129,10 @@
           await attachBroadcastPreview();
           if (wasRelay) await startRelayRecorder();
         } catch (restoreError) {
-          broadcastError = restoreError.message || "Não foi possível restaurar a transmissão anterior.";
+          setBroadcastState({ broadcastError: restoreError.message || "Não foi possível restaurar a transmissão anterior." });
         }
       }
-      if (error.name !== "NotAllowedError") broadcastError = error.message || "Não foi possível trocar a fonte da transmissão.";
+      if (error.name !== "NotAllowedError") setBroadcastState({ broadcastError: error.message || "Não foi possível trocar a fonte da transmissão." });
       return false;
     } finally {
       showDisplayPicker = false;
@@ -5111,18 +5143,14 @@
   }
 
   function cancelBroadcastVisibility() {
-    showBroadcastVisibilityDialog = false;
-    pendingBroadcastContext = null;
+    setBroadcastState({ showBroadcastVisibilityDialog: false, pendingBroadcastContext: null });
   }
 
   function confirmBroadcastVisibility() {
     const context = pendingBroadcastContext || {};
     const sourceType = pendingBroadcastSourceType;
     const nextContext = { ...context, visibility: broadcastVisibility };
-    showBroadcastVisibilityDialog = false;
-    pendingBroadcastContext = nextContext;
-    broadcastSourceType = sourceType;
-    broadcastState = "idle";
+    setBroadcastState({ showBroadcastVisibilityDialog: false, pendingBroadcastContext: nextContext, broadcastSourceType: sourceType, broadcastState: "idle" });
     setNavigationState({ view: "broadcast" });
     notice = "Escolha uma tela, janela ou aplicativo para iniciar a transmissão.";
     void tick().then(() => beginBroadcast({ sourceType, ...nextContext }));
@@ -5141,18 +5169,16 @@
       return;
     }
     const visibility = options.visibility === "private" ? "private" : "public";
-    if (options.title) broadcastTitle = String(options.title).trim().slice(0, 120);
+    if (options.title) setBroadcastState({ broadcastTitle: String(options.title).trim().slice(0, 120) });
     const groupId = visibility === "private" ? options.groupId || null : null;
     const voiceRoomId = visibility === "private" ? options.voiceRoomId || null : null;
     const sourceType = options.sourceType === "camera" ? "camera" : "screen";
-    pendingBroadcastContext = null;
-    broadcastError = "";
+    setBroadcastState({ pendingBroadcastContext: null, broadcastError: "" });
     broadcastAudioWarning = "";
     broadcastChatMessages = [];
     broadcastChatMessageIds = new Set();
     broadcastChatDraft = "";
-    broadcastSourceType = sourceType;
-    broadcastDisplaySurface = null;
+    setBroadcastState({ broadcastSourceType: sourceType, broadcastDisplaySurface: null });
     selectedDisplayProcessId = null;
     broadcastDisplayStream = null;
     broadcastCameraStream = null;
@@ -5160,7 +5186,7 @@
     broadcastAudioProcessId = null;
     broadcastAudioSourceName = "";
     broadcastMicrophoneStream = null;
-    broadcastState = "starting";
+    setBroadcastState({ broadcastState: "starting" });
     setNavigationState({ view: "broadcast" });
     try {
       if (!window.isSecureContext && !["localhost", "127.0.0.1"].includes(window.location.hostname)) throw new Error("A captura de tela exige HTTPS ou localhost.");
@@ -5171,8 +5197,8 @@
       } else {
         broadcastDisplayStream = await captureDisplayStream(profile);
         const displaySurface = broadcastDisplayStream.getVideoTracks?.()[0]?.getSettings?.().displaySurface;
-        if (displaySurface === "monitor" || displaySurface === "screen") broadcastDisplaySurface = "screen";
-        else if (displaySurface) broadcastDisplaySurface = "window";
+        if (displaySurface === "monitor" || displaySurface === "screen") setBroadcastState({ broadcastDisplaySurface: "screen" });
+        else if (displaySurface) setBroadcastState({ broadcastDisplaySurface: "window" });
         const capturedAudioTracks = broadcastDisplayStream.getAudioTracks();
         sourceAudioTrack = audioMode === "none" ? null : capturedAudioTracks[0] || null;
         if (audioMode === "system" && window.miranteDesktop?.isDesktop) {
@@ -5230,7 +5256,7 @@
         throw new Error(broadcastMissingAudioMessage());
       }
       if (visibility === "public" && sourceType === "screen") await waitForPublicBroadcastReview();
-      broadcastCameraEnabled = sourceType === "camera" || Boolean(broadcastCameraEnabled);
+      setBroadcastState({ broadcastCameraEnabled: sourceType === "camera" || Boolean(broadcastCameraEnabled) });
       if (sourceType === "screen" && broadcastCameraEnabled) {
         try {
           broadcastCameraStream = await captureBroadcastCameraStream(profile);
@@ -5248,15 +5274,16 @@
           reportClientError("broadcast_microphone_capture_error", error, { requestedDeviceId: selectedInputDeviceId });
         }
       }
-      broadcastStream = await buildBroadcastOutputStream({
+      const nextBroadcastStream = await buildBroadcastOutputStream({
         displayStream: broadcastDisplayStream,
         cameraStream: broadcastCameraStream,
         sourceAudioTrack,
         microphoneStream: broadcastMicrophoneStream,
         profile,
       });
+      setBroadcastState({ broadcastStream: nextBroadcastStream });
       broadcastSourceAudioTrack = sourceAudioTrack;
-      const videoTrack = broadcastStream.getVideoTracks()[0];
+      const videoTrack = nextBroadcastStream.getVideoTracks()[0];
       if (!videoTrack) throw new Error("A fonte escolhida não forneceu vídeo.");
       activeDisplayProcessId = selectedDisplayProcessId;
       broadcastDisplayStream?.getVideoTracks?.()[0]?.addEventListener("ended", () => { handleBroadcastVideoTrackEnded(broadcastDisplayStream?.getVideoTracks?.()[0]); }, { once: true });
@@ -5265,13 +5292,15 @@
       videoTrack?.addEventListener("ended", () => { handleBroadcastVideoTrackEnded(videoTrack); }, { once: true });
       const roomId = randomRoom();
       const streamResult = await api("/api/streams", { method: "POST", body: JSON.stringify({ roomName: roomId, title: broadcastTitle, visibility, groupId, voiceRoomId }) });
-      broadcastRoomId = roomId;
-      broadcastStreamId = streamResult.stream.id;
-      broadcastInvite = `${window.location.origin}${streamResult.stream.publicPath || `/?room=${roomId}&mode=viewer`}`;
+      setBroadcastState({
+        broadcastRoomId: roomId,
+        broadcastStreamId: streamResult.stream.id,
+        broadcastInvite: `${window.location.origin}${streamResult.stream.publicPath || `/?room=${roomId}&mode=viewer`}`,
+      });
       await connectBroadcastSocket();
       sendBroadcast({ type: "join", role: "host", roomId });
       if (mediaMode === "relay") await startRelayRecorder();
-      broadcastState = "live";
+      setBroadcastState({ broadcastState: "live" });
       await attachBroadcastPreview();
       await loadStreams();
       if (visibility === "private" && groupId) {
@@ -5282,8 +5311,7 @@
       reportClientError("broadcast_start_error", error, { sourceType, visibility, mediaMode });
       const canceled = ["NotAllowedError", "AbortError"].includes(error?.name);
       await stopRelayRecorder();
-      broadcastError = canceled ? "" : broadcastCaptureErrorMessage(error, sourceType);
-      broadcastState = canceled ? "idle" : "error";
+      setBroadcastState({ broadcastError: canceled ? "" : broadcastCaptureErrorMessage(error, sourceType), broadcastState: canceled ? "idle" : "error" });
       if (canceled) {
         notice = sourceType === "camera"
           ? "Acesso à câmera cancelado. Quando quiser, tente iniciar a transmissão novamente."
@@ -5302,20 +5330,20 @@
       broadcastCameraStream?.getTracks?.().forEach((track) => track.stop());
       broadcastDisplayStream = null;
       broadcastCameraStream = null;
-      broadcastCameraEnabled = false;
+      setBroadcastState({ broadcastCameraEnabled: false });
       broadcastSourceAudioTrack = null;
-      broadcastDisplaySurface = null;
+      setBroadcastState({ broadcastDisplaySurface: null });
       broadcastStream?.getTracks().forEach((track) => track.stop());
-      broadcastStream = null;
+      setBroadcastState({ broadcastStream: null });
       broadcastAudioWarning = "";
       if (broadcastStreamId) {
         const failedStreamId = broadcastStreamId;
         try {
           await api(`/api/streams/${failedStreamId}/end`, { method: "POST" });
-          broadcastStreamId = "";
+          setBroadcastState({ broadcastStreamId: "" });
         } catch (cleanupError) {
           reportClientError("broadcast_start_cleanup_error", cleanupError, { streamId: failedStreamId, mediaMode });
-          broadcastError = `${broadcastError || "A transmissão falhou."} O servidor ainda não confirmou o encerramento; tente confirmar novamente.`;
+          setBroadcastState({ broadcastError: `${broadcastError || "A transmissão falhou."} O servidor ainda não confirmou o encerramento; tente confirmar novamente.` });
         }
       }
       broadcastSocket?.close();
@@ -5328,7 +5356,7 @@
     const endingStreamId = broadcastStreamId;
     clearBroadcastCaptureRecoveryTimer();
     const stopPromise = (async () => {
-      broadcastState = "stopping";
+      setBroadcastState({ broadcastState: "stopping" });
 
       try { await stopRelayRecorder(); } catch (error) { console.warn("Falha ao parar o gravador da live:", error); }
       try { sendBroadcast({ type: "stop", reason }); sendBroadcast({ type: "leave" }); } catch (error) { console.warn("Falha ao avisar o encerramento da live:", error); }
@@ -5350,7 +5378,7 @@
 
       try { await stopWindowAudioBridge(); } catch (error) { console.warn("Falha ao parar o áudio da janela:", error); }
       const stream = broadcastStream;
-      broadcastStream = null;
+      setBroadcastState({ broadcastStream: null });
       if (broadcastVideo) broadcastVideo.srcObject = null;
       try { stream?.getTracks().forEach((track) => track.stop()); } catch (error) { console.warn("Falha ao liberar a captura da live:", error); }
       stopVoiceInputStream(broadcastMicrophoneStream);
@@ -5361,7 +5389,7 @@
       try { broadcastCameraStream?.getTracks?.().forEach((track) => track.stop()); } catch {}
       broadcastDisplayStream = null;
       broadcastCameraStream = null;
-      broadcastCameraEnabled = false;
+      setBroadcastState({ broadcastCameraEnabled: false });
       broadcastSourceAudioTrack = null;
       let endConfirmed = !endingStreamId;
       if (endingStreamId) {
@@ -5371,32 +5399,26 @@
         } catch (error) {
           endConfirmed = false;
           reportClientError("broadcast_end_confirmation_error", error, { streamId: endingStreamId, mediaMode });
-          broadcastError = "A captura local foi encerrada, mas o servidor não confirmou o fim da live. Tente confirmar novamente.";
+          setBroadcastState({ broadcastError: "A captura local foi encerrada, mas o servidor não confirmou o fim da live. Tente confirmar novamente." });
         }
       }
 
-      broadcastStreamId = endConfirmed ? "" : endingStreamId;
-      broadcastRoomId = "";
-      broadcastInvite = "";
+      setBroadcastState({ broadcastStreamId: endConfirmed ? "" : endingStreamId, broadcastRoomId: "", broadcastInvite: "" });
       viewerCount = 0;
       broadcastChatMessages = [];
       broadcastChatMessageIds = new Set();
       broadcastChatDraft = "";
-      broadcastSourceType = "screen";
-      broadcastDisplaySurface = null;
-      broadcastSelectedSourceName = "";
-      broadcastSelectionKind = "screen";
+      setBroadcastState({ broadcastSourceType: "screen", broadcastDisplaySurface: null, broadcastSelectedSourceName: "", broadcastSelectionKind: "screen" });
       activeDisplayProcessId = null;
       broadcastSourceSwitching = false;
       broadcastMediaSwitching = false;
-      broadcastState = endConfirmed ? "idle" : "error";
+      setBroadcastState({ broadcastState: endConfirmed ? "idle" : "error" });
       await loadStreams().catch((error) => console.warn("Falha ao atualizar as lives depois do encerramento:", error));
       if (selectedGroupId) await refreshGroupOverview().catch((error) => console.warn("Falha ao atualizar o grupo depois do encerramento:", error));
     })().catch((error) => {
       reportClientError("broadcast_stop_error", error, { streamId: endingStreamId, mediaMode });
       console.error("Erro inesperado ao encerrar a live:", error);
-      broadcastState = endingStreamId ? "error" : "idle";
-      broadcastError = endingStreamId ? "Não foi possível confirmar o encerramento da transmissão. Tente novamente." : "";
+      setBroadcastState({ broadcastState: endingStreamId ? "error" : "idle", broadcastError: endingStreamId ? "Não foi possível confirmar o encerramento da transmissão. Tente novamente." : "" });
       notice = endingStreamId ? "A live precisa de confirmação do servidor." : "A transmissão foi encerrada.";
     });
     broadcastStopPromise = stopPromise;
@@ -5424,7 +5446,7 @@
   async function returnToBroadcast() {
     setNavigationState({ view: "broadcast" });
     if (hasLiveBroadcastCapture()) {
-      broadcastState = "live";
+      setBroadcastState({ broadcastState: "live" });
       await attachBroadcastPreview();
       return;
     }
@@ -5432,15 +5454,16 @@
     const ownStream = streams.find((stream) => stream.channelUsername === user?.username)
       || groupOverview?.streams?.find((stream) => stream.channelUsername === user?.username);
     if (ownStream) {
-      broadcastStreamId = ownStream.id;
-      broadcastRoomId = ownStream.roomName || "";
-      broadcastTitle = ownStream.title || broadcastTitle;
-      broadcastInvite = `${window.location.origin}${ownStream.publicPath || ""}`;
-      broadcastState = "error";
-      broadcastError = "A live ainda aparece ativa, mas a captura local foi perdida. Você pode encerrá-la aqui ou iniciar uma nova captura.";
+      setBroadcastState({
+        broadcastStreamId: ownStream.id,
+        broadcastRoomId: ownStream.roomName || "",
+        broadcastTitle: ownStream.title || broadcastTitle,
+        broadcastInvite: `${window.location.origin}${ownStream.publicPath || ""}`,
+        broadcastState: "error",
+        broadcastError: "A live ainda aparece ativa, mas a captura local foi perdida. Você pode encerrá-la aqui ou iniciar uma nova captura.",
+      });
     } else {
-      broadcastState = "idle";
-      broadcastError = "";
+      setBroadcastState({ broadcastState: "idle", broadcastError: "" });
     }
   }
 
@@ -5655,6 +5678,7 @@
     unsubscribeVisualState();
     unsubscribeViewerState();
     unsubscribeLiveState();
+    unsubscribeBroadcastState();
     unsubscribeMaintenanceState();
     unsubscribeNotificationState();
     unsubscribeSocialState();
@@ -6414,19 +6438,19 @@
       {broadcastAudioSourceCandidates}
       {publicBroadcastAudioLabel}
       {publicBroadcastSourceLabel}
-      onPublicBroadcastTitleChange={(value) => publicBroadcastTitle = value}
-      onPublicBroadcastSourceKindChange={(value) => publicBroadcastSourceKind = value}
-      onPublicBroadcastMicrophoneChange={(value) => publicBroadcastMicrophoneEnabled = value}
-      onPublicBroadcastCameraChange={(value) => publicBroadcastCameraEnabled = value}
-      onPublicBroadcastCameraDeviceChange={(value) => publicBroadcastCameraDeviceId = value}
-      onPublicBroadcastQualityChange={(value) => publicBroadcastQuality = value}
+      onPublicBroadcastTitleChange={(value) => setBroadcastState({ publicBroadcastTitle: value })}
+      onPublicBroadcastSourceKindChange={(value) => setBroadcastState({ publicBroadcastSourceKind: value })}
+      onPublicBroadcastMicrophoneChange={(value) => setBroadcastState({ publicBroadcastMicrophoneEnabled: value })}
+      onPublicBroadcastCameraChange={(value) => setBroadcastState({ publicBroadcastCameraEnabled: value })}
+      onPublicBroadcastCameraDeviceChange={(value) => setBroadcastState({ publicBroadcastCameraDeviceId: value })}
+      onPublicBroadcastQualityChange={(value) => setBroadcastState({ publicBroadcastQuality: value })}
       onSelectedInputDeviceChange={(value) => selectedInputDeviceId = value}
       onCancelPublicBroadcastSetup={cancelPublicBroadcastSetup}
       onConfirmPublicBroadcastSetup={confirmPublicBroadcastSetup}
       onCancelPublicBroadcastReview={cancelPublicBroadcastReview}
       onConfirmPublicBroadcastReview={confirmPublicBroadcastReview}
       onCancelBroadcastVisibility={cancelBroadcastVisibility}
-      onBroadcastVisibilityChange={(value) => broadcastVisibility = value}
+      onBroadcastVisibilityChange={(value) => setBroadcastState({ broadcastVisibility: value })}
       onConfirmBroadcastVisibility={confirmBroadcastVisibility}
       onCancelDisplayPicker={cancelDisplayPicker}
       onDisplaySourceFilterChange={(value) => displaySourceFilter = value}
