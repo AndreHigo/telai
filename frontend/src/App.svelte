@@ -230,8 +230,6 @@
   let broadcastSourceType = broadcastStateStore.getState().broadcastSourceType;
   let broadcastDisplaySurface = broadcastStateStore.getState().broadcastDisplaySurface;
   let mediaMode = "p2p";
-  let relayRecorder = null;
-  let relaySendChain = Promise.resolve();
   let broadcastVideo;
   let broadcastAudioWarning = "";
   let broadcastVisibility = broadcastStateStore.getState().broadcastVisibility;
@@ -2154,6 +2152,23 @@
   function clearBroadcastPeerRetry(...args) { void getBroadcastTransportController().then((controller) => controller.clearBroadcastPeerRetry(...args)); }
   async function negotiateBroadcastPeer(...args) { return (await getBroadcastTransportController()).negotiateBroadcastPeer(...args); }
   async function connectBroadcastSocket(...args) { return (await getBroadcastTransportController()).connectBroadcastSocket(...args); }
+
+  let broadcastRelayControllerPromise = null;
+  function getBroadcastRelayController() {
+    if (!broadcastRelayControllerPromise) {
+      broadcastRelayControllerPromise = import("./features/broadcast/relay-controller.js").then(({ createBroadcastRelayController }) => createBroadcastRelayController({
+        getState: () => ({ broadcastSocket, broadcastStream, selectedQuality }),
+        qualityProfiles,
+        reportClientError,
+        sendBroadcast,
+        setWarning: (message) => { broadcastAudioWarning = message; },
+      }));
+    }
+    return broadcastRelayControllerPromise;
+  }
+  async function startRelayRecorder(...args) { return (await getBroadcastRelayController()).start(...args); }
+  async function stopRelayRecorder(...args) { return (await getBroadcastRelayController()).stop(...args); }
+  async function isRelayRecorderActive(...args) { return (await getBroadcastRelayController()).isRecording(...args); }
 
   let broadcastCompositionControllerPromise = null;
   function getBroadcastCompositionController() {
@@ -4543,44 +4558,6 @@
     return groupLiveStreams.find((stream) => stream.visibility === "private" && stream.voiceRoomId === roomId && stream.createdBy === participant.userId) || null;
   }
 
-  function relayMimeForStream(stream) {
-    const candidates = stream?.getAudioTracks().length
-      ? ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp8"]
-      : ["video/webm;codecs=vp8", "video/webm;codecs=vp8,opus"];
-    return candidates.find((mimeType) => window.MediaRecorder?.isTypeSupported(mimeType)) || "";
-  }
-
-  async function stopRelayRecorder() {
-    const recorder = relayRecorder;
-    relayRecorder = null;
-    if (!recorder || recorder.state === "inactive") return;
-    await new Promise((resolve) => {
-      recorder.addEventListener("stop", resolve, { once: true });
-      try { recorder.stop(); } catch { resolve(); }
-    });
-  }
-
-  async function startRelayRecorder() {
-    const mimeType = relayMimeForStream(broadcastStream);
-    if (!mimeType) throw new Error("Este navegador não suporta o formato relay WebM VP8.");
-    const profile = qualityProfiles[selectedQuality];
-    let recorder;
-    try {
-      recorder = new MediaRecorder(broadcastStream, { mimeType, videoBitsPerSecond: profile.maxBitrate, audioBitsPerSecond: 128_000 });
-    } catch (caught) { throw new Error(caught.message || "Não foi possível iniciar a transmissão relay."); }
-    relayRecorder = recorder;
-    relaySendChain = Promise.resolve();
-    recorder.addEventListener("dataavailable", (event) => {
-      if (!event.data?.size || recorder !== relayRecorder || broadcastSocket?.readyState !== WebSocket.OPEN) return;
-      relaySendChain = relaySendChain.then(async () => {
-        if (recorder !== relayRecorder || broadcastSocket.bufferedAmount > 768 * 1024) return;
-        broadcastSocket.send(await event.data.arrayBuffer());
-      }).catch(() => { if (recorder === relayRecorder) broadcastAudioWarning = "Não foi possível enviar a transmissão relay."; });
-    });
-    recorder.start(200);
-    sendBroadcast({ type: "relay-start", mimeType });
-  }
-
   async function attachBroadcastPreview() {
     await tick();
     if (!broadcastVideo || !broadcastStream) return;
@@ -4796,7 +4773,7 @@
     if (broadcastState !== "live" || broadcastMediaSwitching) return false;
     const previousStream = broadcastStream;
     const previousComposition = broadcastVideoComposition;
-    const wasRelay = mediaMode === "relay" && relayRecorder?.state === "recording";
+    const wasRelay = mediaMode === "relay" && await isRelayRecorderActive();
     let nextStream = null;
     broadcastMediaSwitching = true;
     try {
@@ -4827,7 +4804,7 @@
       });
       return true;
     } catch (error) {
-      if (wasRelay && !relayRecorder && broadcastStream) {
+      if (wasRelay && !(await isRelayRecorderActive()) && broadcastStream) {
         try { await startRelayRecorder(); } catch (relayError) { reportClientError("broadcast_relay_restart_error", relayError, { mediaMode }); }
       }
       nextStream?.getTracks?.().forEach((track) => track.stop());
@@ -5024,7 +5001,7 @@
     const previousCameraStream = broadcastCameraStream;
     const previousProcessId = activeDisplayProcessId;
     const previousAudioMode = audioMode;
-    const wasRelay = mediaMode === "relay" && relayRecorder?.state === "recording";
+    const wasRelay = mediaMode === "relay" && await isRelayRecorderActive();
     let capturedStream = null;
     let nextStream = null;
     try {

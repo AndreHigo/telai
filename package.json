@@ -31,6 +31,7 @@
     "test:release-notes": "node qa/test-release-notes-controller.mjs",
     "test:broadcast-audio-bridge": "node qa/test-broadcast-audio-bridge.mjs",
     "test:broadcast-audio-mixer": "node qa/test-broadcast-audio-mixer.mjs",
+    "test:broadcast-relay-controller": "node qa/test-broadcast-relay-controller.mjs",
     "test:broadcast-capture": "node qa/test-broadcast-capture-controller.mjs",
     "test:broadcast-track": "node qa/test-broadcast-track-controller.mjs",
     "test:broadcast-state": "node qa/test-broadcast-state.mjs",
