@@ -731,7 +731,9 @@ async function main() {
       height: 800,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, partition: "qa-viewer" },
     });
-    await viewerWindow.loadURL(cameraResult.invite);
+    const benchmarkViewerUrl = new URL(cameraResult.invite);
+    benchmarkViewerUrl.searchParams.set("qaStats", "1");
+    await viewerWindow.loadURL(benchmarkViewerUrl.href);
     const viewerResult = await waitFor("recepção da mídia no espectador", () => evaluate(viewerWindow, () => ({
       title: document.title,
       hasViewerVideo: Boolean(document.querySelector("video")),
@@ -739,6 +741,9 @@ async function main() {
       hasLiveTrack: Boolean(document.querySelector("video")?.srcObject?.getVideoTracks().some((track) => track.readyState === "live")),
       body: document.body.innerText.slice(0, 240),
     })).then((result) => result.videoReady && result.hasLiveTrack ? result : false));
+    const viewerQualityFirst = await waitFor("primeira amostra RTC do espectador", () => evaluate(viewerWindow, async () => window.__telaiQaCollectMediaStats?.()).then((result) => result?.peerCount ? result : false));
+    await sleep(1_000);
+    const viewerQualitySecond = await waitFor("segunda amostra RTC do espectador", () => evaluate(viewerWindow, async () => window.__telaiQaCollectMediaStats?.()).then((result) => result?.peerCount ? result : false));
 
     multistreamWindow = new BrowserWindow({
       show: false,
@@ -840,7 +845,7 @@ async function main() {
       realCapture: { camera: realCamera, screen: realScreen, window: realWindow, legacyScreen: realLegacyScreen },
       display: { calls: displayResult.calls.filter((call) => call.type === "display"), previewHasLiveVideo: displayResult.previewHasLiveVideo, sourceSwitch: displaySwitchResult },
       camera: { calls: cameraResult.calls.filter((call) => call.type === "camera"), previewHasLiveVideo: cameraResult.previewHasLiveVideo },
-      viewer: { ...viewerResult, chatLayout: viewerChatLayout, chatCollapsed: viewerChatCollapsed },
+      viewer: { ...viewerResult, chatLayout: viewerChatLayout, chatCollapsed: viewerChatCollapsed, rtcQuality: { first: viewerQualityFirst, second: viewerQualitySecond } },
       multistream: { frameCount: multistreamResult.length, allFramesReady: true },
       broadcasterChat: { layout: hostChatLayout, messageReceived: true },
     }));

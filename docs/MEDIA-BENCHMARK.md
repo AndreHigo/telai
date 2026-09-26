@@ -23,9 +23,21 @@ npm run test:media
 npm run test:voice-reconnect
 ```
 
+`npm run test:media` também coleta duas amostras RTC do espectador no fluxo de
+transmissão pública. A coleta é ativada somente pelo parâmetro interno
+`qaStats=1` usado pelo harness e não cria telemetria adicional para usuários
+normais.
+
+Na última execução local, o segundo sample do viewer sintético registrou RTT de
+1 ms, jitter de 0 ms, perda de 0 pacotes, 2 streams de mídia e aproximadamente
+91,81 kbps recebidos. Isso confirma que a medição funciona; não é uma meta de
+produção nem uma medição da VPS.
+
 ## O que ainda não está medido
 
-A suíte atual confirma fluxo e regressão, mas ainda não é um teste de capacidade. Antes de trocar P2P por SFU, o benchmark deve registrar, por cenário:
+A suíte atual confirma fluxo e regressão e agora coleta métricas de um viewer,
+mas ainda não é um teste de capacidade. Antes de trocar P2P por SFU, o
+benchmark deve registrar, por cenário:
 
 - CPU e memória do servidor e do Electron;
 - RTT, jitter, perda de pacotes e bitrate por peer;

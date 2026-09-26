@@ -71,6 +71,7 @@
   // sendo aceito, mas a detecção do frame evita que uma rota amigável, cache ou
   // proxy remova `embed=1` e mostre o cabeçalho dentro da transmissão.
   const viewerLocation = typeof window !== "undefined" ? new URL(window.location.href) : null;
+  const qaStatsEnabled = viewerLocation?.searchParams.get("qaStats") === "1";
   let compact = Boolean(viewerLocation && (
     viewerLocation.searchParams.get("embed") === "1"
     || window.parent !== window
@@ -110,6 +111,7 @@
   let viewerSessionId = "";
   let viewerStartedAt = Date.now();
   let firstVideoFrameReported = false;
+  let qaStatsSnapshotsByPeer = new Map();
 
   $: fullscreenActive = nativeFullscreen || parentFullscreen || desktopWindowFullscreen;
 
@@ -382,6 +384,28 @@
     peerConnections.get(targetId)?.close();
     peerConnections.delete(targetId);
     pendingCandidates.delete(targetId);
+  }
+
+  async function collectQaMediaStats() {
+    if (!qaStatsEnabled) return null;
+    const { summarizeRtcQuality } = await import("./services/media/rtc-quality.js");
+    const peers = [];
+    for (const [peerId, peer] of peerConnections) {
+      if (peer?.connectionState === "closed" || typeof peer?.getStats !== "function") continue;
+      try {
+        const result = summarizeRtcQuality(await peer.getStats(), qaStatsSnapshotsByPeer.get(peerId));
+        qaStatsSnapshotsByPeer.set(peerId, result.snapshots);
+        peers.push({
+          peerId,
+          connectionState: peer.connectionState,
+          iceConnectionState: peer.iceConnectionState,
+          sample: result.sample,
+        });
+      } catch (caught) {
+        reportViewerError("viewer_qa_stats_error", caught, { peerId });
+      }
+    }
+    return { mediaMode, peerCount: peers.length, peers };
   }
 
   function createPeer(targetId) {
@@ -876,6 +900,7 @@
       document.documentElement.classList.add("viewer-embed-document");
       document.body.classList.add("viewer-embed-document");
     }
+    if (qaStatsEnabled) window.__telaiQaCollectMediaStats = collectQaMediaStats;
     initialize();
     return () => {
       document.documentElement.classList.remove("viewer-embed-document");
@@ -895,6 +920,8 @@
     document.removeEventListener("fullscreenchange", handleFullscreenChange);
     desktopFullscreenUnsubscribe?.();
     desktopFullscreenUnsubscribe = null;
+    if (qaStatsEnabled && window.__telaiQaCollectMediaStats === collectQaMediaStats) delete window.__telaiQaCollectMediaStats;
+    qaStatsSnapshotsByPeer = new Map();
     send({ type: "leave" });
     socket?.close();
     for (const peer of peerConnections.values()) peer.close();
