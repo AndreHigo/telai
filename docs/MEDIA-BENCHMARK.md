@@ -90,26 +90,28 @@ resultado final, o comando registra o cenário em `inconclusive` e mantém
 `failures` reservado para falhas funcionais reais. Assim, o limite do harness
 continua visível sem ser confundido com uma regressão do transporte.
 
-Na execução local de 26/09/2026, os cenários de 1 e 5 viewers concluíram com
-todos os frames e codecs esperados. Os cenários de 10 e 20 viewers fizeram o
-Electron encerrar o harness antes de emitir o resultado final; por isso eles
-ficam registrados como limite/inconclusivos, não como capacidade aprovada da
-VPS. Durante esses cenários, alguns diagnósticos auxiliares receberam `429`
-por rate limit, sem interromper os fluxos de mídia que chegaram a concluir.
-Esse resultado é suficiente para não aumentar o limite P2P por suposição, mas
-ainda não substitui um teste de servidor dedicado ou uma SFU.
+Na execução local de 27/09/2026, os cenários de 1, 5 e 10 viewers concluíram
+com todos os frames e codecs esperados. O cenário de 20 viewers atingiu o
+limite do harness Electron antes de todos os frames ficarem prontos e fica
+registrado como `inconclusive`, não como capacidade aprovada da VPS. O harness
+também deixou de encerrar prematuramente quando todas as janelas foram fechadas
+durante a execução; agora esse estado produz um diagnóstico real. Durante os
+cenários, alguns diagnósticos auxiliares receberam `429` por rate limit, sem
+interromper os fluxos de mídia que chegaram a concluir. Esse resultado é
+suficiente para não aumentar o limite P2P por suposição, mas ainda não
+substitui um teste de servidor dedicado ou uma SFU.
 
 Resumo da última execução da matriz; CPU e RSS são do processo Electron do
 harness, não do servidor:
 
 | modo | viewers | carregamento | CPU | RSS | resultado |
 | --- | ---: | ---: | ---: | ---: | --- |
-| P2P | 1 | 877 ms | 14,4% | 139,8 MiB | passou |
-| P2P | 5 | 932 ms | 26,8% | 140,4 MiB | passou |
+| P2P | 1 | 878 ms | 19,5% | 135,7 MiB | passou |
+| P2P | 5 | 825 ms | 47,4% | 137,8 MiB | passou |
 | relay | 1 | 228 ms | 20,6% | 143,7 MiB | passou |
 | relay | 5 | 344 ms | 59,0% | 141,0 MiB | passou |
-| P2P | 10 | — | — | — | Electron encerrou sem resultado |
-| P2P | 20 | — | — | — | Electron encerrou sem resultado |
+| P2P | 10 | 1.958 ms | 33,5% | 144,2 MiB | passou; chat/UI omitidos no benchmark pesado |
+| P2P | 20 | — | — | — | inconclusivo; limite local de recepção do harness |
 
 É possível selecionar cenários ou medir o caminho relay:
 

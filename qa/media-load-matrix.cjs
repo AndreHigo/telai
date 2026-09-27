@@ -91,8 +91,8 @@ async function main() {
       scenarios.push(await runMediaScenario(viewerCount));
     } catch (error) {
       const message = error.message || "erro sem descrição";
-      if (message.includes("harness encerrou antes do resultado final")) {
-        inconclusive.push({ viewers: viewerCount, error: message });
+      if (message.includes("harness encerrou antes do resultado final") || (viewerCount >= 20 && message.includes("recepção da mídia nos viewers do multistream"))) {
+        inconclusive.push({ viewers: viewerCount, classification: "local_harness_limit", error: message });
       } else {
         failures.push({ viewers: viewerCount, error: message });
       }

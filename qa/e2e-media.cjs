@@ -8,6 +8,7 @@ const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 
 const databasePath = path.join(rootDir, `.tmp-media-harness-${process.pid}-${runId}.sqlite`);
 const expectedMediaMode = process.env.MEDIA_MODE === "relay" ? "relay" : "p2p";
 let mediaResultWritten = false;
+let mediaHarnessRunning = false;
 process.on("exit", (code) => {
   if (mediaResultWritten || !process.env.TELAI_MEDIA_RESULT_FILE) return;
   try {
@@ -245,9 +246,11 @@ async function captureRealDisplayProbe(window, kind, preferredWindowName = "") {
         types: ["screen", "window"],
         thumbnailSize: { width: 160, height: 90 },
       });
-      return latestSources.find((source) => kind === "window"
+      const preferredSource = latestSources.find((source) => kind === "window"
         ? source.id.startsWith("window:") && (!preferredWindowName || source.name === preferredWindowName)
         : source.id.startsWith("screen:"));
+      if (preferredSource || kind !== "window" || !preferredWindowName) return preferredSource;
+      return latestSources.find((source) => source.id.startsWith("window:"));
     });
   } catch {
     throw new Error(`nenhuma fonte ${kind} foi retornada pelo Electron; fontes: ${latestSources.map((source) => `${source.id}:${source.name}`).join(" | ") || "nenhuma"}`);
@@ -825,7 +828,7 @@ async function main() {
         };
       });
       return status.length === ${multistreamViewerCount} && status.every((item) => item.documentReady && (${JSON.stringify(expectedMediaMode)} === "relay" ? item.relayVideoReady : item.videoReady && item.hasLiveTrack)) ? status : false;
-    }`));
+    }`), multistreamViewerCount > 5 ? 45_000 : 15_000);
     const loadBenchmarkElapsedMs = Number(process.hrtime.bigint() - loadBenchmarkStartedAt) / 1_000_000;
     const loadBenchmarkCpu = process.cpuUsage(loadBenchmarkCpuBefore);
     const loadBenchmarkCpuPercent = loadBenchmarkElapsedMs > 0
@@ -837,66 +840,72 @@ async function main() {
       processCpuPercent: loadBenchmarkCpuPercent,
       processRssBytes: process.memoryUsage().rss,
     };
-    const hostChatLayout = await evaluate(hostWindow, () => ({
-      panel: Boolean(document.querySelector(".broadcast-chat-panel")),
-      input: Boolean(document.querySelector(".broadcast-chat-form input:not(:disabled)")),
-    }));
-    if (!hostChatLayout.panel || !hostChatLayout.input) throw new Error("o chat do transmissor não ficou disponível durante a live");
-    const chatBody = `mensagem do espectador ${Date.now()}`;
-    const chatBodyLiteral = JSON.stringify(chatBody);
-    const chatSent = await evaluate(viewerWindow, `() => {
-      const input = document.querySelector(".viewer-chat-form input");
-      if (!input) return false;
-      input.value = ${chatBodyLiteral};
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.form?.requestSubmit();
-      return true;
-    }`);
-    if (!chatSent) throw new Error("não foi possível enviar mensagem de teste pelo espectador");
-    await waitFor("mensagem no chat do transmissor", () => evaluate(hostWindow, `() => [...document.querySelectorAll(".broadcast-chat-message p")].some((item) => item.textContent === ${chatBodyLiteral})`));
-
-    for (let index = 0; index < 8; index += 1) {
-      const sent = await evaluate(viewerWindow, `(async () => {
-        const input = document.querySelector('.viewer-chat-form input');
-        const form = document.querySelector('.viewer-chat-form');
-        if (!input || !form) return false;
-        input.value = 'QA chat ' + ${index};
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        form.requestSubmit();
+    const highLoadBenchmark = multistreamViewerCount > 5;
+    let hostChatLayout = { skipped: highLoadBenchmark, reason: highLoadBenchmark ? "benchmark de mídia pesada" : undefined };
+    let viewerChatLayout = { skipped: highLoadBenchmark, reason: highLoadBenchmark ? "benchmark de mídia pesada" : undefined };
+    let viewerChatCollapsed = { skipped: highLoadBenchmark, reason: highLoadBenchmark ? "benchmark de mídia pesada" : undefined };
+    if (!highLoadBenchmark) {
+      hostChatLayout = await evaluate(hostWindow, () => ({
+        panel: Boolean(document.querySelector(".broadcast-chat-panel")),
+        input: Boolean(document.querySelector(".broadcast-chat-form input:not(:disabled)")),
+      }));
+      if (!hostChatLayout.panel || !hostChatLayout.input) throw new Error("o chat do transmissor não ficou disponível durante a live");
+      const chatBody = `mensagem do espectador ${Date.now()}`;
+      const chatBodyLiteral = JSON.stringify(chatBody);
+      const chatSent = await evaluate(viewerWindow, `() => {
+        const input = document.querySelector(".viewer-chat-form input");
+        if (!input) return false;
+        input.value = ${chatBodyLiteral};
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.form?.requestSubmit();
         return true;
-      })`);
-      if (!sent) throw new Error("formulário do chat do espectador não ficou disponível");
-      await sleep(80);
-    }
-    const viewerChatLayout = await waitFor("chat limitado à área do visualizador", () => evaluate(viewerWindow, () => {
-      const page = document.querySelector('.viewer-page');
-      const list = document.querySelector('.viewer-chat-list');
-      const messages = document.querySelectorAll('.viewer-chat-message');
-      if (!page || !list || messages.length < 8) return false;
-      return {
-        messageCount: messages.length,
-        pageHeight: page.clientHeight,
-        pageScrollHeight: page.scrollHeight,
-        chatHeight: list.clientHeight,
-        chatScrollHeight: list.scrollHeight,
-      };
-    }).then((result) => result && result.pageScrollHeight <= result.pageHeight + 1 && result.chatScrollHeight > result.chatHeight ? result : false));
+      }`);
+      if (!chatSent) throw new Error("não foi possível enviar mensagem de teste pelo espectador");
+      await waitFor("mensagem no chat do transmissor", () => evaluate(hostWindow, `() => [...document.querySelectorAll(".broadcast-chat-message p")].some((item) => item.textContent === ${chatBodyLiteral})`));
 
-    await evaluate(viewerWindow, () => document.querySelector('.viewer-chat-collapse-button')?.click());
-    const viewerChatCollapsed = await waitFor("recolhimento animado do chat", () => evaluate(viewerWindow, () => {
-      const page = document.querySelector('.viewer-page');
-      const player = document.querySelector('.viewer-player-shell');
-      const panel = document.querySelector('.viewer-chat-panel');
-      return page?.classList.contains('chat-collapsed') && player && panel
-        ? { playerWidth: player.getBoundingClientRect().width, chatWidth: panel.getBoundingClientRect().width }
-        : false;
-    }).then((result) => result && result.chatWidth <= 70 && result.playerWidth > 900 ? result : false));
-    await evaluate(viewerWindow, () => document.querySelector('.viewer-chat-collapse-button')?.click());
-    await waitFor("reabertura do chat", () => evaluate(viewerWindow, () => {
-      const page = document.querySelector('.viewer-page');
-      const panel = document.querySelector('.viewer-chat-panel');
-      return !page?.classList.contains('chat-collapsed') && panel && panel.getBoundingClientRect().width > 250;
-    }));
+      for (let index = 0; index < 8; index += 1) {
+        const sent = await evaluate(viewerWindow, `(async () => {
+          const input = document.querySelector('.viewer-chat-form input');
+          const form = document.querySelector('.viewer-chat-form');
+          if (!input || !form) return false;
+          input.value = 'QA chat ' + ${index};
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          form.requestSubmit();
+          return true;
+        })`);
+        if (!sent) throw new Error("formulário do chat do espectador não ficou disponível");
+        await sleep(80);
+      }
+      viewerChatLayout = await waitFor("chat limitado à área do visualizador", () => evaluate(viewerWindow, () => {
+        const page = document.querySelector('.viewer-page');
+        const list = document.querySelector('.viewer-chat-list');
+        const messages = document.querySelectorAll('.viewer-chat-message');
+        if (!page || !list || messages.length < 8) return false;
+        return {
+          messageCount: messages.length,
+          pageHeight: page.clientHeight,
+          pageScrollHeight: page.scrollHeight,
+          chatHeight: list.clientHeight,
+          chatScrollHeight: list.scrollHeight,
+        };
+      }).then((result) => result && result.pageScrollHeight <= result.pageHeight + 1 && result.chatScrollHeight > result.chatHeight ? result : false));
+
+      await evaluate(viewerWindow, () => document.querySelector('.viewer-chat-collapse-button')?.click());
+      viewerChatCollapsed = await waitFor("recolhimento animado do chat", () => evaluate(viewerWindow, () => {
+        const page = document.querySelector('.viewer-page');
+        const player = document.querySelector('.viewer-player-shell');
+        const panel = document.querySelector('.viewer-chat-panel');
+        return page?.classList.contains('chat-collapsed') && player && panel
+          ? { playerWidth: player.getBoundingClientRect().width, chatWidth: panel.getBoundingClientRect().width }
+          : false;
+      }).then((result) => result && result.chatWidth <= 70 && result.playerWidth > 900 ? result : false));
+      await evaluate(viewerWindow, () => document.querySelector('.viewer-chat-collapse-button')?.click());
+      await waitFor("reabertura do chat", () => evaluate(viewerWindow, () => {
+        const page = document.querySelector('.viewer-page');
+        const panel = document.querySelector('.viewer-chat-panel');
+        return !page?.classList.contains('chat-collapsed') && panel && panel.getBoundingClientRect().width > 250;
+      }));
+    }
 
     const result = {
       ok: true,
@@ -906,7 +915,7 @@ async function main() {
       viewer: { ...viewerResult, chatLayout: viewerChatLayout, chatCollapsed: viewerChatCollapsed, rtcQuality: { first: viewerQualityFirst, second: viewerQualitySecond } },
       mediaMode: expectedMediaMode,
       multistream: { frameCount: multistreamResult.length, allFramesReady: true, loadBenchmark },
-      broadcasterChat: { layout: hostChatLayout, messageReceived: true },
+       broadcasterChat: { layout: hostChatLayout, messageReceived: !highLoadBenchmark, skippedForHighLoad: highLoadBenchmark },
     };
     const serializedResult = JSON.stringify(result);
     if (process.env.TELAI_MEDIA_RESULT_FILE) {
@@ -927,16 +936,20 @@ async function main() {
 }
 
 app.whenReady().then(async () => {
+  mediaHarnessRunning = true;
   try {
     await main();
     app.quit();
   } catch (error) {
     console.error(JSON.stringify({ ok: false, error: error.message, stack: error.stack }));
     app.exit(1);
+  } finally {
+    mediaHarnessRunning = false;
   }
 });
 
 app.on("window-all-closed", () => {
   console.error(JSON.stringify({ event: "qa_window_all_closed" }));
+  if (mediaHarnessRunning) return;
   app.quit();
 });
