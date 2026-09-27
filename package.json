@@ -50,6 +50,7 @@
     "test:voice-remote-playback-controller": "node qa/test-voice-remote-playback-controller.mjs",
     "test:voice-participant-preferences-controller": "node qa/test-voice-participant-preferences-controller.mjs",
     "test:voice-input-lifecycle-controller": "node qa/test-voice-input-lifecycle-controller.mjs",
+    "test:voice-shortcut-controller": "node qa/test-voice-shortcut-controller.mjs",
     "test:rtc-quality": "node qa/test-rtc-quality.mjs",
     "test:voice-quality-controller": "node qa/test-voice-quality-controller.mjs",
     "test:voice-reconnect-storage": "node qa/test-voice-reconnect-storage.mjs",

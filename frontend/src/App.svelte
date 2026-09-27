@@ -62,6 +62,7 @@
   import { createVoiceParticipantPreferencesController } from "./features/voice/participant-preferences-controller.js";
   import { createVoiceInputLifecycleController } from "./features/voice/input-lifecycle-controller.js";
   import { createVoiceSoundController, readSoundPreferences, SOUND_PREFERENCE_DEFAULTS } from "./features/voice/sound-controller.js";
+  import { createVoiceShortcutController } from "./features/voice/shortcut-controller.js";
   import { formatBroadcastCaptureError, formatBroadcastMissingAudio } from "./features/broadcast/capture-errors.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
@@ -1192,6 +1193,50 @@
     playVoiceSound,
     previewVoiceSound,
   } = voiceSoundController;
+  const voiceShortcutController = createVoiceShortcutController({
+    getState: () => ({
+      desktopMuteShortcutGlobal,
+      desktopPushToTalkGlobal,
+      isDesktop,
+      muteShortcut,
+      muteShortcutCapturing,
+      pushToTalkActive,
+      pushToTalkCapturing,
+      pushToTalkEnabled,
+      pushToTalkKey,
+      voiceState,
+    }),
+    setState: (next) => {
+      if ("desktopMuteShortcutGlobal" in next) desktopMuteShortcutGlobal = next.desktopMuteShortcutGlobal;
+      if ("desktopPushToTalkGlobal" in next) desktopPushToTalkGlobal = next.desktopPushToTalkGlobal;
+      if ("muteShortcut" in next) muteShortcut = next.muteShortcut;
+      if ("muteShortcutCapturing" in next) muteShortcutCapturing = next.muteShortcutCapturing;
+      if ("pushToTalkActive" in next) pushToTalkActive = next.pushToTalkActive;
+      if ("pushToTalkCapturing" in next) pushToTalkCapturing = next.pushToTalkCapturing;
+      if ("pushToTalkEnabled" in next) pushToTalkEnabled = next.pushToTalkEnabled;
+      if ("pushToTalkKey" in next) pushToTalkKey = next.pushToTalkKey;
+      if ("settingsError" in next) setSettingsState({ settingsError: next.settingsError });
+    },
+    setVoiceMuted: (nextMuted) => setVoiceMuted(nextMuted),
+    toggleVoiceMute: () => toggleVoiceMute(),
+  });
+  const {
+    clearMuteShortcut,
+    clearPushToTalkKey,
+    handleDesktopMuteShortcut,
+    handleDesktopPushToTalk,
+    handleMuteShortcutKeyDown,
+    handleMuteShortcutMouseDown,
+    handlePushToTalkKeyDown,
+    handlePushToTalkKeyUp,
+    pushToTalkLabel,
+    releasePushToTalk,
+    shortcutLabel,
+    startMuteShortcutCapture,
+    startPushToTalkCapture,
+    syncDesktopShortcuts,
+    togglePushToTalk,
+  } = voiceShortcutController;
   const voiceParticipantPreferencesController = createVoiceParticipantPreferencesController({
     api,
     getState: () => ({
@@ -4341,198 +4386,6 @@
     sendVoice({ type: "voice-mute-state", muted: voiceMuted });
     playVoiceSound(voiceMuted ? "mute" : "unmute");
     return true;
-  }
-
-  function pushToTalkLabel(code) {
-    const labels = { Space: "Espaço", ControlLeft: "Ctrl esquerdo", ControlRight: "Ctrl direito", ShiftLeft: "Shift esquerdo", ShiftRight: "Shift direito", AltLeft: "Alt esquerdo", AltRight: "Alt direito", Escape: "Esc", Enter: "Enter", Tab: "Tab", Backspace: "Backspace" };
-    if (labels[code]) return labels[code];
-    if (code?.startsWith("Key")) return code.slice(3);
-    if (code?.startsWith("Digit")) return code.slice(5);
-    return code || "Nenhuma tecla";
-  }
-
-  function startPushToTalkCapture() {
-    pushToTalkCapturing = true;
-    setSettingsState({ settingsError: "Pressione uma tecla agora. Esc cancela." });
-  }
-
-  async function syncDesktopPushToTalkKey() {
-    if (!window.miranteDesktop?.setPushToTalkKey) {
-      desktopPushToTalkGlobal = false;
-      return;
-    }
-    try {
-      const result = await window.miranteDesktop.setPushToTalkKey(pushToTalkEnabled ? pushToTalkKey : "");
-      desktopPushToTalkGlobal = Boolean(result?.ok && result?.global);
-      if (!result?.ok && pushToTalkKey) setSettingsState({ settingsError: result.message || "Não foi possível registrar essa tecla global." });
-    } catch {
-      desktopPushToTalkGlobal = false;
-    }
-  }
-
-  async function syncDesktopMuteShortcut() {
-    if (!window.miranteDesktop?.setMuteShortcut) {
-      desktopMuteShortcutGlobal = false;
-      return;
-    }
-    try {
-      const result = await window.miranteDesktop.setMuteShortcut(muteShortcut);
-      desktopMuteShortcutGlobal = Boolean(result?.ok && result?.global);
-      if (!result?.ok && muteShortcut) setSettingsState({ settingsError: result.message || "Não foi possível registrar o atalho de mudo." });
-    } catch {
-      desktopMuteShortcutGlobal = false;
-    }
-  }
-
-  async function syncDesktopShortcuts() {
-    await Promise.all([syncDesktopPushToTalkKey(), syncDesktopMuteShortcut()]);
-  }
-
-  function handleDesktopPushToTalk(payload = {}) {
-    if (voiceState !== "connected") return;
-    const active = Boolean(payload.active);
-    if (active && !setVoiceMuted(false)) return;
-    if (!active) setVoiceMuted(true);
-    pushToTalkActive = active;
-  }
-
-  function clearPushToTalkKey() {
-    if (pushToTalkActive) {
-      pushToTalkActive = false;
-      setVoiceMuted(true);
-    }
-    pushToTalkKey = "";
-    localStorage.removeItem("mirante-push-to-talk");
-    void syncDesktopPushToTalkKey();
-    setSettingsState({ settingsError: "Tecla de push-to-talk removida. Clique em Salvar preferências." });
-  }
-
-  function togglePushToTalk(event) {
-    pushToTalkEnabled = Boolean(event.currentTarget.checked);
-    localStorage.setItem("mirante-push-to-talk-enabled", String(pushToTalkEnabled));
-    if (!pushToTalkEnabled && pushToTalkActive) {
-      pushToTalkActive = false;
-      setVoiceMuted(true);
-    }
-    void syncDesktopPushToTalkKey();
-  }
-
-  function shortcutLabel(shortcut) {
-    if (shortcut?.startsWith("mouse:")) {
-      const button = Number(shortcut.slice(6));
-      return { 0: "Botão esquerdo", 1: "Botão do meio", 2: "Botão direito", 3: "Botão lateral 1", 4: "Botão lateral 2" }[button] || `Botão ${button + 1}`;
-    }
-    return pushToTalkLabel(shortcut);
-  }
-
-  function startMuteShortcutCapture() {
-    muteShortcutCapturing = true;
-    setSettingsState({ settingsError: "Pressione uma tecla ou botão do mouse agora. Esc cancela." });
-  }
-
-  function clearMuteShortcut() {
-    muteShortcutCapturing = false;
-    muteShortcut = "";
-    localStorage.removeItem("mirante-mute-shortcut");
-    void syncDesktopMuteShortcut();
-    setSettingsState({ settingsError: "Atalho de mudo removido. Clique em Salvar preferências." });
-  }
-
-  function isEditableElement(element) {
-    return Boolean(element?.matches?.("input, textarea, select, [contenteditable='true']"));
-  }
-
-  const reservedSystemShortcutCodes = new Set(["AltLeft", "AltRight", "MetaLeft", "MetaRight", "OSLeft", "OSRight", "Tab"]);
-
-  function isReservedSystemShortcut(event) {
-    return reservedSystemShortcutCodes.has(event?.code) || Boolean(event?.altKey || event?.metaKey);
-  }
-
-  function handlePushToTalkKeyDown(event) {
-    if (pushToTalkCapturing) {
-      if (event.code === "Escape") {
-        event.preventDefault();
-        pushToTalkCapturing = false;
-      setSettingsState({ settingsError: "Escolha de tecla cancelada." });
-      } else if (isReservedSystemShortcut(event)) {
-      setSettingsState({ settingsError: "Alt, Windows e Tab ficam reservados para o sistema. Escolha outra tecla." });
-      } else if (event.code) {
-        event.preventDefault();
-        pushToTalkKey = event.code;
-        pushToTalkCapturing = false;
-        localStorage.setItem("mirante-push-to-talk", pushToTalkKey);
-        void syncDesktopPushToTalkKey();
-        setSettingsState({ settingsError: `Tecla ${pushToTalkLabel(pushToTalkKey)} definida. Clique em Salvar preferências.` });
-      }
-      return;
-    }
-    if (isDesktop && desktopPushToTalkGlobal && !pushToTalkCapturing) return;
-    if (!pushToTalkEnabled || !pushToTalkKey || event.code !== pushToTalkKey || event.repeat || isEditableElement(event.target) || isReservedSystemShortcut(event)) return;
-    event.preventDefault();
-    if (!pushToTalkActive && setVoiceMuted(false)) pushToTalkActive = true;
-  }
-
-  function handleMuteShortcutKeyDown(event) {
-    if (muteShortcutCapturing) {
-      if (event.code === "Escape") {
-        event.preventDefault();
-        muteShortcutCapturing = false;
-      setSettingsState({ settingsError: "Escolha de atalho cancelada." });
-      } else if (isReservedSystemShortcut(event)) {
-      setSettingsState({ settingsError: "Alt, Windows e Tab ficam reservados para o sistema. Escolha outra tecla ou um botão lateral do mouse." });
-      } else if (event.code) {
-        event.preventDefault();
-        muteShortcut = event.code;
-        muteShortcutCapturing = false;
-        localStorage.setItem("mirante-mute-shortcut", muteShortcut);
-        void syncDesktopMuteShortcut();
-        setSettingsState({ settingsError: `Atalho ${shortcutLabel(muteShortcut)} definido. Clique em Salvar preferências.` });
-      }
-      return;
-    }
-    if (isDesktop && desktopMuteShortcutGlobal) return;
-    if (!muteShortcut || muteShortcut.startsWith("mouse:") || event.code !== muteShortcut || event.repeat || isEditableElement(event.target) || isReservedSystemShortcut(event)) return;
-    event.preventDefault();
-    toggleVoiceMute();
-  }
-
-  function handleMuteShortcutMouseDown(event) {
-    if (muteShortcutCapturing) {
-      if (event.button < 3) {
-      setSettingsState({ settingsError: "Para evitar cliques acidentais, use um botão lateral do mouse (4 ou 5)." });
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      muteShortcut = `mouse:${event.button}`;
-      muteShortcutCapturing = false;
-      localStorage.setItem("mirante-mute-shortcut", muteShortcut);
-      void syncDesktopMuteShortcut();
-      setSettingsState({ settingsError: `Atalho ${shortcutLabel(muteShortcut)} definido. Clique em Salvar preferências.` });
-      return;
-    }
-    if (!muteShortcut?.startsWith("mouse:") || isEditableElement(event.target) || Number(muteShortcut.slice(6)) !== event.button) return;
-    event.preventDefault();
-    toggleVoiceMute();
-  }
-
-  function handleDesktopMuteShortcut() {
-    if (voiceState === "connected") toggleVoiceMute();
-  }
-
-  function handlePushToTalkKeyUp(event) {
-    if (event.code !== pushToTalkKey || !pushToTalkActive) return;
-    // Libere o microfone mesmo se Alt/Windows foi pressionado durante o PTT.
-    // A soltura continua disponível ao sistema operacional.
-    if (!isReservedSystemShortcut(event)) event.preventDefault();
-    pushToTalkActive = false;
-    setVoiceMuted(true);
-  }
-
-  function releasePushToTalk() {
-    if (!pushToTalkActive) return;
-    pushToTalkActive = false;
-    setVoiceMuted(true);
   }
 
   function toggleVoiceDeafen() {
