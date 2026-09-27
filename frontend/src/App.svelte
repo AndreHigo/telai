@@ -28,6 +28,7 @@
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
   import { createAccountController } from "./features/shell/account-controller.js";
+  import { createContextMenuController } from "./features/shell/context-menu-controller.js";
   import { createNavigationStateStore } from "./features/shell/navigation-state.js";
   import { createViewerStateStore } from "./features/shell/viewer-state.js";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
@@ -3825,41 +3826,23 @@
     if (event.key === "Escape") closeVoiceContextMenu();
   }
 
-  function handleGlobalVoiceContextMenu(event) {
-    const target = event.target.closest?.(".channel-voice-member, .voice-chip");
-    if (!target || !voiceRoomId) return;
-    const participantName = target.querySelector("b")?.textContent?.trim() || target.childNodes[0]?.textContent?.trim() || target.textContent.trim().split("silencioso")[0].trim();
-    const participant = [...voiceParticipants.values()].find((item) => voiceParticipantDisplayName(item) === participantName);
-    if (participant) openVoiceContextMenu(event, activeVoiceRoom || selectedRoom, participant);
-  }
-
-  function handleGlobalRoomContextMenu(event) {
-    const target = event.target.closest?.(".channel-item");
-    const icon = target?.querySelector(".channel-icon")?.textContent?.trim();
-    if (!target || !["#", "⌁"].includes(icon)) return;
-    const roomName = target.children?.[1]?.textContent?.trim();
-    const roomList = icon === "⌁" ? voiceRooms : textRooms;
-    const room = roomList.find((candidate) => candidate.name === roomName);
-    if (room) openRoomContextMenu(event, room);
-  }
-
-  function handleGlobalUserClick(event) {
-    const target = event.target.closest?.(".member-item, .channel-voice-member, .voice-chip");
-    if (!target) return;
-    const voiceTarget = target.matches(".channel-voice-member, .voice-chip");
-    const displayName = voiceTarget
-      ? target.querySelector("b")?.textContent?.trim() || target.textContent.trim().split("silencioso")[0].trim()
-      : target.querySelector("strong")?.textContent?.trim();
-    if (!displayName) return;
-    if (voiceTarget) {
-      const participants = voiceRooms.flatMap((room) => visibleVoiceParticipants(room));
-      const participant = [...voiceParticipants.values(), ...participants].find((item) => voiceParticipantDisplayName(item) === displayName);
-      if (participant) openVoiceContextMenu(event, activeVoiceRoom || selectedRoom, participant);
-      return;
-    }
-    const member = groupMembers.find((item) => item.displayName === displayName);
-    if (member) openUserContextMenu(event, member);
-  }
+  const contextMenuController = createContextMenuController({
+    getVoiceRoomId: () => voiceRoomId,
+    getActiveVoiceRoom: () => activeVoiceRoom,
+    getSelectedRoom: () => selectedRoom,
+    getVoiceParticipants: () => voiceParticipants,
+    getVoiceRooms: () => voiceRooms,
+    getTextRooms: () => textRooms,
+    getGroupMembers: () => groupMembers,
+    visibleVoiceParticipants,
+    voiceParticipantDisplayName,
+    openVoiceContextMenu,
+    openRoomContextMenu,
+    openUserContextMenu,
+  });
+  const handleGlobalVoiceContextMenu = contextMenuController.handleVoiceContextMenu;
+  const handleGlobalRoomContextMenu = contextMenuController.handleRoomContextMenu;
+  const handleGlobalUserClick = contextMenuController.handleUserClick;
 
   function showVoiceProfile(participant) {
     profilePreview = participant;

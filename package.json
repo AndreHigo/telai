@@ -23,6 +23,7 @@
     "test:viewport-controller": "node qa/test-viewport-controller.mjs",
     "test:route-controller": "node qa/test-route-controller.mjs",
     "test:account-controller": "node qa/test-account-controller.mjs",
+    "test:context-menu-controller": "node qa/test-context-menu-controller.mjs",
     "test:lazy-component-loader": "node qa/test-lazy-component-loader.mjs",
     "test:clipboard": "node qa/test-clipboard.mjs",
     "test:mention-controller": "node qa/test-mention-controller.mjs",
