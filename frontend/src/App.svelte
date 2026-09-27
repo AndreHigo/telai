@@ -42,6 +42,7 @@
   import { createMessageStateStore } from "./features/groups/message-state.js";
   import { createApplicationCommandController } from "./features/groups/application-command-controller.js";
   import { createApplicationCommandStateStore } from "./features/groups/application-command-state.js";
+  import { createMentionController } from "./features/groups/mention-controller.js";
   import { createGroupThreadRuntime } from "./features/groups/thread-runtime.js";
   import {
     createSelectedVoiceAudioConstraints,
@@ -5208,73 +5209,14 @@
     if (nextView === "groups" && selectedGroupId) await loadGroup(selectedGroupId);
   }
 
-  function clearMentionSuggestions() {
-    setMessageState({ mentionSuggestions: [], mentionStartIndex: -1, mentionActiveIndex: 0 });
-  }
-
-  function updateMentionSuggestions(event) {
-    const input = event.currentTarget;
-    const cursor = input.selectionStart ?? messageDraft.length;
-    const draft = input.value;
-    const beforeCursor = draft.slice(0, cursor);
-    const match = beforeCursor.match(/(?:^|\s)@([\p{L}\p{N}_.-]*)$/u);
-    if (!match) {
-      clearMentionSuggestions();
-      return;
-    }
-    const query = (match[1] || "").toLocaleLowerCase();
-    const mentionStart = cursor - query.length - 1;
-    const suggestions = groupMembers
-      .filter((member) => {
-        const username = String(member.username || "").toLocaleLowerCase();
-        const displayName = String(member.displayName || "").toLocaleLowerCase();
-        return !query || username.includes(query) || displayName.includes(query);
-      })
-      .slice(0, 6);
-    setMessageState({
-      mentionStartIndex: suggestions.length ? mentionStart : -1,
-      mentionSuggestions: suggestions,
-      mentionActiveIndex: Math.min(mentionActiveIndex, Math.max(suggestions.length - 1, 0)),
-    });
-  }
-
-  async function insertMention(member) {
-    if (!member || !messageComposerInput || mentionStartIndex < 0) return;
-    const cursor = messageComposerInput.selectionStart ?? messageDraft.length;
-    const mentionName = member.username || member.displayName || "usuario";
-    const nextDraft = `${messageDraft.slice(0, mentionStartIndex)}@${mentionName} ${messageDraft.slice(cursor)}`;
-    const nextCursor = mentionStartIndex + mentionName.length + 2;
-    setMessageState({ messageDraft: nextDraft });
-    clearMentionSuggestions();
-    await tick();
-    messageComposerInput?.focus();
-    messageComposerInput?.setSelectionRange(nextCursor, nextCursor);
-  }
-
-  function handleMessageKeydown(event) {
-    if (mentionSuggestions.length) {
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        const direction = event.key === "ArrowDown" ? 1 : -1;
-        setMessageState({ mentionActiveIndex: (mentionActiveIndex + direction + mentionSuggestions.length) % mentionSuggestions.length });
-        return;
-      }
-      if (event.key === "Enter" || event.key === "Tab") {
-        event.preventDefault();
-        void insertMention(mentionSuggestions[mentionActiveIndex]);
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        clearMentionSuggestions();
-        return;
-      }
-    }
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      event.currentTarget.form?.requestSubmit();
-    }
-  }
+  const mentionController = createMentionController({
+    getState: () => ({ messageDraft, mentionSuggestions, mentionStartIndex, mentionActiveIndex }),
+    setState: (next) => setMessageState(next),
+    getMembers: () => groupMembers,
+    getInput: () => messageComposerInput,
+    tick,
+  });
+  const { updateSuggestions: updateMentionSuggestions, handleKeydown: handleMessageKeydown, insertMention } = mentionController;
 
   function runtimeVersion() {
     return isDesktop ? desktopVersion : WEB_VERSION;

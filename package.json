@@ -24,6 +24,7 @@
     "test:route-controller": "node qa/test-route-controller.mjs",
     "test:lazy-component-loader": "node qa/test-lazy-component-loader.mjs",
     "test:clipboard": "node qa/test-clipboard.mjs",
+    "test:mention-controller": "node qa/test-mention-controller.mjs",
     "test:client-polling": "node qa/test-client-polling.mjs",
     "test:maintenance-controller": "node qa/test-maintenance-controller.mjs",
     "test:gateway-sequence": "node qa/test-gateway-sequence.mjs",
