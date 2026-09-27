@@ -111,7 +111,7 @@ export function createApplicationInteractionRepository(database, { createId = ra
     try {
       database.exec("BEGIN IMMEDIATE");
       database.prepare("UPDATE application_interactions SET status = 'expired' WHERE application_id = ? AND status IN ('pending', 'claimed') AND expires_at <= ?").run(applicationId, claimedAt);
-      const rows = database.prepare("SELECT id FROM application_interactions WHERE application_id = ? AND status = 'pending' AND expires_at > ? ORDER BY created_at ASC LIMIT ?").all(applicationId, claimedAt, safeLimit);
+      const rows = database.prepare("SELECT id FROM application_interactions WHERE application_id = ? AND status = 'pending' AND expires_at > ? AND EXISTS (SELECT 1 FROM application_group_installations WHERE application_group_installations.application_id = application_interactions.application_id AND application_group_installations.group_id = application_interactions.group_id AND application_group_installations.allow_interactions = 1) ORDER BY created_at ASC LIMIT ?").all(applicationId, claimedAt, safeLimit);
       for (const row of rows) database.prepare("UPDATE application_interactions SET status = 'claimed', claimed_at = ? WHERE id = ? AND status = 'pending'").run(claimedAt, row.id);
       const result = rows.map((row) => findById(row.id));
       database.exec("COMMIT");
@@ -172,7 +172,7 @@ export function createPostgresApplicationInteractionRepository(database, { creat
     const safeLimit = Math.min(50, Math.max(1, Number(limit) || 25));
     return withPostgresTransaction(database, async (client) => {
       await client.query("UPDATE application_interactions SET status = 'expired' WHERE application_id = $1 AND status IN ('pending', 'claimed') AND expires_at <= $2", [applicationId, claimedAt]);
-      const pending = await client.query("SELECT id FROM application_interactions WHERE application_id = $1 AND status = 'pending' AND expires_at > $2 ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT $3", [applicationId, claimedAt, safeLimit]);
+      const pending = await client.query("SELECT id FROM application_interactions WHERE application_id = $1 AND status = 'pending' AND expires_at > $2 AND EXISTS (SELECT 1 FROM application_group_installations WHERE application_group_installations.application_id = application_interactions.application_id AND application_group_installations.group_id = application_interactions.group_id AND application_group_installations.allow_interactions = TRUE) ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT $3", [applicationId, claimedAt, safeLimit]);
       const claimed = [];
       for (const row of pending.rows) {
         await client.query("UPDATE application_interactions SET status = 'claimed', claimed_at = $1 WHERE id = $2", [claimedAt, row.id]);

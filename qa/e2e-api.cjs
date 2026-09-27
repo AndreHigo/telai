@@ -426,6 +426,13 @@ async function main() {
     const createdInteraction = await api(owner, `/api/groups/${groupId}/applications/${applicationId}/interactions`, "POST", { roomId: group.textRoomId, commandName: "ping" });
     assert.equal(createdInteraction.response.status, 202, JSON.stringify(createdInteraction.body));
     assert.equal(createdInteraction.body.interaction.kind, "command");
+    const pendingInteractionsDisabled = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "PATCH", { permissions: { commands: true, messages: true, interactions: false } });
+    assert.equal(pendingInteractionsDisabled.response.status, 200, JSON.stringify(pendingInteractionsDisabled.body));
+    const blockedBotPoll = await request("/api/bot/interactions", { headers: { authorization: `Bot ${tokenCreation.body.token}` } });
+    assert.equal(blockedBotPoll.response.status, 200);
+    assert.equal(blockedBotPoll.body.interactions.some((item) => item.id === createdInteraction.body.interaction.id), false);
+    const pendingInteractionsEnabled = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "PATCH", { permissions: { commands: true, messages: true, interactions: true } });
+    assert.equal(pendingInteractionsEnabled.response.status, 200, JSON.stringify(pendingInteractionsEnabled.body));
     const botPoll = await request("/api/bot/interactions", { headers: { authorization: `Bot ${tokenCreation.body.token}` } });
     assert.equal(botPoll.response.status, 200);
     const pendingInteraction = botPoll.body.interactions.find((item) => item.id === createdInteraction.body.interaction.id);
