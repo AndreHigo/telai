@@ -22,6 +22,7 @@
   let commandName = "";
   let commandDescription = "";
   let commandOptions = "";
+  let editingCommandId = "";
   let installGroupId = "";
   const installationPermissionOptions = [
     { key: "commands", label: "Comandos" },
@@ -153,21 +154,41 @@
     return parsed;
   }
 
+  function beginEditCommand(command) {
+    editingCommandId = command.id;
+    commandName = command.name || "";
+    commandDescription = command.description || "";
+    commandOptions = command.options?.length ? JSON.stringify(command.options, null, 2) : "";
+    error = "";
+    notice = "";
+  }
+
+  function cancelEditCommand() {
+    editingCommandId = "";
+    commandName = "";
+    commandDescription = "";
+    commandOptions = "";
+  }
+
   async function createCommand() {
     if (busy || !selectedApplicationId || !commandName.trim() || !commandDescription.trim()) return;
     busy = true;
     error = "";
     notice = "";
     try {
-      const result = await api(`/api/applications/${encodeURIComponent(selectedApplicationId)}/commands`, {
-        method: "POST",
+      const editing = Boolean(editingCommandId);
+      const endpoint = editing
+        ? `/api/applications/${encodeURIComponent(selectedApplicationId)}/commands/${encodeURIComponent(editingCommandId)}`
+        : `/api/applications/${encodeURIComponent(selectedApplicationId)}/commands`;
+      const result = await api(endpoint, {
+        method: editing ? "PATCH" : "POST",
         body: JSON.stringify({ name: commandName.trim(), description: commandDescription.trim(), options: parseOptions() }),
       });
-      commands = [...commands, result.command].sort((left, right) => left.name.localeCompare(right.name));
-      commandName = "";
-      commandDescription = "";
-      commandOptions = "";
-      notice = "Comando registrado.";
+      commands = editing
+        ? commands.map((item) => item.id === editingCommandId ? result.command : item).sort((left, right) => left.name.localeCompare(right.name))
+        : [...commands, result.command].sort((left, right) => left.name.localeCompare(right.name));
+      cancelEditCommand();
+      notice = editing ? "Comando atualizado." : "Comando registrado.";
     } catch (cause) {
       setError(cause);
     } finally {
@@ -183,6 +204,7 @@
     try {
       await api(`/api/applications/${encodeURIComponent(selectedApplicationId)}/commands/${encodeURIComponent(command.id)}`, { method: "DELETE" });
       commands = commands.filter((item) => item.id !== command.id);
+      if (editingCommandId === command.id) cancelEditCommand();
       notice = "Comando removido.";
     } catch (cause) {
       setError(cause);
@@ -315,7 +337,27 @@
         <div class="application-detail-grid">
           <section class="settings-card"><div class="settings-card-heading"><div><h3>Tokens</h3><p class="muted">Guarde o token em um cofre. O Telai nunca o exibe novamente.</p></div></div>{#if revealedToken}<div class="application-token-reveal" role="status"><code>{revealedToken}</code><button class="outline" type="button" on:click={copyToken}>Copiar</button></div>{/if}<form class="inline-settings-form" on:submit|preventDefault={createToken}><input class="settings-input" bind:value={tokenLabel} maxlength="64" placeholder="Rótulo do token" /><button class="primary" type="submit" disabled={busy}>Gerar token</button></form><div class="application-token-list">{#each tokens as token}<div class="application-row"><span><strong>{token.label}</strong><small>{token.revokedAt ? "Revogado" : token.lastUsedAt ? `Usado em ${new Date(token.lastUsedAt).toLocaleString()}` : "Nunca utilizado"}</small></span>{#if !token.revokedAt}<button class="outline" type="button" disabled={busy} on:click={() => revokeToken(token)}>Revogar</button>{/if}</div>{/each}{#if !tokens.length}<p class="muted">Nenhum token criado.</p>{/if}</div></section>
 
-          <section class="settings-card"><div class="settings-card-heading"><div><h3>Comandos</h3><p class="muted">Registre a superfície que o bot anuncia aos clientes.</p></div></div><form class="application-form" on:submit|preventDefault={createCommand}><label class="modal-field">Nome<input class="settings-input" bind:value={commandName} maxlength="32" pattern="[A-Za-z0-9_-]+" required placeholder="status" /></label><label class="modal-field">Descrição<input class="settings-input" bind:value={commandDescription} maxlength="100" required placeholder="Mostra o status do serviço" /></label><label class="modal-field">Opções JSON <textarea class="settings-input" bind:value={commandOptions} rows="3" placeholder="Lista JSON opcional de opções"></textarea></label><button class="primary" type="submit" disabled={busy || !commandName.trim() || !commandDescription.trim()}>Registrar comando</button></form><div class="application-token-list">{#each commands as command}<div class="application-row"><span><strong>/{command.name}</strong><small>{command.description} · {command.options?.length || 0} opção(ões)</small></span><button class="outline" type="button" disabled={busy} on:click={() => deleteCommand(command)}>Remover</button></div>{/each}{#if !commands.length}<p class="muted">Nenhum comando registrado.</p>{/if}</div></section>
+          <section class="settings-card">
+            <div class="settings-card-heading"><div><h3>Comandos</h3><p class="muted">Registre a superfície que o bot anuncia aos clientes.</p></div></div>
+            <form class="application-form" on:submit|preventDefault={createCommand}>
+              <label class="modal-field">Nome<input class="settings-input" bind:value={commandName} maxlength="32" pattern="[A-Za-z0-9_-]+" required placeholder="status" /></label>
+              <label class="modal-field">Descrição<input class="settings-input" bind:value={commandDescription} maxlength="100" required placeholder="Mostra o status do serviço" /></label>
+              <label class="modal-field">Opções JSON <textarea class="settings-input" bind:value={commandOptions} rows="3" placeholder="Lista JSON opcional de opções"></textarea></label>
+              <div class="inline-settings-form">
+                <button class="primary" type="submit" disabled={busy || !commandName.trim() || !commandDescription.trim()}>{editingCommandId ? "Salvar alterações" : "Registrar comando"}</button>
+                {#if editingCommandId}<button class="outline" type="button" disabled={busy} on:click={cancelEditCommand}>Cancelar edição</button>{/if}
+              </div>
+            </form>
+            <div class="application-token-list">
+              {#each commands as command}
+                <div class="application-row">
+                  <span><strong>/{command.name}</strong><small>{command.description} · {command.options?.length || 0} opção(ões)</small></span>
+                  <div class="inline-settings-form"><button class="outline" type="button" disabled={busy} on:click={() => beginEditCommand(command)}>Editar</button><button class="outline" type="button" disabled={busy} on:click={() => deleteCommand(command)}>Remover</button></div>
+                </div>
+              {/each}
+              {#if !commands.length}<p class="muted">Nenhum comando registrado.</p>{/if}
+            </div>
+          </section>
         </div>
 
         <section class="settings-card"><div class="settings-card-heading"><div><h3>Instalação em grupos</h3><p class="muted">Escolha grupos em que o bot poderá responder e publicar mensagens.</p></div></div>{#if availableGroups.length}<form class="inline-settings-form" on:submit|preventDefault={installBot}><select class="settings-input" bind:value={installGroupId} aria-label="Grupo para instalar o bot"><option value="">Escolha um grupo</option>{#each availableGroups as group}<option value={group.id}>{group.name}</option>{/each}</select><button class="primary" type="submit" disabled={busy || !installGroupId}>Instalar bot</button></form>{:else}<p class="muted">Todos os seus grupos já estão instalados ou você ainda não participa de nenhum.</p>{/if}<div class="application-token-list">{#each installations as installation}<div class="application-row application-installation-row"><span class="application-installation-meta"><strong>{groups.find((group) => group.id === installation.groupId)?.name || installation.groupId}</strong><small>Instalado em {new Date(installation.createdAt).toLocaleDateString()}</small></span><div class="application-permission-list" role="group" aria-label="Permissões da instalação">{#each installationPermissionOptions as permission}<label class="application-permission-toggle"><input type="checkbox" checked={installation.permissions?.[permission.key] !== false} disabled={busy} on:change={(event) => updateInstallationPermission(installation, permission.key, event.currentTarget.checked)} /><span>{permission.label}</span></label>{/each}</div><button class="outline" type="button" disabled={busy} on:click={() => uninstallBot(installation)}>Remover</button></div>{/each}{#if !installations.length}<p class="muted">Este bot ainda não está instalado em nenhum grupo.</p>{/if}</div></section>
