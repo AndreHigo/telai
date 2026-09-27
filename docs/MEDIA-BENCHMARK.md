@@ -85,6 +85,11 @@ Para medir a matriz P2P local completa, o comando executa cenários isolados de
 npm run test:media:matrix
 ```
 
+Quando o Electron encerra um cenário de alta concorrência sem emitir o
+resultado final, o comando registra o cenário em `inconclusive` e mantém
+`failures` reservado para falhas funcionais reais. Assim, o limite do harness
+continua visível sem ser confundido com uma regressão do transporte.
+
 Na execução local de 26/09/2026, os cenários de 1 e 5 viewers concluíram com
 todos os frames e codecs esperados. Os cenários de 10 e 20 viewers fizeram o
 Electron encerrar o harness antes de emitir o resultado final; por isso eles
