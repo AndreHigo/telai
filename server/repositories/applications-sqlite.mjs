@@ -84,7 +84,7 @@ export function createApplicationRepository(database, { createId = randomUUID } 
       JOIN applications ON applications.id = application_group_installations.application_id
       JOIN users ON users.id = applications.bot_user_id
       JOIN application_commands ON application_commands.application_id = applications.id
-      WHERE application_group_installations.group_id = ? AND application_group_installations.allow_commands = 1
+      WHERE application_group_installations.group_id = ? AND application_group_installations.allow_commands = 1 AND application_group_installations.allow_interactions = 1
       ORDER BY applications.name COLLATE NOCASE, application_commands.name COLLATE NOCASE
     `).all(groupId);
     return groupInstalledCommands(rows);

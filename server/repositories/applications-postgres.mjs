@@ -87,7 +87,7 @@ export function createPostgresApplicationRepository(database, { createId = rando
       JOIN applications ON applications.id = application_group_installations.application_id
       JOIN users ON users.id = applications.bot_user_id
       JOIN application_commands ON application_commands.application_id = applications.id
-      WHERE application_group_installations.group_id = $1 AND application_group_installations.allow_commands = TRUE
+      WHERE application_group_installations.group_id = $1 AND application_group_installations.allow_commands = TRUE AND application_group_installations.allow_interactions = TRUE
       ORDER BY LOWER(applications.name), LOWER(application_commands.name)
     `, [groupId]);
     return groupInstalledCommands(result.rows);

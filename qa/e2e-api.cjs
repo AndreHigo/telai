@@ -415,6 +415,14 @@ async function main() {
     assert.equal(enabledGroupCommandCatalog.response.status, 200, JSON.stringify(enabledGroupCommandCatalog.body));
     assert.equal(enabledGroupCommandCatalog.body.applications[0].applicationId, applicationId);
     assert.equal(enabledGroupCommandCatalog.body.applications[0].commands[0].name, "ping");
+    const interactionsDisabled = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "PATCH", { permissions: { commands: true, messages: true, interactions: false } });
+    assert.equal(interactionsDisabled.response.status, 200, JSON.stringify(interactionsDisabled.body));
+    const hiddenInteractionCatalog = await api(owner, `/api/groups/${groupId}/applications/commands`);
+    assert.equal(hiddenInteractionCatalog.response.status, 200, JSON.stringify(hiddenInteractionCatalog.body));
+    assert.equal(hiddenInteractionCatalog.body.applications.length, 0);
+    assert.equal((await api(owner, `/api/groups/${groupId}/applications/${applicationId}/interactions`, "POST", { roomId: group.textRoomId, commandName: "ping" })).response.status, 404);
+    const interactionEnabled = await api(owner, `/api/applications/${applicationId}/groups/${groupId}`, "PATCH", { permissions: { commands: true, messages: true, interactions: true } });
+    assert.equal(interactionEnabled.response.status, 200, JSON.stringify(interactionEnabled.body));
     const createdInteraction = await api(owner, `/api/groups/${groupId}/applications/${applicationId}/interactions`, "POST", { roomId: group.textRoomId, commandName: "ping" });
     assert.equal(createdInteraction.response.status, 202, JSON.stringify(createdInteraction.body));
     assert.equal(createdInteraction.body.interaction.kind, "command");
