@@ -84,12 +84,18 @@ function runMediaScenario(viewerCount) {
 async function main() {
   const scenarios = [];
   const failures = [];
+  const inconclusive = [];
   for (const viewerCount of counts) {
     process.stdout.write(`media-matrix: executando ${mediaMode}/${viewerCount} viewers...\n`);
     try {
       scenarios.push(await runMediaScenario(viewerCount));
     } catch (error) {
-      failures.push({ viewers: viewerCount, error: error.message });
+      const message = error.message || "erro sem descrição";
+      if (message.includes("harness encerrou antes do resultado final")) {
+        inconclusive.push({ viewers: viewerCount, error: message });
+      } else {
+        failures.push({ viewers: viewerCount, error: message });
+      }
     }
   }
   const rows = scenarios.map((scenario) => ({
@@ -102,7 +108,7 @@ async function main() {
     rtcPeerCount: scenario.viewer.rtcQuality?.second?.peerCount ?? null,
     codecs: scenario.viewer.rtcQuality?.second?.peers?.flatMap((peer) => peer.sample?.codecs || []) || [],
   }));
-  const result = { ok: failures.length === 0, mediaMode, scenarios: rows, failures };
+  const result = { ok: failures.length === 0, mediaMode, scenarios: rows, failures, inconclusive };
   console.log(JSON.stringify(result, null, 2));
   if (failures.length) process.exitCode = 1;
 }

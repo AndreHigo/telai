@@ -9,6 +9,8 @@ const files = {
   main: fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8"),
   preload: fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8"),
   app: fs.readFileSync(path.join(root, "frontend", "src", "App.svelte"), "utf8"),
+  desktop: fs.readFileSync(path.join(root, "frontend", "src", "features", "shell", "desktop-controller.js"), "utf8"),
+  profile: fs.readFileSync(path.join(root, "frontend", "src", "features", "settings", "ProfileSettingsExtras.svelte"), "utf8"),
   design: fs.readFileSync(path.join(root, "electron", "tray-icon-design.cjs"), "utf8"),
 };
 
@@ -16,8 +18,8 @@ const assertions = [
   ["menu contextual por estado", /function trayContextMenuForStatus\(status = \{\}\)/.test(files.main)],
   ["ação de abrir", files.main.includes('label: "Abrir Telai"')],
   ["ação de reiniciar", files.main.includes('label: "Reiniciar Telai"') && files.main.includes("app.relaunch()") && files.main.includes("function restartApplication")],
-  ["ação de microfone", files.main.includes('"toggle-mute"') && files.app.includes('action === "toggle-mute"')],
-  ["ação de áudio", files.main.includes('"toggle-deafen"') && files.app.includes('action === "toggle-deafen"')],
+  ["ação de microfone", files.main.includes('"toggle-mute"') && files.desktop.includes('action === "toggle-mute"')],
+  ["ação de áudio", files.main.includes('"toggle-deafen"') && files.desktop.includes('action === "toggle-deafen"')],
   ["verificação de atualizações", files.main.includes("checkForUpdatesInBackground()")],
   ["reconhecimentos", files.main.includes('label: "Reconhecimentos"') && files.main.includes("showTrayAcknowledgements")],
   ["saída explícita", files.main.includes('label: "Sair do Telai"') && files.main.includes("app.quit()")],
@@ -27,7 +29,7 @@ const assertions = [
   ["estado logado fora de sala", files.app.includes("connected: Boolean(user)") && files.main.includes('if (status.connected && !status.live && !status.voice)')],
   ["diagnóstico de atualização", files.main.includes('"tray_status_updated"') && files.main.includes('"tray_status_update_failed"')],
   ["limpeza do listener", files.app.includes("desktopTrayUnsubscribe?.()")],
-  ["preferência de aceleração gráfica", files.main.includes("app.disableHardwareAcceleration()") && files.main.includes('app-get-hardware-acceleration') && files.preload.includes('setHardwareAcceleration(mode)') && files.app.includes("Aceleração gráfica")],
+  ["preferência de aceleração gráfica", files.main.includes("app.disableHardwareAcceleration()") && files.main.includes('app-get-hardware-acceleration') && files.preload.includes('setHardwareAcceleration(mode)') && files.desktop.includes("setHardwareAcceleration") && files.profile.includes("Aceleração gráfica")],
 ];
 
 async function main() {
