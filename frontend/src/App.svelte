@@ -27,6 +27,7 @@
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
+  import { createAccountController } from "./features/shell/account-controller.js";
   import { createNavigationStateStore } from "./features/shell/navigation-state.js";
   import { createViewerStateStore } from "./features/shell/viewer-state.js";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
@@ -1403,6 +1404,15 @@
   });
   async function openSettings(...args) { return settingsNavigationController.openSettings(...args); }
   function selectSettingsSection(...args) { return settingsNavigationController.selectSettingsSection(...args); }
+  const accountController = createAccountController({
+    openSettings,
+    setSettingsState,
+    setUserMenuVisible: (value) => { showUserMenu = value; },
+    tick,
+    documentObject: document,
+  });
+  async function openAccountDestination(...args) { return accountController.openDestination(...args); }
+  function handleGlobalAccountClick(...args) { return accountController.handleGlobalClick(...args); }
   const authController = createAuthController({
     api,
     getState: () => authState.getState(),
@@ -3831,23 +3841,6 @@
     const roomList = icon === "⌁" ? voiceRooms : textRooms;
     const room = roomList.find((candidate) => candidate.name === roomName);
     if (room) openRoomContextMenu(event, room);
-  }
-
-  async function openAccountDestination(destination) {
-    showUserMenu = false;
-    await openSettings("user");
-    if (destination === "channel") {
-      setSettingsState({ settingsSection: "channel" });
-      return;
-    }
-    if (destination === "preferences") {
-      await tick();
-      document.querySelector(".settings-layout .settings-content > form:nth-of-type(2)")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
-
-  function handleGlobalAccountClick(event) {
-    if (!event.target.closest?.(".account-menu-shell")) showUserMenu = false;
   }
 
   function handleGlobalUserClick(event) {

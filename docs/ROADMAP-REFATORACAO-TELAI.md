@@ -186,6 +186,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair o controle do breakpoint responsivo e fechamento da sidebar para `frontend/src/features/shell/viewport-controller.js`, preservando o layout.
     - [x] Extrair polling condicionado por visibilidade, manutenção e countdown para `frontend/src/services/client-polling.js`, preservando frequências e condições do shell.
     - [x] Extrair o controller de manutenção programada, countdown e reload protegido para `frontend/src/features/shell/maintenance-controller.js`, preservando o banner existente.
+    - [x] Extrair a navegação e o fechamento do menu de conta para `frontend/src/features/shell/account-controller.js`, preservando destinos, rolagem e identidade visual.
     - [x] Centralizar a deduplicação monotônica de eventos WebSocket em `frontend/src/services/gateway-sequence.js`, preservando a ordem dos gateways.
     - [x] Extrair tema, cores personalizadas e defaults visuais para `frontend/src/features/settings/visual-state.js`, preservando bindings e identidade visual.
     - [x] Extrair estado do visualizador, fullscreen e rota de transmissão para `frontend/src/features/shell/viewer-state.js`, preservando URLs e navegação.
