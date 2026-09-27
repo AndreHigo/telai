@@ -1063,7 +1063,15 @@
   });
 
   const routeController = createRouteController({
-    getState: () => ({ isViewer: viewerState.getState().isViewer }),
+    getState: () => ({
+      groupOverview,
+      isViewer: viewerState.getState().isViewer,
+      pendingGroupRouteId,
+      pendingRoomRouteId,
+      rooms,
+      selectedGroupId,
+      user,
+    }),
     setState: (next) => {
       if ("authError" in next) setAuthState({ authError: next.authError });
       if ("isViewer" in next) setViewerState({ isViewer: next.isViewer });
@@ -1073,8 +1081,11 @@
       if ("viewerRoomId" in next) setViewerState({ viewerRoomId: next.viewerRoomId });
       if ("viewerStreamPath" in next) setViewerState({ viewerStreamPath: next.viewerStreamPath });
     },
+    loadGroup: (...args) => loadGroup(...args),
+    setGroupState,
+    setGroupsView: () => setGroupsView(),
   });
-  const { canonicalizeAuthenticatedRoute, detectViewerRoute, replaceBrowserPath } = routeController;
+  const { canonicalizeAuthenticatedRoute, detectViewerRoute, openPendingChannelRoute, replaceBrowserPath } = routeController;
 
   $: selectedGroup = groups.find((group) => group.id === selectedGroupId) || null;
   $: normalizedGroupPickerQuery = groupPickerQuery.trim().toLocaleLowerCase();
@@ -2461,21 +2472,6 @@
     if (voiceReconnectTimer) window.clearTimeout(voiceReconnectTimer);
     voiceReconnectTimer = null;
     voiceReconnectStorage.clear();
-  }
-
-  async function openPendingChannelRoute() {
-    if (!user || isViewer || !pendingGroupRouteId) return;
-    const groupId = pendingGroupRouteId;
-    try {
-      if (selectedGroupId !== groupId || groupOverview?.group?.id !== groupId) await loadGroup(groupId);
-      const room = rooms.find((candidate) => candidate.id === pendingRoomRouteId && ["text", "voice"].includes(candidate.kind));
-      if (room) {
-        setGroupState({ selectedRoomId: room.id });
-        setGroupsView();
-      }
-      pendingGroupRouteId = "";
-      pendingRoomRouteId = "";
-    } catch {}
   }
 
   function randomRoom() {

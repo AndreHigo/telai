@@ -57,4 +57,32 @@ const loginController = createRouteController({
 loginController.canonicalizeAuthenticatedRoute();
 assert.equal(loginWindow.calls.at(-1), "/?from=invite");
 
-console.log(JSON.stringify({ ok: true, viewerQuery: true, friendlyPath: true, loginCanonicalization: true }));
+const pendingState = {
+  user: { id: "user-1" },
+  isViewer: false,
+  pendingGroupRouteId: "group-2",
+  pendingRoomRouteId: "room-2",
+  selectedGroupId: "group-1",
+  groupOverview: { group: { id: "group-1" } },
+  rooms: [{ id: "room-2", kind: "text" }],
+};
+const pendingCalls = [];
+const pendingController = createRouteController({
+  windowObject: fakeWindow("https://telai.test/"),
+  getState: () => pendingState,
+  setState: (next) => Object.assign(pendingState, next),
+  loadGroup: async (groupId) => {
+    pendingCalls.push(["load", groupId]);
+    pendingState.selectedGroupId = groupId;
+    pendingState.groupOverview = { group: { id: groupId } };
+  },
+  setGroupState: (next) => Object.assign(pendingState, next),
+  setGroupsView: () => pendingCalls.push(["view"]),
+});
+await pendingController.openPendingChannelRoute();
+assert.deepEqual(pendingCalls, [["load", "group-2"], ["view"]]);
+assert.equal(pendingState.selectedRoomId, "room-2");
+assert.equal(pendingState.pendingGroupRouteId, "");
+assert.equal(pendingState.pendingRoomRouteId, "");
+
+console.log(JSON.stringify({ ok: true, viewerQuery: true, friendlyPath: true, loginCanonicalization: true, pendingChannelRoute: true }));

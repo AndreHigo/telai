@@ -4,7 +4,7 @@ const AUTH_ERROR_MESSAGES = {
   "oauth-failed": "Não foi possível concluir o acesso externo.",
 };
 
-export function createRouteController({ getState, setState, windowObject = globalThis.window } = {}) {
+export function createRouteController({ getState, setState, windowObject = globalThis.window, loadGroup, setGroupState, setGroupsView } = {}) {
   function replaceBrowserPath(pathname, { preserveQuery = true } = {}) {
     const url = new URL(windowObject.location.href);
     url.pathname = pathname;
@@ -46,5 +46,21 @@ export function createRouteController({ getState, setState, windowObject = globa
     }
   }
 
-  return { replaceBrowserPath, canonicalizeAuthenticatedRoute, detectViewerRoute };
+  async function openPendingChannelRoute() {
+    const state = getState();
+    if (!state.user || state.isViewer || !state.pendingGroupRouteId) return;
+    const groupId = state.pendingGroupRouteId;
+    try {
+      if (state.selectedGroupId !== groupId || state.groupOverview?.group?.id !== groupId) await loadGroup?.(groupId);
+      const current = getState();
+      const room = (current.rooms || []).find((candidate) => candidate.id === current.pendingRoomRouteId && ["text", "voice"].includes(candidate.kind));
+      if (room) {
+        setGroupState?.({ selectedRoomId: room.id });
+        setGroupsView?.();
+      }
+      setState({ pendingGroupRouteId: "", pendingRoomRouteId: "" });
+    } catch {}
+  }
+
+  return { replaceBrowserPath, canonicalizeAuthenticatedRoute, detectViewerRoute, openPendingChannelRoute };
 }
