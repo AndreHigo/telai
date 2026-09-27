@@ -81,6 +81,7 @@
   import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
   import { createBroadcastLifecycleController } from "./features/broadcast/lifecycle-controller.js";
   import { createLazyComponentLoader } from "./services/lazy-component-loader.js";
+  import { copyTextValue } from "./services/clipboard.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
@@ -111,26 +112,7 @@
     try {
       // No Electron, o clipboard do processo principal continua disponível
       // mesmo quando a página remota não recebe permissão do Chromium.
-      if (window.miranteDesktop?.copyText) {
-        const result = await window.miranteDesktop.copyText(value);
-        if (result?.ok) {
-          notice = successMessage;
-          return true;
-        }
-      }
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
-      else {
-        const input = document.createElement("textarea");
-        input.value = value;
-        input.setAttribute("readonly", "");
-        input.style.position = "fixed";
-        input.style.opacity = "0";
-        document.body.appendChild(input);
-        input.select();
-        const copied = document.execCommand("copy");
-        input.remove();
-        if (!copied) throw new Error("Clipboard indisponível neste contexto.");
-      }
+      await copyTextValue(value);
       notice = successMessage;
       return true;
     } catch (error) {
