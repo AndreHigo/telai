@@ -5,6 +5,14 @@ const state = {
   groups: [],
   selectedGroupId: null,
   selectedRoomId: null,
+  groupName: "",
+  showGroupDialog: false,
+  roomDialogMode: "create",
+  editingRoomId: "",
+  roomName: "",
+  roomKind: "text",
+  roomMaxParticipants: 8,
+  showRoomDialog: false,
   groupLoadSequence: 0,
   groupLoading: false,
   groupOverview: null,
@@ -23,9 +31,13 @@ const calls = [];
 const controller = createGroupController({
   getState: () => state,
   setState: (next) => Object.assign(state, next),
-  api: async (path) => path === "/api/groups"
-    ? { groups: [{ id: "group-1", name: "Colmeia" }] }
-    : { group: { id: "group-1" }, rooms: [{ id: "room-1", kind: "text" }, { id: "room-2", kind: "voice" }], messages: [{ id: "message-1" }], members: [] },
+  api: async (path, options = {}) => {
+    calls.push(["api", path, options.method || "GET"]);
+    if (path === "/api/groups" && options.method === "POST") return { group: { id: "group-2", name: "Nova" } };
+    if (path === "/api/groups") return { groups: [{ id: "group-1", name: "Colmeia" }] };
+    const groupId = path.match(/\/api\/groups\/([^/]+)\/overview/)?.[1] || "group-1";
+    return { group: { id: groupId }, rooms: [{ id: "room-1", kind: "text" }, { id: "room-2", kind: "voice" }], messages: [{ id: "message-1" }], members: [] };
+  },
   mergeActiveVoicePresence: (value) => value,
   shouldKeepGroupMessagesAtBottom: () => true,
   scrollGroupMessagesToBottom: async () => {},
@@ -40,6 +52,7 @@ const controller = createGroupController({
   getMessageComposerInput: () => ({ focus: () => calls.push(["focus"]) }),
   tick: async () => {},
   joinVoiceRoom: async () => calls.push(["join-voice"]),
+  setGroupsView: () => calls.push(["groups-view"]),
 });
 
 await controller.loadGroups();
@@ -66,4 +79,21 @@ assert.deepEqual(state.mentionSuggestions, []);
 assert.equal(state.mentionStartIndex, -1);
 assert.ok(calls.some(([name]) => name === "focus"));
 
-console.log(JSON.stringify({ ok: true, checks: 18 }));
+state.groupName = "Nova";
+state.showGroupDialog = true;
+await controller.createGroup();
+assert.equal(state.groupName, "");
+assert.equal(state.showGroupDialog, false);
+assert.equal(state.selectedGroupId, "group-2");
+assert.ok(calls.some(([name]) => name === "groups-view"));
+
+controller.openCreateRoomDialog("voice");
+assert.equal(state.showRoomDialog, true);
+assert.equal(state.roomKind, "voice");
+state.roomName = "Sala nova";
+await controller.createRoom();
+assert.equal(state.showRoomDialog, false);
+assert.equal(state.roomName, "");
+assert.ok(calls.some(([name, path, method]) => name === "api" && path.endsWith("/rooms") && method === "POST"));
+
+console.log(JSON.stringify({ ok: true, checks: 27 }));

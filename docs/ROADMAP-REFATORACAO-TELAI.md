@@ -166,7 +166,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair o cabeçalho, navegação global e banner de reconexão do shell para `frontend/src/features/shell`.
 - [x] Extrair a tela inicial para `frontend/src/features/home` sem alterar sua identidade visual.
 - [x] Extrair a seleção de grupos, rails de comunidades/canais/membros e cabeçalho do workspace para `frontend/src/features/groups`.
-- [x] Extrair carregamento concorrente de grupos, overview incremental e presença para `frontend/src/features/groups/controller.js` em chunk separado.
+    - [x] Extrair carregamento concorrente de grupos, overview incremental, presença e criação/edição de grupos e canais para `frontend/src/features/groups/controller.js` em chunk separado.
 - [x] Extrair o chat textual e a sala de voz do workspace de grupos para `frontend/src/features/groups`, mantendo o estado de mídia no shell.
 - [x] Extrair o pipeline de entrada de voz para `frontend/src/services/media` sem alterar os filtros atuais.
 - [x] Extrair utilitários de identificação, persistência e normalização de dispositivos de voz para `frontend/src/services/media/voice-device-utils.js`.

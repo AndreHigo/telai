@@ -1514,6 +1514,8 @@
         api,
         getState: () => ({
           broadcastState,
+          editingRoomId,
+          groupName,
           groupLoadSequence,
           groupLoading,
           groupOverview,
@@ -1523,13 +1525,21 @@
           groups,
           knownGroupMessageIds,
           pendingGroupOverviewRequests,
+          roomDialogMode,
+          roomKind,
+          roomMaxParticipants,
+          roomName,
           selectedGroupId,
           selectedRoomId,
+          showGroupDialog,
           showGroupPicker,
+          showRoomDialog,
           user,
           watchingGroupLiveStreamId,
         }),
         setState: (next) => {
+          if ("editingRoomId" in next) editingRoomId = next.editingRoomId;
+          if ("groupName" in next) groupName = next.groupName;
           const groupPatch = {};
           if ("groupLoadSequence" in next) groupPatch.groupLoadSequence = next.groupLoadSequence;
           if ("groupLoading" in next) groupPatch.groupLoading = next.groupLoading;
@@ -1541,7 +1551,13 @@
           if ("knownGroupMessageIds" in next) groupPatch.knownGroupMessageIds = next.knownGroupMessageIds;
           if ("selectedGroupId" in next) groupPatch.selectedGroupId = next.selectedGroupId;
           if ("selectedRoomId" in next) groupPatch.selectedRoomId = next.selectedRoomId;
+          if ("roomDialogMode" in next) roomDialogMode = next.roomDialogMode;
+          if ("roomKind" in next) roomKind = next.roomKind;
+          if ("roomMaxParticipants" in next) roomMaxParticipants = next.roomMaxParticipants;
+          if ("roomName" in next) roomName = next.roomName;
+          if ("showGroupDialog" in next) showGroupDialog = next.showGroupDialog;
           if ("showGroupPicker" in next) showGroupPicker = next.showGroupPicker;
+          if ("showRoomDialog" in next) showRoomDialog = next.showRoomDialog;
           if ("showMobileChannels" in next) setNavigationState({ showMobileChannels: next.showMobileChannels });
           const messagePatch = {};
           if ("mentionSuggestions" in next) messagePatch.mentionSuggestions = next.mentionSuggestions;
@@ -1562,13 +1578,17 @@
         getSelectedRoomId: () => selectedRoomId,
         markGroupRoomRead: (room) => markGroupRoomRead(room),
         getVoiceSoundContext: () => getVoiceSoundContext(),
-        getMessageComposerInput: () => messageComposerInput,
-        tick,
-        joinVoiceRoom: () => joinVoiceRoom(),
-      }));
+         getMessageComposerInput: () => messageComposerInput,
+         tick,
+         joinVoiceRoom: () => joinVoiceRoom(),
+         setGroupsView: () => setGroupsView(),
+       }));
     }
     return groupControllerPromise;
   }
+  async function createGroup(...args) { return (await getGroupController()).createGroup(...args); }
+  async function createRoom(...args) { return (await getGroupController()).createRoom(...args); }
+  function openCreateRoomDialog(...args) { void getGroupController().then((controller) => controller.openCreateRoomDialog(...args)); }
   async function loadGroups(...args) { return (await getGroupController()).loadGroups(...args); }
   async function loadGroup(...args) { return (await getGroupController()).loadGroup(...args); }
   async function selectRoom(...args) { return (await getGroupController()).selectRoom(...args); }
@@ -2443,29 +2463,6 @@
     voiceReconnectStorage.clear();
   }
 
-  async function createGroup() {
-    if (groupName.trim().length < 2) return;
-    try {
-      const result = await api("/api/groups", { method: "POST", body: JSON.stringify({ name: groupName.trim() }) });
-      showGroupDialog = false;
-      groupName = "";
-      await loadGroups();
-      setGroupState({ selectedGroupId: result.group.id });
-      await loadGroup(result.group.id);
-      setGroupsView();
-      notice = "Grupo criado.";
-    } catch (error) { notice = error.message; }
-  }
-
-  function openCreateRoomDialog(kind = "text") {
-    roomDialogMode = "create";
-    editingRoomId = "";
-    roomName = "";
-    roomKind = kind;
-    roomMaxParticipants = 8;
-    showRoomDialog = true;
-  }
-
   async function openPendingChannelRoute() {
     if (!user || isViewer || !pendingGroupRouteId) return;
     const groupId = pendingGroupRouteId;
@@ -2479,30 +2476,6 @@
       pendingGroupRouteId = "";
       pendingRoomRouteId = "";
     } catch {}
-  }
-
-  async function createRoom() {
-    if (!selectedGroupId || roomName.trim().length < 2) return;
-    const editing = roomDialogMode === "edit" && Boolean(editingRoomId);
-    try {
-      if (editing) {
-        await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms/${encodeURIComponent(editingRoomId)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ name: roomName.trim(), ...(roomKind === "voice" ? { maxParticipants: Number(roomMaxParticipants) } : {}) }),
-        });
-      } else {
-        await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms`, {
-          method: "POST",
-          body: JSON.stringify({ name: roomName.trim(), kind: roomKind, ...(roomKind === "voice" ? { maxParticipants: Number(roomMaxParticipants) } : {}) }),
-        });
-      }
-      showRoomDialog = false;
-      roomName = "";
-      editingRoomId = "";
-      roomDialogMode = "create";
-      await loadGroup(selectedGroupId);
-      notice = editing ? "Canal atualizado." : "Sala criada.";
-    } catch (error) { notice = error.message; }
   }
 
   function randomRoom() {

@@ -16,12 +16,64 @@ export function createGroupController({
   getMessageComposerInput,
   tick,
   joinVoiceRoom,
+  setGroupsView,
 }) {
   async function loadGroups() {
     const result = await api("/api/groups");
     const groups = result.groups || [];
     const state = getState();
     setState({ groups, ...(state.selectedGroupId && groups.some((group) => group.id === state.selectedGroupId) ? {} : { selectedGroupId: groups[0]?.id || null }) });
+  }
+
+  async function createGroup() {
+    const state = getState();
+    if (state.groupName.trim().length < 2) return;
+    try {
+      const result = await api("/api/groups", { method: "POST", body: JSON.stringify({ name: state.groupName.trim() }) });
+      setState({ showGroupDialog: false, groupName: "" });
+      await loadGroups();
+      setState({ selectedGroupId: result.group.id });
+      await loadGroup(result.group.id);
+      setGroupsView?.();
+      setNotice("Grupo criado.");
+    } catch (error) {
+      setNotice(error.message);
+    }
+  }
+
+  function openCreateRoomDialog(kind = "text") {
+    setState({
+      roomDialogMode: "create",
+      editingRoomId: "",
+      roomName: "",
+      roomKind: kind,
+      roomMaxParticipants: 8,
+      showRoomDialog: true,
+    });
+  }
+
+  async function createRoom() {
+    const state = getState();
+    if (!state.selectedGroupId || state.roomName.trim().length < 2) return;
+    const editing = state.roomDialogMode === "edit" && Boolean(state.editingRoomId);
+    try {
+      if (editing) {
+        await api(`/api/groups/${encodeURIComponent(state.selectedGroupId)}/rooms/${encodeURIComponent(state.editingRoomId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name: state.roomName.trim(), ...(state.roomKind === "voice" ? { maxParticipants: Number(state.roomMaxParticipants) } : {}) }),
+        });
+      } else {
+        await api(`/api/groups/${encodeURIComponent(state.selectedGroupId)}/rooms`, {
+          method: "POST",
+          body: JSON.stringify({ name: state.roomName.trim(), kind: state.roomKind, ...(state.roomKind === "voice" ? { maxParticipants: Number(state.roomMaxParticipants) } : {}) }),
+        });
+      }
+      setState({ showRoomDialog: false, roomName: "", editingRoomId: "", roomDialogMode: "create" });
+      await loadGroup(state.selectedGroupId);
+      setNotice(editing ? "Canal atualizado." : "Sala criada.");
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
 
   async function loadGroup(groupId) {
@@ -151,5 +203,5 @@ export function createGroupController({
     if (room.kind === "voice" && current.selectedRoomId === room.id) await joinVoiceRoom?.();
   }
 
-  return { loadGroup, loadGroups, refreshGroupOverview, refreshGroupPresence, selectRoom };
+  return { createGroup, createRoom, loadGroup, loadGroups, openCreateRoomDialog, refreshGroupOverview, refreshGroupPresence, selectRoom };
 }
