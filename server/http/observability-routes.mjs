@@ -50,8 +50,12 @@ export function createObservabilityRoutes({
           && !kind.endsWith("_closed")
           && !kind.includes("recovery_started");
         const isRoutineClientTelemetry = routineClientDiagnosticKinds.has(kind);
-        if (isViewerTelemetry || isRoutineClientTelemetry) infoLog("client_telemetry", clientDiagnostic);
-        else errorLog("client_error", clientDiagnostic);
+        // Telemetria rotineira já é contabilizada em clientEventCounts, mas
+        // não deve escrever uma linha de log por amostra. Em salas de voz,
+        // voice_rtc_quality chega a cada 10s por cliente e por participante;
+        // persistir cada payload gera I/O e ruído proporcionais ao tamanho
+        // da sala. Falhas reais continuam no log de erro.
+        if (!isViewerTelemetry && !isRoutineClientTelemetry) errorLog("client_error", clientDiagnostic);
         json(response, 202, { ok: true });
       } catch (error) {
         warnLog("client_error_rejected", { error: error.message });

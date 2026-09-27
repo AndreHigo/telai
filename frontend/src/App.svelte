@@ -97,7 +97,10 @@
   const viewerState = createViewerStateStore();
 
   const reportClientError = createClientDiagnostics({
-    routineKinds: ["voice_activity_sample", "voice_activity_state"],
+    // Qualidade RTC é amostrada localmente para recuperação dos pares, mas
+    // não deve virar um POST a cada 10s por participante. Em salas maiores
+    // isso multiplica tráfego e logs sem melhorar o estado da chamada.
+    routineKinds: ["voice_activity_sample", "voice_activity_state", "voice_rtc_quality", "voice_activity_analyzer_ready"],
     getRoute: () => window.location.pathname,
     getAppVersion: () => runtimeVersion(),
     getView: () => view,
