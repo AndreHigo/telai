@@ -80,6 +80,7 @@
   import { createMaintenanceController } from "./features/shell/maintenance-controller.js";
   import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
   import { createBroadcastLifecycleController } from "./features/broadcast/lifecycle-controller.js";
+  import { createLazyComponentLoader } from "./services/lazy-component-loader.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
@@ -326,31 +327,18 @@
   // para clientes antigos que ainda não publicam esse estado.
   let voiceSpeakingSignalKnownParticipantIds = new Set();
   let GroupTextChatWorkspace = null;
-  let groupTextWorkspaceLoad = null;
   let GroupVoiceWorkspace = null;
-  let groupVoiceWorkspaceLoad = null;
   let GroupMessageSearchDialog = null;
-  let groupMessageSearchDialogLoad = null;
   let GroupThreadDialog = null;
-  let groupThreadDialogLoad = null;
   let GroupChannelPermissionsSettings = null;
-  let groupChannelPermissionsSettingsLoad = null;
   let GroupAuditLogSettings = null;
-  let groupAuditLogSettingsLoad = null;
   let SettingsPage = null;
-  let settingsPageLoad = null;
   let MultistreamPage = null;
-  let multistreamPageLoad = null;
   let ContextMenus = null;
-  let contextMenusLoad = null;
   let GroupDialogs = null;
-  let groupDialogsLoad = null;
   let BroadcastDialogs = null;
-  let broadcastDialogsLoad = null;
   let ProfileSettingsExtras = null;
-  let profileSettingsExtrasLoad = null;
   let VoiceSettingsPanel = null;
-  let voiceSettingsPanelLoad = null;
   function setNavigationState(next) {
     navigationState.setState(next);
   }
@@ -483,46 +471,34 @@
     },
   });
 
-  function loadGroupTextWorkspace() {
-    if (GroupTextChatWorkspace || groupTextWorkspaceLoad) return groupTextWorkspaceLoad;
-    groupTextWorkspaceLoad = import("./features/groups/GroupTextChatWorkspace.svelte")
-      .then((module) => { GroupTextChatWorkspace = module.default; })
-      .catch((error) => reportClientError("text_workspace_load_error", error))
-      .finally(() => { groupTextWorkspaceLoad = null; });
-    return groupTextWorkspaceLoad;
-  }
+  const loadGroupTextWorkspace = createLazyComponentLoader({
+    importer: () => import("./features/groups/GroupTextChatWorkspace.svelte"),
+    assign: (component) => { GroupTextChatWorkspace = component; },
+    onError: (error) => reportClientError("text_workspace_load_error", error),
+  }).load;
 
-  function loadGroupVoiceWorkspace() {
-    if (GroupVoiceWorkspace || groupVoiceWorkspaceLoad) return groupVoiceWorkspaceLoad;
-    groupVoiceWorkspaceLoad = import("./features/groups/GroupVoiceWorkspace.svelte")
-      .then((module) => { GroupVoiceWorkspace = module.default; })
-      .catch((error) => reportClientError("voice_workspace_load_error", error))
-      .finally(() => { groupVoiceWorkspaceLoad = null; });
-    return groupVoiceWorkspaceLoad;
-  }
+  const loadGroupVoiceWorkspace = createLazyComponentLoader({
+    importer: () => import("./features/groups/GroupVoiceWorkspace.svelte"),
+    assign: (component) => { GroupVoiceWorkspace = component; },
+    onError: (error) => reportClientError("voice_workspace_load_error", error),
+  }).load;
 
   $: if (selectedRoom && selectedRoom.kind !== "voice" && !GroupTextChatWorkspace) void loadGroupTextWorkspace();
   $: if (selectedRoom?.kind === "voice" && !GroupVoiceWorkspace) void loadGroupVoiceWorkspace();
 
-  function loadGroupMessageSearchDialog() {
-    if (GroupMessageSearchDialog || groupMessageSearchDialogLoad) return groupMessageSearchDialogLoad;
-    groupMessageSearchDialogLoad = import("./features/groups/GroupMessageSearchDialog.svelte")
-      .then((module) => { GroupMessageSearchDialog = module.default; })
-      .catch((error) => reportClientError("group_message_search_dialog_load_error", error))
-      .finally(() => { groupMessageSearchDialogLoad = null; });
-    return groupMessageSearchDialogLoad;
-  }
+  const loadGroupMessageSearchDialog = createLazyComponentLoader({
+    importer: () => import("./features/groups/GroupMessageSearchDialog.svelte"),
+    assign: (component) => { GroupMessageSearchDialog = component; },
+    onError: (error) => reportClientError("group_message_search_dialog_load_error", error),
+  }).load;
 
   $: if (showGroupMessageSearch && !GroupMessageSearchDialog) void loadGroupMessageSearchDialog();
 
-  function loadGroupThreadDialog() {
-    if (GroupThreadDialog || groupThreadDialogLoad) return groupThreadDialogLoad;
-    groupThreadDialogLoad = import("./features/groups/GroupThreadDialog.svelte")
-      .then((module) => { GroupThreadDialog = module.default; })
-      .catch((error) => reportClientError("group_thread_dialog_load_error", error))
-      .finally(() => { groupThreadDialogLoad = null; });
-    return groupThreadDialogLoad;
-  }
+  const loadGroupThreadDialog = createLazyComponentLoader({
+    importer: () => import("./features/groups/GroupThreadDialog.svelte"),
+    assign: (component) => { GroupThreadDialog = component; },
+    onError: (error) => reportClientError("group_thread_dialog_load_error", error),
+  }).load;
 
   $: if (activeGroupThread && !GroupThreadDialog) void loadGroupThreadDialog();
 
@@ -551,102 +527,75 @@
   async function openGroupThread(...args) { return groupThreadRuntime.openGroupThread(...args); }
   async function sendGroupThreadMessage(...args) { return groupThreadRuntime.sendGroupThreadMessage(...args); }
 
-  function loadGroupChannelPermissionsSettings() {
-    if (GroupChannelPermissionsSettings || groupChannelPermissionsSettingsLoad) return groupChannelPermissionsSettingsLoad;
-    groupChannelPermissionsSettingsLoad = import("./features/settings/GroupChannelPermissionsSettings.svelte")
-      .then((module) => { GroupChannelPermissionsSettings = module.default; })
-      .catch((error) => reportClientError("group_channel_permissions_load_error", error))
-      .finally(() => { groupChannelPermissionsSettingsLoad = null; });
-    return groupChannelPermissionsSettingsLoad;
-  }
+  const loadGroupChannelPermissionsSettings = createLazyComponentLoader({
+    importer: () => import("./features/settings/GroupChannelPermissionsSettings.svelte"),
+    assign: (component) => { GroupChannelPermissionsSettings = component; },
+    onError: (error) => reportClientError("group_channel_permissions_load_error", error),
+  }).load;
 
   $: if (settingsTab === "group" && !GroupChannelPermissionsSettings) void loadGroupChannelPermissionsSettings();
 
-  function loadGroupAuditLogSettings() {
-    if (GroupAuditLogSettings || groupAuditLogSettingsLoad) return groupAuditLogSettingsLoad;
-    groupAuditLogSettingsLoad = import("./features/settings/GroupAuditLogSettings.svelte")
-      .then((module) => { GroupAuditLogSettings = module.default; })
-      .catch((error) => reportClientError("group_audit_log_load_error", error))
-      .finally(() => { groupAuditLogSettingsLoad = null; });
-    return groupAuditLogSettingsLoad;
-  }
+  const loadGroupAuditLogSettings = createLazyComponentLoader({
+    importer: () => import("./features/settings/GroupAuditLogSettings.svelte"),
+    assign: (component) => { GroupAuditLogSettings = component; },
+    onError: (error) => reportClientError("group_audit_log_load_error", error),
+  }).load;
 
   $: if (settingsTab === "group" && !GroupAuditLogSettings) void loadGroupAuditLogSettings();
 
-  function loadSettingsPage() {
-    if (SettingsPage || settingsPageLoad) return settingsPageLoad;
-    settingsPageLoad = import("./features/settings/SettingsPage.svelte")
-      .then((module) => { SettingsPage = module.default; })
-      .catch((error) => reportClientError("settings_page_load_error", error))
-      .finally(() => { settingsPageLoad = null; });
-    return settingsPageLoad;
-  }
+  const loadSettingsPage = createLazyComponentLoader({
+    importer: () => import("./features/settings/SettingsPage.svelte"),
+    assign: (component) => { SettingsPage = component; },
+    onError: (error) => reportClientError("settings_page_load_error", error),
+  }).load;
 
   $: if (view === "settings" && !SettingsPage) void loadSettingsPage();
 
-  function loadMultistreamPage() {
-    if (MultistreamPage || multistreamPageLoad) return multistreamPageLoad;
-    multistreamPageLoad = import("./features/live/MultistreamPage.svelte")
-      .then((module) => { MultistreamPage = module.default; })
-      .catch((error) => reportClientError("multistream_page_load_error", error))
-      .finally(() => { multistreamPageLoad = null; });
-    return multistreamPageLoad;
-  }
+  const loadMultistreamPage = createLazyComponentLoader({
+    importer: () => import("./features/live/MultistreamPage.svelte"),
+    assign: (component) => { MultistreamPage = component; },
+    onError: (error) => reportClientError("multistream_page_load_error", error),
+  }).load;
 
   $: if (view === "multistream" && !MultistreamPage) void loadMultistreamPage();
 
-  function loadContextMenus() {
-    if (ContextMenus || contextMenusLoad) return contextMenusLoad;
-    contextMenusLoad = import("./features/shell/ContextMenus.svelte")
-      .then((module) => { ContextMenus = module.default; })
-      .catch((error) => reportClientError("context_menus_load_error", error))
-      .finally(() => { contextMenusLoad = null; });
-    return contextMenusLoad;
-  }
+  const loadContextMenus = createLazyComponentLoader({
+    importer: () => import("./features/shell/ContextMenus.svelte"),
+    assign: (component) => { ContextMenus = component; },
+    onError: (error) => reportClientError("context_menus_load_error", error),
+  }).load;
 
   $: if ((groupContextMenu || roomContextMenu || voiceContextMenu || profilePreview) && !ContextMenus) void loadContextMenus();
 
-  function loadGroupDialogs() {
-    if (GroupDialogs || groupDialogsLoad) return groupDialogsLoad;
-    groupDialogsLoad = import("./features/groups/GroupDialogs.svelte")
-      .then((module) => { GroupDialogs = module.default; })
-      .catch((error) => reportClientError("group_dialogs_load_error", error))
-      .finally(() => { groupDialogsLoad = null; });
-    return groupDialogsLoad;
-  }
+  const loadGroupDialogs = createLazyComponentLoader({
+    importer: () => import("./features/groups/GroupDialogs.svelte"),
+    assign: (component) => { GroupDialogs = component; },
+    onError: (error) => reportClientError("group_dialogs_load_error", error),
+  }).load;
 
   $: if ((showInviteDialog || showGroupSearchDialog || showLeaveGroupDialog || showDeleteRoomDialog || showDeleteGroupDialog || showGroupDialog || showRoomDialog) && !GroupDialogs) void loadGroupDialogs();
 
-  function loadBroadcastDialogs() {
-    if (BroadcastDialogs || broadcastDialogsLoad) return broadcastDialogsLoad;
-    broadcastDialogsLoad = import("./features/broadcast/BroadcastDialogs.svelte")
-      .then((module) => { BroadcastDialogs = module.default; })
-      .catch((error) => reportClientError("broadcast_dialogs_load_error", error))
-      .finally(() => { broadcastDialogsLoad = null; });
-    return broadcastDialogsLoad;
-  }
+  const loadBroadcastDialogs = createLazyComponentLoader({
+    importer: () => import("./features/broadcast/BroadcastDialogs.svelte"),
+    assign: (component) => { BroadcastDialogs = component; },
+    onError: (error) => reportClientError("broadcast_dialogs_load_error", error),
+  }).load;
 
   $: if ((showPublicBroadcastSetup || showPublicBroadcastReview || showBroadcastVisibilityDialog || showDisplayPicker || showBroadcastAudioPicker) && !BroadcastDialogs) void loadBroadcastDialogs();
 
-  function loadProfileSettingsExtras() {
-    if (ProfileSettingsExtras || profileSettingsExtrasLoad) return profileSettingsExtrasLoad;
-    profileSettingsExtrasLoad = import("./features/settings/ProfileSettingsExtras.svelte")
-      .then((module) => { ProfileSettingsExtras = module.default; })
-      .catch((error) => reportClientError("profile_settings_extras_load_error", error))
-      .finally(() => { profileSettingsExtrasLoad = null; });
-    return profileSettingsExtrasLoad;
-  }
+  const loadProfileSettingsExtras = createLazyComponentLoader({
+    importer: () => import("./features/settings/ProfileSettingsExtras.svelte"),
+    assign: (component) => { ProfileSettingsExtras = component; },
+    onError: (error) => reportClientError("profile_settings_extras_load_error", error),
+  }).load;
 
   $: if (settingsSection === "profile" && !ProfileSettingsExtras) void loadProfileSettingsExtras();
 
-  function loadVoiceSettingsPanel() {
-    if (VoiceSettingsPanel || voiceSettingsPanelLoad) return voiceSettingsPanelLoad;
-    voiceSettingsPanelLoad = import("./features/settings/VoiceSettingsPanel.svelte")
-      .then((module) => { VoiceSettingsPanel = module.default; })
-      .catch((error) => reportClientError("voice_settings_panel_load_error", error))
-      .finally(() => { voiceSettingsPanelLoad = null; });
-    return voiceSettingsPanelLoad;
-  }
+  const loadVoiceSettingsPanel = createLazyComponentLoader({
+    importer: () => import("./features/settings/VoiceSettingsPanel.svelte"),
+    assign: (component) => { VoiceSettingsPanel = component; },
+    onError: (error) => reportClientError("voice_settings_panel_load_error", error),
+  }).load;
 
   $: if (settingsSection === "voice" && !VoiceSettingsPanel) void loadVoiceSettingsPanel();
   let voiceActivityTimer;

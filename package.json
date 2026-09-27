@@ -22,6 +22,7 @@
     "test:navigation-state": "node qa/test-navigation-state.mjs",
     "test:viewport-controller": "node qa/test-viewport-controller.mjs",
     "test:route-controller": "node qa/test-route-controller.mjs",
+    "test:lazy-component-loader": "node qa/test-lazy-component-loader.mjs",
     "test:client-polling": "node qa/test-client-polling.mjs",
     "test:maintenance-controller": "node qa/test-maintenance-controller.mjs",
     "test:gateway-sequence": "node qa/test-gateway-sequence.mjs",
