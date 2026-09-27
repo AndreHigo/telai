@@ -318,6 +318,7 @@ enviada ao GitHub nem publicada em produção.
    - [x] Adicionar escopos persistentes por instalação para comandos, mensagens e interações, mantendo todos habilitados por compatibilidade.
    - [x] Separar presenters, parsing de comandos e conversão de permissões do repositório de aplicações em um módulo de domínio compartilhado pelos drivers.
    - [x] Separar as implementações SQLite e PostgreSQL do repositório de aplicações, mantendo uma fachada de importação estável.
+   - [x] Aplicar a permissão de interações no catálogo e no polling de bots para não expor nem capturar comandos desativados.
    - [ ] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
 - [x] Comandos, componentes e modais.
   - [x] Registrar comandos por aplicação com validação de nome, descrição e opções em SQLite/PostgreSQL.
