@@ -922,6 +922,7 @@ eventGateway = createEventGateway({
   groupMemberRepository,
   isPresent,
   canGroupRoomAction,
+  enqueueApplicationEvent: (...args) => applicationRepository?.enqueueGroupEvent(...args),
   touchGroupPresence,
   randomUUID,
   infoLog,

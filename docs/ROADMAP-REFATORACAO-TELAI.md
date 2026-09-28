@@ -329,9 +329,9 @@ enviada ao GitHub nem publicada em produção.
     - [x] Separar as implementações SQLite e PostgreSQL do repositório de aplicações, mantendo uma fachada de importação estável.
    - [x] Permitir atualizar nome e descrição da aplicação, sincronizando a identidade do bot em SQLite/PostgreSQL.
    - [x] Aplicar a permissão de interações no catálogo e no polling de bots para não expor nem capturar comandos desativados.
-   - [ ] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
+   - [x] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
      - [x] Permitir editar comandos, ativar/desativar comandos e a identidade da aplicação pelo painel existente, sem criar uma tela paralela.
-     - [ ] Adicionar eventos assináveis e permissões granulares adicionais somente após definir retenção, entrega e limites operacionais.
+      - [x] Adicionar eventos assináveis e permissões granulares adicionais somente após definir retenção de 5 minutos, entrega at-most-once, lote de 25 e limite de 100 eventos por aplicação.
 - [x] Comandos, componentes e modais.
   - [x] Registrar comandos por aplicação com validação de nome, descrição e opções em SQLite/PostgreSQL.
   - [x] Expor o manifesto de comandos ao bot autenticado sem vazar tokens ou dados internos.

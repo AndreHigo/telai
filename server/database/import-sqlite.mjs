@@ -40,6 +40,7 @@ export const IMPORT_ORDER = [
   ["application_commands", ["id"]],
   ["application_interactions", ["id"]],
   ["application_group_installations", ["application_id", "group_id"]],
+  ["application_events", ["id"]],
   ["direct_conversations", ["id"]],
   ["direct_conversation_members", ["conversation_id", "user_id"]],
   ["direct_messages", ["id"]],

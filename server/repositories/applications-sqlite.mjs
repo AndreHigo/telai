@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { APPLICATION_EVENT_TYPES } from "../domain/applications/normalization.mjs";
 import {
   groupInstalledCommands,
   installationPermissionValues,
   parseCommandOptions,
+  parseEventSubscriptions,
   publicApplication,
+  publicApplicationEvent,
   publicCommand,
   publicInstallation,
   publicToken,
@@ -168,8 +171,8 @@ export function createApplicationRepository(database, { createId = randomUUID } 
       database.exec("BEGIN IMMEDIATE");
       database.prepare("INSERT OR IGNORE INTO group_members (group_id, user_id, role, created_at) VALUES (?, ?, 'member', ?)")
         .run(groupId, application.botUserId, createdAt);
-      database.prepare("INSERT OR IGNORE INTO application_group_installations (application_id, group_id, installed_by, created_at, allow_commands, allow_messages, allow_interactions) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .run(applicationId, groupId, installedBy, createdAt, values.allowCommands, values.allowMessages, values.allowInteractions);
+      database.prepare("INSERT OR IGNORE INTO application_group_installations (application_id, group_id, installed_by, created_at, allow_commands, allow_messages, allow_interactions, event_subscriptions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(applicationId, groupId, installedBy, createdAt, values.allowCommands, values.allowMessages, values.allowInteractions, values.eventSubscriptions);
       database.exec("COMMIT");
       return findInstallation(applicationId, groupId);
     } catch (error) {
@@ -181,7 +184,8 @@ export function createApplicationRepository(database, { createId = randomUUID } 
   function findInstallation(applicationId, groupId) {
     return publicInstallation(database.prepare(`
       SELECT application_id AS applicationId, group_id AS groupId, created_at AS createdAt,
-        allow_commands AS allowCommands, allow_messages AS allowMessages, allow_interactions AS allowInteractions
+        allow_commands AS allowCommands, allow_messages AS allowMessages, allow_interactions AS allowInteractions,
+        event_subscriptions_json AS eventSubscriptionsJson
       FROM application_group_installations WHERE application_id = ? AND group_id = ?
     `).get(applicationId, groupId));
   }
@@ -189,7 +193,8 @@ export function createApplicationRepository(database, { createId = randomUUID } 
   function listInstallations(applicationId) {
     return database.prepare(`
       SELECT application_id AS applicationId, group_id AS groupId, created_at AS createdAt,
-        allow_commands AS allowCommands, allow_messages AS allowMessages, allow_interactions AS allowInteractions
+        allow_commands AS allowCommands, allow_messages AS allowMessages, allow_interactions AS allowInteractions,
+        event_subscriptions_json AS eventSubscriptionsJson
       FROM application_group_installations WHERE application_id = ? ORDER BY created_at DESC
     `).all(applicationId).map(publicInstallation);
   }
@@ -198,10 +203,42 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     const values = installationPermissionValues(permissions);
     const result = database.prepare(`
       UPDATE application_group_installations
-      SET allow_commands = ?, allow_messages = ?, allow_interactions = ?
+      SET allow_commands = ?, allow_messages = ?, allow_interactions = ?, event_subscriptions_json = ?
       WHERE application_id = ? AND group_id = ?
-    `).run(values.allowCommands, values.allowMessages, values.allowInteractions, applicationId, groupId);
+    `).run(values.allowCommands, values.allowMessages, values.allowInteractions, values.eventSubscriptions, applicationId, groupId);
     return result.changes ? findInstallation(applicationId, groupId) : null;
+  }
+
+  function enqueueGroupEvent({ groupId, eventType, payload, createdAt = new Date().toISOString(), expiresAt = new Date(Date.now() + 5 * 60_000).toISOString() }) {
+    if (!APPLICATION_EVENT_TYPES.includes(eventType)) return 0;
+    const serialized = JSON.stringify(payload && typeof payload === "object" ? payload : {});
+    if (Buffer.byteLength(serialized, "utf8") > 64 * 1024) return 0;
+    const installations = database.prepare("SELECT application_id AS applicationId, event_subscriptions_json AS eventSubscriptionsJson FROM application_group_installations WHERE group_id = ?").all(groupId);
+    let enqueued = 0;
+    for (const installation of installations) {
+      if (!parseEventSubscriptions(installation.eventSubscriptionsJson).includes(eventType)) continue;
+      database.prepare("INSERT INTO application_events (id, application_id, group_id, event_type, payload_json, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(createId(), installation.applicationId, groupId, eventType, serialized, createdAt, expiresAt);
+      database.prepare("DELETE FROM application_events WHERE application_id = ? AND id IN (SELECT id FROM application_events WHERE application_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET 100)")
+        .run(installation.applicationId, installation.applicationId);
+      enqueued += 1;
+    }
+    return enqueued;
+  }
+
+  function claimEvents(applicationId, { limit = 25, now = new Date().toISOString() } = {}) {
+    const safeLimit = Math.max(1, Math.min(25, Number(limit) || 25));
+    try {
+      database.exec("BEGIN IMMEDIATE");
+      database.prepare("DELETE FROM application_events WHERE application_id = ? AND (expires_at <= ? OR claimed_at IS NOT NULL)").run(applicationId, now);
+      const rows = database.prepare("SELECT id, application_id AS applicationId, group_id AS groupId, event_type AS eventType, payload_json AS payloadJson, created_at AS createdAt, expires_at AS expiresAt FROM application_events WHERE application_id = ? AND claimed_at IS NULL AND expires_at > ? ORDER BY created_at ASC LIMIT ?").all(applicationId, now, safeLimit);
+      for (const row of rows) database.prepare("UPDATE application_events SET claimed_at = ? WHERE id = ? AND claimed_at IS NULL").run(now, row.id);
+      database.exec("COMMIT");
+      return rows.map(publicApplicationEvent);
+    } catch (error) {
+      try { database.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
   }
 
   function uninstallGroup(applicationId, groupId) {
@@ -234,5 +271,5 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     }
   }
 
-  return { listOwned, findOwned, createApplication, updateApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, updateApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, enqueueGroupEvent, claimEvents, uninstallGroup, deleteApplication };
 }

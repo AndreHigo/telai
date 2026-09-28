@@ -155,6 +155,20 @@ export function createApplicationBotRoutes({
   }
 
   async function handleBotInteractionRoutes(request, response, requestUrl) {
+    if (requestUrl.pathname === "/api/bot/events" && request.method === "GET") {
+      const identity = await botIdentity(request);
+      if (!identity) {
+        json(response, 401, { error: "Token de bot inválido ou revogado." });
+        return true;
+      }
+      const events = await applicationRepository.claimEvents(identity.applicationId, {
+        limit: Number(requestUrl.searchParams.get("limit")) || 25,
+      });
+      await applicationRepository.touchToken(identity.tokenId);
+      json(response, 200, { events, delivery: { mode: "at-most-once", ttlSeconds: 300, maxBatch: 25 } });
+      return true;
+    }
+
     if (requestUrl.pathname === "/api/bot/interactions" && request.method === "GET") {
       const identity = await botIdentity(request);
       if (!identity) {

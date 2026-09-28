@@ -77,6 +77,16 @@ Eventos de comunidade usam o WebSocket autenticado `/events`, separado da
 sinalização WebRTC em `/signal`. O contrato e o fluxo de assinatura estão em
 `docs/EVENTS-GATEWAY.md`.
 
+Aplicações podem assinar eventos de grupo por instalação no painel existente ou
+no `PATCH /api/v1/applications/{applicationId}/groups/{groupId}` usando
+`permissions.events`. O bot consulta `GET /api/v1/bot/events` com seu token;
+as entregas são at-most-once, têm lote máximo de 25 itens, TTL de 5 minutos e
+limite de 100 eventos pendentes por aplicação. A assinatura é vazia por padrão
+e os tipos aceitos são mensagens criadas/editadas/removidas, moderação,
+presença e respostas de interação. Eventos expirados ou já reclamados são
+removidos durante o polling, evitando crescimento de fila sem um broker
+adicional.
+
 Após uma queda inesperada do socket de voz, o cliente persiste a sala ativa,
 refaz a conexão automaticamente e aceita o novo estado somente depois do
 `voice-joined` emitido pelo servidor. Esse fluxo é coberto por

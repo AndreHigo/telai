@@ -56,7 +56,28 @@ export function normalizeApplicationInstallationPermissions(value, fallback = { 
     if (value[key] !== undefined && typeof value[key] !== "boolean") return null;
     permissions[key] = value[key] === undefined ? Boolean(fallback[key]) : value[key];
   }
+  const events = normalizeApplicationEventSubscriptions(value.events, fallback.events || []);
+  if (!events) return null;
+  permissions.events = events;
   return permissions;
+}
+
+export const APPLICATION_EVENT_TYPES = Object.freeze([
+  "group-message",
+  "group-message-updated",
+  "group-message-deleted",
+  "group-member-moderated",
+  "group-presence",
+  "application-interaction-response",
+]);
+
+export function normalizeApplicationEventSubscriptions(value, fallback = []) {
+  if (value === undefined) return [...fallback];
+  if (!Array.isArray(value) || value.length > APPLICATION_EVENT_TYPES.length) return null;
+  const allowed = new Set(APPLICATION_EVENT_TYPES);
+  const subscriptions = [...new Set(value.map((item) => String(item || "").trim()))];
+  if (subscriptions.some((item) => !allowed.has(item))) return null;
+  return subscriptions;
 }
 
 export function normalizeComponents(value) {

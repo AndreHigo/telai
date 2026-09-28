@@ -200,9 +200,15 @@ export function createApplicationOwnerRoutes({
         } else if (request.method === "PATCH") {
           try {
             const body = await readJson(request, 8 * 1024);
-            const permissions = normalizeApplicationInstallationPermissions(body.permissions);
+            const currentInstallation = await applicationRepository.findInstallation(applicationId, childId);
+            const permissions = normalizeApplicationInstallationPermissions(body.permissions, {
+              commands: true,
+              messages: true,
+              interactions: true,
+              events: currentInstallation?.permissions?.events || [],
+            });
             if (!permissions) {
-              json(response, 400, { error: "As permissões da instalação precisam ser booleanas." });
+              json(response, 400, { error: "As permissões da instalação precisam ser booleanas e os eventos precisam ser tipos válidos." });
               return true;
             }
             const installation = await applicationRepository.updateInstallation({ applicationId, groupId: childId, permissions });

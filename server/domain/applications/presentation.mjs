@@ -33,15 +33,42 @@ export function publicToken(row) {
 
 export function publicInstallation(row) {
   if (!row) return null;
+  const events = parseEventSubscriptions(row.eventSubscriptionsJson ?? row.event_subscriptions_json);
+  const permissions = {
+    commands: Boolean(row.allowCommands ?? row.allow_commands ?? 1),
+    messages: Boolean(row.allowMessages ?? row.allow_messages ?? 1),
+    interactions: Boolean(row.allowInteractions ?? row.allow_interactions ?? 1),
+  };
+  if (events.length) permissions.events = events;
   return {
     applicationId: row.applicationId,
     groupId: row.groupId,
     createdAt: row.createdAt,
-    permissions: {
-      commands: Boolean(row.allowCommands ?? row.allow_commands ?? 1),
-      messages: Boolean(row.allowMessages ?? row.allow_messages ?? 1),
-      interactions: Boolean(row.allowInteractions ?? row.allow_interactions ?? 1),
-    },
+    permissions,
+  };
+}
+
+export function parseEventSubscriptions(value) {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function publicApplicationEvent(row) {
+  if (!row) return null;
+  let payload = {};
+  try { payload = JSON.parse(String(row.payloadJson ?? row.payload_json ?? "{}")); } catch {}
+  return {
+    id: row.id,
+    applicationId: row.applicationId,
+    groupId: row.groupId,
+    type: row.eventType,
+    payload,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
   };
 }
 
@@ -50,6 +77,7 @@ export function installationPermissionValues(permissions = {}) {
     allowCommands: permissions.commands !== false ? 1 : 0,
     allowMessages: permissions.messages !== false ? 1 : 0,
     allowInteractions: permissions.interactions !== false ? 1 : 0,
+    eventSubscriptions: JSON.stringify(Array.isArray(permissions.events) ? permissions.events : []),
   };
 }
 

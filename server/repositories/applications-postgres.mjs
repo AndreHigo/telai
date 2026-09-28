@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { APPLICATION_EVENT_TYPES } from "../domain/applications/normalization.mjs";
 import {
   groupInstalledCommands,
   installationPermissionValues,
   parseCommandOptions,
+  parseEventSubscriptions,
   publicApplication,
+  publicApplicationEvent,
   publicCommand,
   publicInstallation,
   publicToken,
@@ -172,25 +175,50 @@ export function createPostgresApplicationRepository(database, { createId = rando
     const values = installationPermissionValues(permissions);
     return withPostgresTransaction(database, async (client) => {
       await client.query("INSERT INTO group_members (group_id, user_id, role, created_at) VALUES ($1, $2, 'member', $3) ON CONFLICT DO NOTHING", [groupId, application.botUserId, createdAt]);
-      await client.query("INSERT INTO application_group_installations (application_id, group_id, installed_by, created_at, allow_commands, allow_messages, allow_interactions) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING", [applicationId, groupId, installedBy, createdAt, values.allowCommands, values.allowMessages, values.allowInteractions]);
+      await client.query("INSERT INTO application_group_installations (application_id, group_id, installed_by, created_at, allow_commands, allow_messages, allow_interactions, event_subscriptions_json) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING", [applicationId, groupId, installedBy, createdAt, values.allowCommands, values.allowMessages, values.allowInteractions, values.eventSubscriptions]);
       return findInstallation(applicationId, groupId, client);
     });
   }
 
   async function findInstallation(applicationId, groupId, client = database) {
-    const result = await client.query('SELECT application_id AS "applicationId", group_id AS "groupId", created_at AS "createdAt", allow_commands AS "allowCommands", allow_messages AS "allowMessages", allow_interactions AS "allowInteractions" FROM application_group_installations WHERE application_id = $1 AND group_id = $2', [applicationId, groupId]);
+    const result = await client.query('SELECT application_id AS "applicationId", group_id AS "groupId", created_at AS "createdAt", allow_commands AS "allowCommands", allow_messages AS "allowMessages", allow_interactions AS "allowInteractions", event_subscriptions_json AS "eventSubscriptionsJson" FROM application_group_installations WHERE application_id = $1 AND group_id = $2', [applicationId, groupId]);
     return publicInstallation(result.rows[0]);
   }
 
   async function listInstallations(applicationId) {
-    const result = await database.query('SELECT application_id AS "applicationId", group_id AS "groupId", created_at AS "createdAt", allow_commands AS "allowCommands", allow_messages AS "allowMessages", allow_interactions AS "allowInteractions" FROM application_group_installations WHERE application_id = $1 ORDER BY created_at DESC', [applicationId]);
+    const result = await database.query('SELECT application_id AS "applicationId", group_id AS "groupId", created_at AS "createdAt", allow_commands AS "allowCommands", allow_messages AS "allowMessages", allow_interactions AS "allowInteractions", event_subscriptions_json AS "eventSubscriptionsJson" FROM application_group_installations WHERE application_id = $1 ORDER BY created_at DESC', [applicationId]);
     return result.rows.map(publicInstallation);
   }
 
   async function updateInstallation({ applicationId, groupId, permissions = {} }) {
     const values = installationPermissionValues(permissions);
-    const result = await database.query("UPDATE application_group_installations SET allow_commands = $1, allow_messages = $2, allow_interactions = $3 WHERE application_id = $4 AND group_id = $5", [values.allowCommands, values.allowMessages, values.allowInteractions, applicationId, groupId]);
+    const result = await database.query("UPDATE application_group_installations SET allow_commands = $1, allow_messages = $2, allow_interactions = $3, event_subscriptions_json = $4 WHERE application_id = $5 AND group_id = $6", [values.allowCommands, values.allowMessages, values.allowInteractions, values.eventSubscriptions, applicationId, groupId]);
     return result.rowCount ? findInstallation(applicationId, groupId) : null;
+  }
+
+  async function enqueueGroupEvent({ groupId, eventType, payload, createdAt = new Date().toISOString(), expiresAt = new Date(Date.now() + 5 * 60_000).toISOString() }) {
+    if (!APPLICATION_EVENT_TYPES.includes(eventType)) return 0;
+    const serialized = JSON.stringify(payload && typeof payload === "object" ? payload : {});
+    if (Buffer.byteLength(serialized, "utf8") > 64 * 1024) return 0;
+    const installations = await database.query('SELECT application_id AS "applicationId", event_subscriptions_json AS "eventSubscriptionsJson" FROM application_group_installations WHERE group_id = $1', [groupId]);
+    let enqueued = 0;
+    for (const installation of installations.rows) {
+      if (!parseEventSubscriptions(installation.eventSubscriptionsJson).includes(eventType)) continue;
+      await database.query("INSERT INTO application_events (id, application_id, group_id, event_type, payload_json, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)", [createId(), installation.applicationId, groupId, eventType, serialized, createdAt, expiresAt]);
+      await database.query("DELETE FROM application_events WHERE application_id = $1 AND id IN (SELECT id FROM application_events WHERE application_id = $1 ORDER BY created_at DESC OFFSET 100)", [installation.applicationId]);
+      enqueued += 1;
+    }
+    return enqueued;
+  }
+
+  async function claimEvents(applicationId, { limit = 25, now = new Date().toISOString() } = {}) {
+    const safeLimit = Math.max(1, Math.min(25, Number(limit) || 25));
+    return withPostgresTransaction(database, async (client) => {
+      await client.query("DELETE FROM application_events WHERE application_id = $1 AND (expires_at <= $2 OR claimed_at IS NOT NULL)", [applicationId, now]);
+      const result = await client.query('SELECT id, application_id AS "applicationId", group_id AS "groupId", event_type AS "eventType", payload_json AS "payloadJson", created_at AS "createdAt", expires_at AS "expiresAt" FROM application_events WHERE application_id = $1 AND claimed_at IS NULL AND expires_at > $2 ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT $3', [applicationId, now, safeLimit]);
+      for (const row of result.rows) await client.query("UPDATE application_events SET claimed_at = $1 WHERE id = $2", [now, row.id]);
+      return result.rows.map(publicApplicationEvent);
+    });
   }
 
   async function uninstallGroup(applicationId, groupId) {
@@ -215,5 +243,5 @@ export function createPostgresApplicationRepository(database, { createId = rando
     });
   }
 
-  return { listOwned, findOwned, createApplication, updateApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, updateApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, enqueueGroupEvent, claimEvents, uninstallGroup, deleteApplication };
 }

@@ -36,6 +36,7 @@ export function createEventGateway({
   isPresent,
   touchGroupPresence,
   canGroupRoomAction = () => true,
+  enqueueApplicationEvent = () => 0,
   randomUUID,
   infoLog,
   warnLog,
@@ -90,6 +91,11 @@ export function createEventGateway({
   async function publishGroupEvent(groupId, message) {
     const normalizedGroupId = String(groupId || "");
     if (!normalizedGroupId || !message || typeof message !== "object") return 0;
+    await enqueueApplicationEvent({
+      groupId: normalizedGroupId,
+      eventType: String(message.type || ""),
+      payload: { ...message, groupId: normalizedGroupId },
+    });
     let delivered = 0;
     for (const socket of clients) {
       if (!socket.eventGroups?.has(normalizedGroupId)) continue;

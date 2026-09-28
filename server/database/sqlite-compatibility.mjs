@@ -40,6 +40,7 @@ export function ensureCompatibilityColumns(database) {
   ensureColumn(database, "application_group_installations", "allow_commands", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(database, "application_group_installations", "allow_messages", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(database, "application_group_installations", "allow_interactions", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(database, "application_group_installations", "event_subscriptions_json", "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(database, "application_commands", "enabled", "INTEGER NOT NULL DEFAULT 1");
   database.exec(`
     CREATE TABLE IF NOT EXISTS group_room_reads (
@@ -134,9 +135,21 @@ export function ensureCompatibilityColumns(database) {
       allow_commands INTEGER NOT NULL DEFAULT 1,
       allow_messages INTEGER NOT NULL DEFAULT 1,
       allow_interactions INTEGER NOT NULL DEFAULT 1,
+      event_subscriptions_json TEXT NOT NULL DEFAULT '[]',
       PRIMARY KEY (application_id, group_id)
     );
     CREATE INDEX IF NOT EXISTS application_group_installations_group_idx ON application_group_installations(group_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS application_events (
+      id TEXT PRIMARY KEY,
+      application_id TEXT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+      group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      claimed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS application_events_claim_idx ON application_events(application_id, claimed_at, expires_at, created_at);
   `);
 }
 

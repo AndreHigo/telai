@@ -115,6 +115,9 @@ const paths = {
   "/bot/interactions": pathItem("Aplicações", {
     get: ["pollBotInteractions", "Obtém interações pendentes do bot", { auth: false }],
   }),
+  "/bot/events": pathItem("Aplicações", {
+    get: ["pollBotEvents", "Obtém eventos assinados pendentes do bot", { auth: false }],
+  }),
   "/bot/interactions/{interactionId}/respond": pathItem("Aplicações", {
     post: ["respondBotInteraction", "Responde a uma interação de bot", { auth: false }],
   }),

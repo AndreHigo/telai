@@ -32,6 +32,14 @@
     { key: "messages", label: "Mensagens" },
     { key: "interactions", label: "Interações" },
   ];
+  const installationEventOptions = [
+    { key: "group-message", label: "Mensagens recebidas" },
+    { key: "group-message-updated", label: "Mensagens editadas" },
+    { key: "group-message-deleted", label: "Mensagens removidas" },
+    { key: "group-member-moderated", label: "Moderação" },
+    { key: "group-presence", label: "Presença" },
+    { key: "application-interaction-response", label: "Respostas de interação" },
+  ];
 
   $: selectedApplication = applications.find((application) => application.id === selectedApplicationId) || null;
   $: installedGroupIds = new Set(installations.map((installation) => installation.groupId));
@@ -263,8 +271,16 @@
       commands: installation.permissions?.commands !== false,
       messages: installation.permissions?.messages !== false,
       interactions: installation.permissions?.interactions !== false,
-      [permission]: enabled,
+      events: [...(installation.permissions?.events || [])],
     };
+    if (permission.startsWith("event:")) {
+      const eventType = permission.slice("event:".length);
+      permissions.events = enabled
+        ? [...new Set([...permissions.events, eventType])]
+        : permissions.events.filter((item) => item !== eventType);
+    } else {
+      permissions[permission] = enabled;
+    }
     try {
       const result = await api(`/api/applications/${encodeURIComponent(selectedApplicationId)}/groups/${encodeURIComponent(installation.groupId)}`, {
         method: "PATCH",
@@ -399,7 +415,7 @@
           </section>
         </div>
 
-        <section class="settings-card"><div class="settings-card-heading"><div><h3>Instalação em grupos</h3><p class="muted">Escolha grupos em que o bot poderá responder e publicar mensagens.</p></div></div>{#if availableGroups.length}<form class="inline-settings-form" on:submit|preventDefault={installBot}><select class="settings-input" bind:value={installGroupId} aria-label="Grupo para instalar o bot"><option value="">Escolha um grupo</option>{#each availableGroups as group}<option value={group.id}>{group.name}</option>{/each}</select><button class="primary" type="submit" disabled={busy || !installGroupId}>Instalar bot</button></form>{:else}<p class="muted">Todos os seus grupos já estão instalados ou você ainda não participa de nenhum.</p>{/if}<div class="application-token-list">{#each installations as installation}<div class="application-row application-installation-row"><span class="application-installation-meta"><strong>{groups.find((group) => group.id === installation.groupId)?.name || installation.groupId}</strong><small>Instalado em {new Date(installation.createdAt).toLocaleDateString()}</small></span><div class="application-permission-list" role="group" aria-label="Permissões da instalação">{#each installationPermissionOptions as permission}<label class="application-permission-toggle"><input type="checkbox" checked={installation.permissions?.[permission.key] !== false} disabled={busy} on:change={(event) => updateInstallationPermission(installation, permission.key, event.currentTarget.checked)} /><span>{permission.label}</span></label>{/each}</div><button class="outline" type="button" disabled={busy} on:click={() => uninstallBot(installation)}>Remover</button></div>{/each}{#if !installations.length}<p class="muted">Este bot ainda não está instalado em nenhum grupo.</p>{/if}</div></section>
+        <section class="settings-card"><div class="settings-card-heading"><div><h3>Instalação em grupos</h3><p class="muted">Escolha grupos em que o bot poderá responder, publicar mensagens e receber eventos selecionados.</p></div></div>{#if availableGroups.length}<form class="inline-settings-form" on:submit|preventDefault={installBot}><select class="settings-input" bind:value={installGroupId} aria-label="Grupo para instalar o bot"><option value="">Escolha um grupo</option>{#each availableGroups as group}<option value={group.id}>{group.name}</option>{/each}</select><button class="primary" type="submit" disabled={busy || !installGroupId}>Instalar bot</button></form>{:else}<p class="muted">Todos os seus grupos já estão instalados ou você ainda não participa de nenhum.</p>{/if}<div class="application-token-list">{#each installations as installation}<div class="application-row application-installation-row"><span class="application-installation-meta"><strong>{groups.find((group) => group.id === installation.groupId)?.name || installation.groupId}</strong><small>Instalado em {new Date(installation.createdAt).toLocaleDateString()}</small></span><div class="application-permission-list" role="group" aria-label="Permissões da instalação">{#each installationPermissionOptions as permission}<label class="application-permission-toggle"><input type="checkbox" checked={installation.permissions?.[permission.key] !== false} disabled={busy} on:change={(event) => updateInstallationPermission(installation, permission.key, event.currentTarget.checked)} /><span>{permission.label}</span></label>{/each}</div><div class="application-permission-list" role="group" aria-label="Eventos assináveis">{#each installationEventOptions as eventOption}<label class="application-permission-toggle"><input type="checkbox" checked={installation.permissions?.events?.includes(eventOption.key)} disabled={busy} on:change={(event) => updateInstallationPermission(installation, `event:${eventOption.key}`, event.currentTarget.checked)} /><span>{eventOption.label}</span></label>{/each}</div><button class="outline" type="button" disabled={busy} on:click={() => uninstallBot(installation)}>Remover</button></div>{/each}{#if !installations.length}<p class="muted">Este bot ainda não está instalado em nenhum grupo.</p>{/if}</div></section>
       </div>
     {:else if !loading}
       <div class="settings-card application-empty-state"><HugeiconsIcon icon={iconFor("appWindow")} size={28} strokeWidth={1.6} /><h2>Crie sua primeira aplicação</h2><p class="muted">O painel de detalhes aparecerá aqui, sem abrir uma nova tela.</p></div>
