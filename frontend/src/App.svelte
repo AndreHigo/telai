@@ -84,10 +84,13 @@
   import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
   import { createBroadcastLifecycleController } from "./features/broadcast/lifecycle-controller.js";
   import { createAppComponentLoaders } from "./app/component-loader-registry.js";
+  import { createWindowLifecycle } from "./app/window-lifecycle.js";
   import { copyTextValue } from "./services/clipboard.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceActivityController } from "./features/voice/activity-controller.js";
   import { createVoiceParticipantStateController } from "./features/voice/participant-state.js";
+  import { createVoiceSocketController } from "./features/voice/socket-controller.js";
+  import { createVoiceLiveController } from "./features/voice/live-controller.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { PlayIcon } from "@hugeicons/core-free-icons";
@@ -3094,10 +3097,6 @@
   function handleBroadcastVideoTrackEnded(...args) { return broadcastRuntimeController.handleBroadcastVideoTrackEnded(...args); }
   function sendBroadcastChatMessage(...args) { return broadcastRuntimeController.sendBroadcastChatMessage(...args); }
 
-  function sendVoice(message) {
-    if (voiceSocket?.readyState === WebSocket.OPEN) voiceSocket.send(JSON.stringify(message));
-  }
-
   const voiceSignalingController = createVoiceSignalingController({
     getState: () => ({ voiceClientId, voiceError, voiceParticipants, voicePeerConnections, voicePendingCandidates, voicePendingSignals, voiceRoomId, voiceSignalQueues: voiceSignalingControllerQueues, voiceState }),
     setState: (next) => {
@@ -3461,35 +3460,21 @@
     return voiceSignalingController.enqueueSignal(message);
   }
 
-  function connectVoiceSocket() {
-    return new Promise((resolve, reject) => {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const socket = new WebSocket(`${protocol}//${window.location.host}/signal`);
-      voiceSocket = socket;
-      let settled = false;
-      const handshakeTimeout = window.setTimeout(() => {
-        if (settled) return;
-        const caught = new Error("A conexão da sala de voz demorou para responder.");
-        reportClientError("voice_socket_connect_timeout", caught, { roomId: voiceRoomId });
-        try { socket.close(); } catch {}
-        settled = true;
-        reject(caught);
-      }, 12_000);
-      const resolveConnection = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(handshakeTimeout);
-        resolve(socket);
-      };
-      const rejectConnection = (error) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(handshakeTimeout);
-        reject(error);
-      };
-      socket.addEventListener("open", resolveConnection, { once: true });
-      socket.addEventListener("error", () => { const caught = new Error("Não foi possível conectar à sala de voz."); reportClientError("voice_socket_connect_error", caught, { roomId: voiceRoomId }); rejectConnection(caught); }, { once: true });
-      socket.addEventListener("message", async (event) => {
+  const voiceSocketController = createVoiceSocketController({
+    getRoomId: () => voiceRoomId,
+    getSocket: () => voiceSocket,
+    setSocket: (socket) => { voiceSocket = socket; },
+    onMessage: (event, socket) => handleVoiceSocketMessage(event, socket),
+    onClosed: (event, socket) => handleVoiceSocketClosed(event, socket),
+    reportClientError,
+  });
+
+  function sendVoice(message) {
+    return voiceSocketController.send(message);
+  }
+
+  async function handleVoiceSocketMessage(event, socket) {
+
         if (voiceSocket !== socket) return;
         if (typeof event.data !== "string") return;
         try {
@@ -3629,27 +3614,28 @@
           reportClientError("voice_message_error", caught, { roomId: voiceRoomId });
           voiceError = "A sinalização da sala de voz retornou uma mensagem inválida.";
         }
-      });
-      socket.addEventListener("error", () => reportClientError("voice_socket_error", new Error("A conexão da sala de voz falhou."), { roomId: voiceRoomId }));
-      socket.addEventListener("close", (event) => {
-        if (!settled) rejectConnection(new Error("A conexão da sala de voz foi encerrada antes de conectar."));
-        if (voiceSocket !== socket) return;
-        if (event.code === 4001) {
-          clearVoiceReconnectSession();
-          voiceError = "Esta conta entrou na sala em outra janela.";
-          leaveVoiceRoom({ silent: true });
-          void refreshGroupOverview();
-          return;
-        }
-        reportClientError("voice_socket_closed", new Error("A conexão da sala de voz foi encerrada."), { roomId: voiceRoomId });
-        if (voiceState === "connected" || voiceState === "connecting") {
-          writeVoiceReconnectSession({ groupId: selectedGroupId, voiceRoomId, groupName: selectedGroup?.name, roomName: activeVoiceRoom?.name || selectedRoom?.name });
-          voiceError = "A conexão da sala de voz foi encerrada. Tentando reconectar…";
-          leaveVoiceRoom({ preserveLocalStream: true, preserveReconnect: true, silent: true });
-          scheduleVoiceReconnect(1500);
-        }
-      });
-    });
+  }
+
+  function handleVoiceSocketClosed(event, socket) {
+    if (voiceSocket !== socket) return;
+    if (event.code === 4001) {
+      clearVoiceReconnectSession();
+      voiceError = "Esta conta entrou na sala em outra janela.";
+      leaveVoiceRoom({ silent: true });
+      void refreshGroupOverview();
+      return;
+    }
+    reportClientError("voice_socket_closed", new Error("A conexão da sala de voz foi encerrada."), { roomId: voiceRoomId });
+    if (voiceState === "connected" || voiceState === "connecting") {
+      writeVoiceReconnectSession({ groupId: selectedGroupId, voiceRoomId, groupName: selectedGroup?.name, roomName: activeVoiceRoom?.name || selectedRoom?.name });
+      voiceError = "A conexão da sala de voz foi encerrada. Tentando reconectar…";
+      leaveVoiceRoom({ preserveLocalStream: true, preserveReconnect: true, silent: true });
+      scheduleVoiceReconnect(1500);
+    }
+  }
+
+  function connectVoiceSocket() {
+    return voiceSocketController.connect();
   }
 
   function scheduleVoiceReconnect(delayMs = 1500) {
@@ -3811,8 +3797,7 @@
       stopVoiceInputStream(voiceLocalStream);
       voiceLocalStream = null;
     }
-    voiceSocket?.close();
-    voiceSocket = null;
+    voiceSocketController.close();
     voiceRoomId = null;
     voiceClientId = null;
     voiceParticipants = new Map();
@@ -3875,20 +3860,14 @@
     setSettingsState({ settingsSection: "voice" });
   }
 
-  function watchSelectedRoomLive(streamId = selectedRoomLiveStream?.id) {
-    const stream = selectedRoomLiveStreams.find((candidate) => candidate.id === streamId);
-    if (!stream || stream.createdBy === user?.id) return;
-    setGroupState({ watchingGroupLiveStreamId: stream.id });
-  }
-
-  function closeSelectedRoomLive() {
-    setGroupState({ watchingGroupLiveStreamId: "" });
-  }
-
-  function privateLiveForParticipant(participant, roomId) {
-    if (!participant?.userId || !roomId) return null;
-    return groupLiveStreams.find((stream) => stream.visibility === "private" && stream.voiceRoomId === roomId && stream.createdBy === participant.userId) || null;
-  }
+  const voiceLiveController = createVoiceLiveController({
+    getStreams: () => groupLiveStreams,
+    getUserId: () => user?.id,
+    setWatchingStream: (streamId) => setGroupState({ watchingGroupLiveStreamId: streamId }),
+  });
+  const watchSelectedRoomLive = (streamId = selectedRoomLiveStream?.id) => voiceLiveController.watchSelectedRoomLive(streamId);
+  const closeSelectedRoomLive = () => voiceLiveController.closeSelectedRoomLive();
+  const privateLiveForParticipant = (...args) => voiceLiveController.privateLiveForParticipant(...args);
 
   async function attachBroadcastPreview() {
     await tick();
@@ -4542,42 +4521,46 @@
     setViewerState({ viewerParentFullscreen: Boolean(event.data.active) });
   }
 
+  const handleNavigationViewport = () => viewportController.sync();
+  const windowLifecycle = createWindowLifecycle({
+    bindings: [
+      ["error", (event) => reportClientError("window_error", event.error || event.message, { filename: event.filename, line: event.lineno, column: event.colno })],
+      ["unhandledrejection", (event) => reportClientError("unhandled_rejection", event.reason)],
+      ["click", closeVoiceContextMenu],
+      ["click", closeRoomContextMenu],
+      ["popstate", handleBrowserPopState],
+      ["message", handleViewerFullscreenMessage],
+      ["click", closeGroupContextMenu],
+      ["click", handleGlobalAccountClick],
+      ["click", handleGlobalUserClick],
+      ["resize", closeVoiceContextMenu],
+      ["resize", closeRoomContextMenu],
+      ["resize", closeGroupContextMenu],
+      ["resize", handleNavigationViewport],
+      ["contextmenu", handleGlobalVoiceContextMenu],
+      ["keydown", handlePushToTalkKeyDown],
+      ["keydown", handleMuteShortcutKeyDown],
+      ["mousedown", handleMuteShortcutMouseDown, true],
+      ["contextmenu", handleGlobalRoomContextMenu],
+      ["keyup", handlePushToTalkKeyUp],
+      ["blur", releasePushToTalk],
+      ["offline", handleVoiceNetworkOffline],
+      ["online", handleVoiceNetworkOnline],
+      ["pointerdown", handleVoicePlaybackInteraction, true],
+      ["keydown", handleVoicePlaybackInteraction, true],
+      ["focus", handleVoicePlaybackInteraction],
+    ],
+    documentBindings: [["visibilitychange", handleVoicePlaybackInteraction]],
+    mediaBindings: [["devicechange", handleVoiceDeviceChange]],
+  });
+
   onMount(async () => {
     detectViewerRoute();
     void loadMaintenance();
-    const handleNavigationViewport = () => viewportController.sync();
     handleNavigationViewport();
     voiceReconnectSession = readVoiceReconnectSession();
     voiceReconnectVisible = Boolean(voiceReconnectSession);
-    const handleWindowError = (event) => reportClientError("window_error", event.error || event.message, { filename: event.filename, line: event.lineno, column: event.colno });
-    const handleUnhandledRejection = (event) => reportClientError("unhandled_rejection", event.reason);
-    window.addEventListener("error", handleWindowError);
-    window.addEventListener("unhandledrejection", handleUnhandledRejection);
-    window.addEventListener("click", closeVoiceContextMenu);
-    window.addEventListener("click", closeRoomContextMenu);
-    window.addEventListener("popstate", handleBrowserPopState);
-    window.addEventListener("message", handleViewerFullscreenMessage);
-    window.addEventListener("click", closeGroupContextMenu);
-    window.addEventListener("click", handleGlobalAccountClick);
-    window.addEventListener("click", handleGlobalUserClick);
-    window.addEventListener("resize", closeVoiceContextMenu);
-    window.addEventListener("resize", closeRoomContextMenu);
-    window.addEventListener("resize", closeGroupContextMenu);
-    window.addEventListener("resize", handleNavigationViewport);
-    window.addEventListener("contextmenu", handleGlobalVoiceContextMenu);
-    window.addEventListener("keydown", handlePushToTalkKeyDown);
-    window.addEventListener("keydown", handleMuteShortcutKeyDown);
-    window.addEventListener("mousedown", handleMuteShortcutMouseDown, true);
-    window.addEventListener("contextmenu", handleGlobalRoomContextMenu);
-    window.addEventListener("keyup", handlePushToTalkKeyUp);
-    window.addEventListener("blur", releasePushToTalk);
-    window.addEventListener("offline", handleVoiceNetworkOffline);
-    window.addEventListener("online", handleVoiceNetworkOnline);
-    window.addEventListener("pointerdown", handleVoicePlaybackInteraction, true);
-    window.addEventListener("keydown", handleVoicePlaybackInteraction, true);
-    window.addEventListener("focus", handleVoicePlaybackInteraction);
-    document.addEventListener("visibilitychange", handleVoicePlaybackInteraction);
-    navigator.mediaDevices?.addEventListener?.("devicechange", handleVoiceDeviceChange);
+    windowLifecycle.start();
     setVisualState({ theme: localStorage.getItem("mirante-theme") === "light" ? "light" : "dark" });
     if (window.miranteDesktop?.isDesktop) {
       isDesktop = true;
@@ -4655,33 +4638,7 @@
     groupEventRuntime.close();
     voiceActivityController.reset();
     voiceQualityController.stop();
-    window.removeEventListener("click", closeVoiceContextMenu);
-    window.removeEventListener("click", closeRoomContextMenu);
-    window.removeEventListener("popstate", handleBrowserPopState);
-    window.removeEventListener("message", handleViewerFullscreenMessage);
-    window.removeEventListener("click", closeGroupContextMenu);
-    window.removeEventListener("click", handleGlobalAccountClick);
-    window.removeEventListener("click", handleGlobalUserClick);
-    window.removeEventListener("resize", closeVoiceContextMenu);
-    window.removeEventListener("resize", closeRoomContextMenu);
-    window.removeEventListener("resize", closeGroupContextMenu);
-    window.removeEventListener("resize", handleNavigationViewport);
-    window.removeEventListener("contextmenu", handleGlobalVoiceContextMenu);
-    window.removeEventListener("keydown", handlePushToTalkKeyDown);
-    window.removeEventListener("keydown", handleMuteShortcutKeyDown);
-    window.removeEventListener("mousedown", handleMuteShortcutMouseDown, true);
-    window.removeEventListener("contextmenu", handleGlobalRoomContextMenu);
-    window.removeEventListener("keyup", handlePushToTalkKeyUp);
-    window.removeEventListener("blur", releasePushToTalk);
-    window.removeEventListener("offline", handleVoiceNetworkOffline);
-    window.removeEventListener("online", handleVoiceNetworkOnline);
-    window.removeEventListener("pointerdown", handleVoicePlaybackInteraction, true);
-    window.removeEventListener("keydown", handleVoicePlaybackInteraction, true);
-    window.removeEventListener("focus", handleVoicePlaybackInteraction);
-    document.removeEventListener("visibilitychange", handleVoicePlaybackInteraction);
-    navigator.mediaDevices?.removeEventListener?.("devicechange", handleVoiceDeviceChange);
-    window.removeEventListener("error", handleWindowError);
-    window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    windowLifecycle.stop();
     desktopPushToTalkUnsubscribe?.();
     desktopMuteShortcutUnsubscribe?.();
     desktopTrayUnsubscribe?.();
