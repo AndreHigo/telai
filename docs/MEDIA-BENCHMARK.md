@@ -119,6 +119,15 @@ harness, não do servidor:
 | P2P | 10 | 1.958 ms | 33,5% | 144,2 MiB | passou; chat/UI omitidos no benchmark pesado |
 | P2P | 20 | — | — | — | inconclusivo; limite local de recepção do harness |
 
+Na execução reproduzida em 28/09/2026 após as refatorações, 1, 5 e 10 viewers
+novamente concluíram com todos os frames, Opus/VP8 e sem falha funcional. Os
+tempos de carregamento foram 886 ms, 857 ms e 2.106 ms; o processo Electron do
+harness registrou respectivamente 8,9%, 47,5% e 23,8% de CPU e 161,7 MiB,
+160,5 MiB e 164,7 MiB de RSS. O cenário de 20 viewers continuou
+`inconclusive` por limite do harness local (`qa_window_all_closed` e ausência
+de recepção completa), portanto o benchmark externo e a medição de servidor
+dedicado continuam pendentes.
+
 É possível selecionar cenários ou medir o caminho relay:
 
 ```powershell
