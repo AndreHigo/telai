@@ -86,6 +86,7 @@
   import { createBroadcastSourceController } from "./features/broadcast/source-controller.js";
   import { createBroadcastPreviewController } from "./features/broadcast/preview-controller.js";
   import { createBroadcastAudioModeController } from "./features/broadcast/audio-mode-controller.js";
+  import { createBroadcastSwitchController } from "./features/broadcast/switch-controller.js";
   import { createAppComponentLoaders } from "./app/component-loader-registry.js";
   import { createWindowLifecycle } from "./app/window-lifecycle.js";
   import { copyTextValue } from "./services/clipboard.js";
@@ -4054,133 +4055,64 @@
   const handleBroadcastAudioModeChange = (...args) => broadcastAudioModeController.handleChange(...args);
 
 
-  async function switchBroadcastSource() {
-    if (broadcastState !== "live" || broadcastSourceType !== "screen" || broadcastSourceSwitching) return;
-    broadcastSourceSwitching = true;
-    setBroadcastState({ broadcastError: "" });
-    broadcastAudioWarning = "";
-    const previousStream = broadcastStream;
-    const previousDisplayStream = broadcastDisplayStream;
-    const previousCameraStream = broadcastCameraStream;
-    const previousProcessId = activeDisplayProcessId;
-    const previousAudioMode = audioMode;
-    const wasRelay = mediaMode === "relay" && await isRelayRecorderActive();
-    let capturedStream = null;
-    let nextStream = null;
-    try {
-      const profile = qualityProfiles[selectedQuality];
-      capturedStream = await captureDisplayStream(profile);
-      const nextVideoTrack = capturedStream.getVideoTracks()[0];
-      if (!nextVideoTrack) throw new Error("A nova fonte não forneceu vídeo.");
-      const displaySurface = nextVideoTrack.getSettings?.().displaySurface;
-      if (displaySurface === "monitor" || displaySurface === "screen") {
-        setBroadcastState({ broadcastDisplaySurface: "screen" });
-      } else if (displaySurface) {
-        setBroadcastState({ broadcastDisplaySurface: "window" });
+  const broadcastSwitchController = createBroadcastSwitchController({
+    getState: () => ({
+      activeDisplayProcessId,
+      audioMode,
+      broadcastAudioProcessId,
+      broadcastAudioSourceName,
+      broadcastCameraStream,
+      broadcastDisplayStream,
+      broadcastMicrophoneStream,
+      broadcastSelectionKind,
+      broadcastSourceAudioTrack,
+      broadcastSourceType,
+      broadcastSourceSwitching,
+      broadcastState,
+      broadcastStream,
+      isDesktop,
+      mediaMode,
+      selectedDisplayProcessId,
+      selectedQuality,
+    }),
+    setState: (next) => {
+      if ("activeDisplayProcessId" in next) activeDisplayProcessId = next.activeDisplayProcessId;
+      if ("audioMode" in next) audioMode = next.audioMode;
+      if ("broadcastAudioProcessId" in next) broadcastAudioProcessId = next.broadcastAudioProcessId;
+      if ("broadcastAudioSourceName" in next) broadcastAudioSourceName = next.broadcastAudioSourceName;
+      if ("broadcastAudioWarning" in next) broadcastAudioWarning = next.broadcastAudioWarning;
+      if ("broadcastDisplayStream" in next) broadcastDisplayStream = next.broadcastDisplayStream;
+      if ("broadcastSourceAudioTrack" in next) broadcastSourceAudioTrack = next.broadcastSourceAudioTrack;
+      if ("broadcastSourceSwitching" in next) broadcastSourceSwitching = next.broadcastSourceSwitching;
+      if ("showDisplayPicker" in next) showDisplayPicker = next.showDisplayPicker;
+      if ("displaySources" in next) displaySources = next.displaySources;
+      if ("selectedDisplayProcessId" in next) selectedDisplayProcessId = next.selectedDisplayProcessId;
+      const broadcastPatch = {};
+      for (const key of ["broadcastError", "broadcastStream", "broadcastDisplaySurface"]) {
+        if (key in next) broadcastPatch[key] = next[key];
       }
-      const nextProcessId = selectedDisplayProcessId;
-      let sourceAudioTrack = audioMode === "none" ? null : capturedStream.getAudioTracks()[0] || null;
-      if (window.miranteDesktop?.isDesktop && audioMode === "system") {
-        capturedStream.getAudioTracks().forEach((track) => track.stop());
-        try {
-          sourceAudioTrack = await startSystemAudioBridge();
-          if (!sourceAudioTrack) throw new Error("O Windows não encontrou aplicativos para incluir no áudio filtrado.");
-        } catch (error) {
-          audioMode = "none";
-          sourceAudioTrack = null;
-          broadcastAudioWarning = `${error.message || "Não foi possível preparar o áudio filtrado."} A troca seguirá sem áudio do computador.`;
-        }
-      } else if (window.miranteDesktop?.isDesktop && audioMode === "source" && broadcastDisplaySurface === "screen") {
-        const selectedAudioSource = await requestBroadcastAudioSource();
-        capturedStream.getAudioTracks().forEach((track) => track.stop());
-        if (selectedAudioSource?.processId) {
-          broadcastAudioProcessId = selectedAudioSource.processId;
-          broadcastAudioSourceName = selectedAudioSource.name;
-          sourceAudioTrack = await startWindowAudioBridge(selectedAudioSource.processId);
-        } else {
-          await stopWindowAudioBridge();
-          audioMode = "none";
-          sourceAudioTrack = null;
-          broadcastAudioWarning = "A troca seguirá sem áudio do computador. Escolha um aplicativo para incluir somente o áudio dele.";
-        }
-      } else if (window.miranteDesktop?.isDesktop && audioMode === "source") {
-        if (nextProcessId) {
-          const windowAudioTrack = await startWindowAudioBridge(nextProcessId);
-          capturedStream.getAudioTracks().forEach((track) => track.stop());
-          sourceAudioTrack = windowAudioTrack || null;
-        } else {
-          await stopWindowAudioBridge();
-          capturedStream.getAudioTracks().forEach((track) => track.stop());
-          sourceAudioTrack = null;
-          broadcastAudioWarning = "Não foi possível identificar o processo da janela. A troca seguirá sem áudio da fonte para não capturar o computador inteiro.";
-        }
-      } else if (window.miranteDesktop?.isDesktop) {
-        await stopWindowAudioBridge();
-      }
-      if (audioMode !== "none" && !sourceAudioTrack && !isDesktop) {
-        throw new Error(formatBroadcastMissingAudio({ isDesktop, displaySurface: broadcastDisplaySurface, selectionKind: broadcastSelectionKind }));
-      }
-      nextStream = await buildBroadcastOutputStream({
-        displayStream: capturedStream,
-        cameraStream: previousCameraStream,
-        sourceAudioTrack,
-        microphoneStream: broadcastMicrophoneStream,
-        profile,
-      });
-      if (wasRelay) await stopRelayRecorder();
-      await replaceBroadcastTracks(nextStream);
-      setBroadcastState({ broadcastStream: nextStream });
-      broadcastDisplayStream = capturedStream;
-      broadcastSourceAudioTrack = sourceAudioTrack;
-      activeDisplayProcessId = nextProcessId;
-      nextVideoTrack.contentHint = "detail";
-      nextVideoTrack.addEventListener("ended", () => { handleBroadcastVideoTrackEnded(nextVideoTrack); }, { once: true });
-      clearBroadcastCaptureRecoveryTimer();
-      previousStream?.getTracks().forEach((track) => track.stop());
-      if (previousDisplayStream && previousDisplayStream !== capturedStream) previousDisplayStream.getTracks().forEach((track) => track.stop());
-      await attachBroadcastPreview();
-      if (wasRelay) await startRelayRecorder();
-      notice = "Fonte da transmissão trocada sem encerrar a live.";
-      return true;
-    } catch (error) {
-      capturedStream?.getTracks().forEach((track) => track.stop());
-      stopBroadcastVideoComposition();
-      if (previousStream && broadcastState === "live") {
-        try {
-          let restoredSourceAudioTrack = audioMode === "none" ? null : broadcastSourceAudioTrack || previousDisplayStream?.getAudioTracks?.()[0] || null;
-          if (window.miranteDesktop?.isDesktop && previousAudioMode === "system") {
-            try { restoredSourceAudioTrack = await startSystemAudioBridge(); } catch {}
-          } else if (window.miranteDesktop?.isDesktop && audioMode === "source" && previousProcessId) {
-            restoredSourceAudioTrack = await startWindowAudioBridge(previousProcessId);
-          }
-          const restoredStream = await buildBroadcastOutputStream({
-            displayStream: previousDisplayStream,
-            cameraStream: previousCameraStream,
-            sourceAudioTrack: restoredSourceAudioTrack,
-            microphoneStream: broadcastMicrophoneStream,
-            profile: qualityProfiles[selectedQuality],
-          });
-          await replaceBroadcastTracks(restoredStream);
-          setBroadcastState({ broadcastStream: restoredStream });
-          broadcastDisplayStream = previousDisplayStream;
-          broadcastSourceAudioTrack = restoredSourceAudioTrack;
-          broadcastCameraStream = previousCameraStream;
-          activeDisplayProcessId = previousProcessId;
-          await attachBroadcastPreview();
-          if (wasRelay) await startRelayRecorder();
-        } catch (restoreError) {
-          setBroadcastState({ broadcastError: restoreError.message || "Não foi possível restaurar a transmissão anterior." });
-        }
-      }
-      if (error.name !== "NotAllowedError") setBroadcastState({ broadcastError: error.message || "Não foi possível trocar a fonte da transmissão." });
-      return false;
-    } finally {
-      showDisplayPicker = false;
-      displaySources = [];
-      selectedDisplayProcessId = activeDisplayProcessId;
-      broadcastSourceSwitching = false;
-    }
-  }
+      if (Object.keys(broadcastPatch).length) setBroadcastState(broadcastPatch);
+    },
+    captureDisplayStream: (...args) => captureDisplayStream(...args),
+    buildOutputStream: (...args) => buildBroadcastOutputStream(...args),
+    replaceTracks: (...args) => replaceBroadcastTracks(...args),
+    attachPreview: (...args) => attachBroadcastPreview(...args),
+    requestBroadcastAudioSource: (...args) => requestBroadcastAudioSource(...args),
+    startWindowAudioBridge: (...args) => startWindowAudioBridge(...args),
+    startSystemAudioBridge: (...args) => startSystemAudioBridge(...args),
+    stopWindowAudioBridge: (...args) => stopWindowAudioBridge(...args),
+    stopComposition: () => stopBroadcastVideoComposition(),
+    isRelayActive: (...args) => isRelayRecorderActive(...args),
+    stopRelay: (...args) => stopRelayRecorder(...args),
+    startRelay: (...args) => startRelayRecorder(...args),
+    handleVideoTrackEnded: (...args) => handleBroadcastVideoTrackEnded(...args),
+    clearCaptureRecoveryTimer: () => clearBroadcastCaptureRecoveryTimer(),
+    formatMissingAudio: (...args) => formatBroadcastMissingAudio(...args),
+    qualityProfiles,
+    reportClientError,
+    setNotice: (value) => { notice = value; },
+  });
+  const switchBroadcastSource = (...args) => broadcastSwitchController.switchSource(...args);
 
   function cancelBroadcastVisibility() {
     setBroadcastState({ showBroadcastVisibilityDialog: false, pendingBroadcastContext: null });
