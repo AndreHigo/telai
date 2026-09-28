@@ -87,6 +87,7 @@
   import { copyTextValue } from "./services/clipboard.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceActivityController } from "./features/voice/activity-controller.js";
+  import { createVoiceParticipantStateController } from "./features/voice/participant-state.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { PlayIcon } from "@hugeicons/core-free-icons";
@@ -3144,57 +3145,22 @@
   });
   const voiceSignalingControllerQueues = new Map();
 
-  function updateVoiceRoomSnapshot(roomId, updater) {
-    if (!roomId || !groupOverview?.rooms?.length) return;
-    setGroupState({ groupOverview: {
-      ...groupOverview,
-      rooms: groupOverview.rooms.map((room) => room.id === roomId
-        ? { ...room, participants: updater(Array.isArray(room.participants) ? room.participants : []) }
-        : room),
-    } });
-  }
-
-  function uniqueVoiceParticipants(participants) {
-    const unique = new Map();
-    for (const participant of participants || []) {
-      if (!participant?.id) continue;
-      const key = participant.userId ? `user:${participant.userId}` : `id:${participant.id}`;
-      const current = unique.get(key);
-      if (!current || (participant.isLocal && !current.isLocal) || (!participant.connecting && current.connecting)) {
-        unique.set(key, participant);
-      }
-    }
-    return [...unique.values()];
-  }
-
-  function replaceVoiceRoomSnapshot(roomId, participants) {
-    updateVoiceRoomSnapshot(roomId, () => uniqueVoiceParticipants(participants));
-  }
-
-  function upsertVoiceRoomParticipant(roomId, participant) {
-    if (!participant?.id) return;
-    updateVoiceRoomSnapshot(roomId, (participants) => uniqueVoiceParticipants([...participants, participant]));
-  }
-
-  function removeVoiceRoomParticipant(roomId, participantId, userId = null) {
-    updateVoiceRoomSnapshot(roomId, (participants) => participants.filter((participant) => (
-      participant.id !== participantId &&
-      participant.id !== "local-pending" &&
-      (!userId || participant.userId !== userId)
-    )));
-  }
-
-  function mergeActiveVoicePresence(overview) {
-    if (!overview?.rooms?.length || !voiceRoomId || !["connected", "connecting"].includes(voiceState)) return overview;
-    return {
-      ...overview,
-      rooms: overview.rooms.map((room) => {
-        if (room.id !== voiceRoomId) return room;
-        const participants = (room.participants || []).filter((participant) => participant.userId !== user?.id);
-        return { ...room, participants: uniqueVoiceParticipants([...participants, ...voiceParticipants.values()]) };
-      }),
-    };
-  }
+  const voiceParticipantStateController = createVoiceParticipantStateController({
+    getState: () => ({
+      groupOverview,
+      voiceRoomId,
+      voiceState,
+      voiceParticipants,
+      currentUserId: user?.id || null,
+    }),
+    setGroupState,
+  });
+  function updateVoiceRoomSnapshot(...args) { return voiceParticipantStateController.updateRoomSnapshot(...args); }
+  function uniqueVoiceParticipants(...args) { return voiceParticipantStateController.uniqueParticipants(...args); }
+  function replaceVoiceRoomSnapshot(...args) { return voiceParticipantStateController.replaceRoomSnapshot(...args); }
+  function upsertVoiceRoomParticipant(...args) { return voiceParticipantStateController.upsertRoomParticipant(...args); }
+  function removeVoiceRoomParticipant(...args) { return voiceParticipantStateController.removeRoomParticipant(...args); }
+  function mergeActiveVoicePresence(...args) { return voiceParticipantStateController.mergeActivePresence(...args); }
 
   async function loadIceConfiguration() {
     try {
