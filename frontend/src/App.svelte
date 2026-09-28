@@ -17,6 +17,7 @@
   import { createLiveStateStore } from "./features/live/live-state.js";
   import HomePage from "./features/home/HomePage.svelte";
   import AppGroupsWorkspace from "./app/AppGroupsWorkspace.svelte";
+  import AppSettingsWorkspace from "./app/AppSettingsWorkspace.svelte";
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
@@ -4169,175 +4170,176 @@
           bind:messageComposerInput
         />
       {:else if view === "settings"}
-        {#if SettingsPage}
-        <svelte:component this={SettingsPage}
+        <AppSettingsWorkspace
+          state={{
+            SettingsPage,
+            settingsSection,
+            settingsTab,
+            selectedGroupId,
+            user,
+            settingsBusy,
+            settingsError,
+            channelDisplayName,
+            channelAvatarData,
+            gameOptions,
+            channelGames,
+            channelError,
+            settingsAvatarData,
+            settingsDisplayName,
+            avatarError,
+            theme,
+            buttonColor,
+            inputBackgroundColor,
+            backgroundColor,
+            providers,
+            selectedGroup,
+            ProfileSettingsExtras,
+            isDesktop,
+            preferencesResetBusy,
+            preferencesResetConfirm,
+            launchAtLogin,
+            launchAtLoginBusy,
+            launchAtLoginError,
+            hardwareAccelerationMode,
+            hardwareAccelerationBusy,
+            hardwareAccelerationError,
+            VoiceSettingsPanel,
+            voiceNoiseSuppressionStatus,
+            voiceNativeProcessingDetails,
+            voiceInputProfile,
+            voiceAdvancedOptions,
+            voiceTestRunning,
+            voiceTestLevel,
+            voiceTestError,
+            voiceTestSpeakerStatus,
+            voiceTestStatus,
+            voiceDevicesBusy,
+            audioInputDevices,
+            audioOutputDevices,
+            voiceMicrophoneVolume,
+            voiceOutputVolume,
+            pushToTalkEnabled,
+            pushToTalkCapturing,
+            pushToTalkActive,
+            pushToTalkKey,
+            desktopPushToTalkGlobal,
+            muteShortcutCapturing,
+            muteShortcut,
+            desktopMuteShortcutGlobal,
+            voiceAdvancedOpen,
+            soundPreferences,
+            voiceDevicesError,
+            voiceSensitivityAuto,
+            voiceSensitivity,
+            pushToTalkLabel,
+            shortcutLabel,
+            liveNotificationScopes,
+            groupRoles,
+            selectedRole,
+            groupMembers,
+            rolePermissionOptions,
+            filteredRoleMembers,
+            roleOrderSaving,
+            draggedRoleId,
+            dragOverRoleId,
+            roleEditBusy,
+            roleMemberActionId,
+            GroupChannelPermissionsSettings,
+            GroupAuditLogSettings,
+            rooms,
+            groupRoomPermissions,
+            roomPermissionBusyKey,
+            activeGroupInvites,
+            groupInviteLink,
+            groupInviteCreating,
+            groupInviteBusyId,
+            groupJoinRequests,
+            groupJoinActionId,
+            groupAuditEntries,
+            groupAuditLoading,
+            api,
+            groupAdminError
+          }}
+          actions={{
+            selectSettingsSection,
+            loadGroupAdministration,
+            back: () => setNavigationState({ view: settingsReturnView }),
+            selectTab: (tab) => setSettingsState({ settingsTab: tab }),
+            setChannelDisplayName: (event) => setSettingsState({ channelDisplayName: event.detail }),
+            saveChannelProfile,
+            handleChannelAvatarChange,
+            clearChannelAvatar,
+            toggleChannelGame,
+            setSettingsDisplayName: (event) => setSettingsState({ settingsDisplayName: event.detail }),
+            setTheme: (event) => setVisualState({ theme: event.detail }),
+            setButtonColor: (event) => setVisualState({ buttonColor: event.detail }),
+            setInputBackgroundColor: (event) => setVisualState({ inputBackgroundColor: event.detail }),
+            setBackgroundColor: (event) => setVisualState({ backgroundColor: event.detail }),
+            saveProfile,
+            handleAvatarChange,
+            clearAvatar,
+            savePreferences,
+            saveGroupSettings,
+            togglePreferencesResetConfirm: () => setSettingsState({ preferencesResetConfirm: !preferencesResetConfirm }),
+            resetPreferencesToDefaults,
+            toggleLaunchAtLogin,
+            setHardwareAcceleration,
+            loadAudioDevices,
+            applyVoiceInputDevice,
+            applyVoiceOutputDevice,
+            setVoiceMicrophoneVolume,
+            setVoiceOutputVolume,
+            applyVoiceInputProfile,
+            togglePushToTalk,
+            startPushToTalkCapture,
+            clearPushToTalkKey,
+            startMuteShortcutCapture,
+            clearMuteShortcut,
+            toggleVoiceAdvanced,
+            updateVoiceAdvancedOption,
+            handleVoiceSoundEffectsChange,
+            handleSoundVolumeChange,
+            previewVoiceSound,
+            handleSoundPreferenceChange,
+            updateVoiceSensitivityAuto,
+            updateVoiceSensitivity,
+            startVoiceTest,
+            stopVoiceTest,
+            testVoiceSpeaker,
+            setLiveNotificationScope,
+            createGroupRole,
+            startRoleDrag,
+            handleRoleDragOver,
+            dropRole,
+            endRoleDrag,
+            moveRole,
+            deleteGroupRole,
+            saveGroupRoleDetails,
+            updateRolePermission,
+            setRoleMember,
+            loadGroupRoomPermissions,
+            updateGroupRoomPermission,
+            resetGroupRoomPermission,
+            createGroupInvite,
+            copyGroupInvite,
+            deleteGroupInvite,
+            respondToGroupJoinRequest,
+            refreshGroupAfterModeration
+          }}
           bind:settingsPageElement
-          {settingsSection}
-          {settingsTab}
-          {selectedGroupId}
-          {user}
-          {settingsBusy}
-          {settingsError}
-          onSelectSection={selectSettingsSection}
-          onLoadGroupAdministration={loadGroupAdministration}
-          onBack={() => setNavigationState({ view: settingsReturnView })}
-          onSelectTab={(tab) => setSettingsState({ settingsTab: tab })}
-          channelDisplayName={channelDisplayName}
-          on:channelDisplayName={(event) => setSettingsState({ channelDisplayName: event.detail })}
-          {channelAvatarData}
-          {gameOptions}
-          {channelGames}
-          {channelError}
-          onSaveChannelProfile={saveChannelProfile}
-          onChannelAvatarChange={handleChannelAvatarChange}
-          onClearChannelAvatar={clearChannelAvatar}
-          onToggleChannelGame={toggleChannelGame}
-          {settingsAvatarData}
-          settingsDisplayName={settingsDisplayName}
-          on:settingsDisplayName={(event) => setSettingsState({ settingsDisplayName: event.detail })}
-          {avatarError}
-          theme={theme}
-          on:theme={(event) => setVisualState({ theme: event.detail })}
           bind:selectedQuality
           bind:audioMode
-          buttonColor={buttonColor}
-          on:buttonColor={(event) => setVisualState({ buttonColor: event.detail })}
-          inputBackgroundColor={inputBackgroundColor}
-          on:inputBackgroundColor={(event) => setVisualState({ inputBackgroundColor: event.detail })}
-          backgroundColor={backgroundColor}
-          on:backgroundColor={(event) => setVisualState({ backgroundColor: event.detail })}
-          {providers}
-          {selectedGroup}
           bind:groupSettingsName
-          onSaveProfile={saveProfile}
-          onAvatarChange={handleAvatarChange}
-          onClearAvatar={clearAvatar}
-          onSavePreferences={savePreferences}
-          onSaveGroupSettings={saveGroupSettings}
-          {ProfileSettingsExtras}
-          {isDesktop}
-          {preferencesResetBusy}
-          {preferencesResetConfirm}
-          {launchAtLogin}
-          {launchAtLoginBusy}
-          {launchAtLoginError}
-          {hardwareAccelerationMode}
-          {hardwareAccelerationBusy}
-          {hardwareAccelerationError}
-          onTogglePreferencesResetConfirm={() => setSettingsState({ preferencesResetConfirm: !preferencesResetConfirm })}
-          onResetPreferences={resetPreferencesToDefaults}
-          onToggleLaunchAtLogin={toggleLaunchAtLogin}
-          onSetHardwareAcceleration={setHardwareAcceleration}
-          {VoiceSettingsPanel}
-          {voiceNoiseSuppressionStatus}
-          {voiceNativeProcessingDetails}
-          {voiceInputProfile}
-          {voiceAdvancedOptions}
-          {voiceTestRunning}
-          {voiceTestLevel}
-          {voiceTestError}
-          {voiceTestSpeakerStatus}
-          {voiceTestStatus}
-          {voiceDevicesBusy}
           bind:selectedInputDeviceId
           bind:selectedOutputDeviceId
-          {audioInputDevices}
-          {audioOutputDevices}
-          {voiceMicrophoneVolume}
-          {voiceOutputVolume}
-          {pushToTalkEnabled}
-          {pushToTalkCapturing}
-          {pushToTalkActive}
-          {pushToTalkKey}
-          {desktopPushToTalkGlobal}
-          {muteShortcutCapturing}
-          {muteShortcut}
-          {desktopMuteShortcutGlobal}
-          {voiceAdvancedOpen}
-          {soundPreferences}
-          {voiceDevicesError}
-          {voiceSensitivityAuto}
-          {voiceSensitivity}
-          onLoadAudioDevices={loadAudioDevices}
-          onApplyVoiceInputDevice={applyVoiceInputDevice}
-          onApplyVoiceOutputDevice={applyVoiceOutputDevice}
-          onSetVoiceMicrophoneVolume={setVoiceMicrophoneVolume}
-          onSetVoiceOutputVolume={setVoiceOutputVolume}
-          onApplyVoiceInputProfile={applyVoiceInputProfile}
-          onTogglePushToTalk={togglePushToTalk}
-          onStartPushToTalkCapture={startPushToTalkCapture}
-          onClearPushToTalkKey={clearPushToTalkKey}
-          onStartMuteShortcutCapture={startMuteShortcutCapture}
-          onClearMuteShortcut={clearMuteShortcut}
-          onToggleVoiceAdvanced={toggleVoiceAdvanced}
-          onUpdateVoiceAdvancedOption={updateVoiceAdvancedOption}
-          onHandleVoiceSoundEffectsChange={handleVoiceSoundEffectsChange}
-          onHandleSoundVolumeChange={handleSoundVolumeChange}
-          onPreviewVoiceSound={previewVoiceSound}
-          onHandleSoundPreferenceChange={handleSoundPreferenceChange}
-          onUpdateVoiceSensitivityAuto={updateVoiceSensitivityAuto}
-          onUpdateVoiceSensitivity={updateVoiceSensitivity}
-          onStartVoiceTest={startVoiceTest}
-          onStopVoiceTest={stopVoiceTest}
-          onTestVoiceSpeaker={testVoiceSpeaker}
-          {pushToTalkLabel}
-          {shortcutLabel}
-          {liveNotificationScopes}
-          onSetNotificationScope={setLiveNotificationScope}
-          {groupRoles}
-          {selectedRole}
           bind:selectedRoleId
-          {groupMembers}
-          {rolePermissionOptions}
-          {filteredRoleMembers}
-          {roleOrderSaving}
-          {draggedRoleId}
-          {dragOverRoleId}
           bind:newRoleName
           bind:newRoleColor
           bind:roleEditName
           bind:roleEditColor
-          {roleEditBusy}
           bind:roleMemberSearchQuery
-          {roleMemberActionId}
-          onCreateRole={createGroupRole}
-          onStartRoleDrag={startRoleDrag}
-          onRoleDragOver={handleRoleDragOver}
-          onDropRole={dropRole}
-          onEndRoleDrag={endRoleDrag}
-          onMoveRole={moveRole}
-          onDeleteRole={deleteGroupRole}
-          onSaveRoleDetails={saveGroupRoleDetails}
-          onUpdateRolePermission={updateRolePermission}
-          onSetRoleMember={setRoleMember}
-          {GroupChannelPermissionsSettings}
-          {GroupAuditLogSettings}
-          {rooms}
           bind:selectedRoomPermissionId
-          {groupRoomPermissions}
-          {roomPermissionBusyKey}
-          {activeGroupInvites}
-          {groupInviteLink}
-          {groupInviteCreating}
-          {groupInviteBusyId}
-          {groupJoinRequests}
-          {groupJoinActionId}
-          {groupAuditEntries}
-          {groupAuditLoading}
-          {api}
-          {groupAdminError}
-          onLoadRoom={loadGroupRoomPermissions}
-          onUpdatePermission={updateGroupRoomPermission}
-          onResetPermission={resetGroupRoomPermission}
-          onCreateInvite={createGroupInvite}
-          onCopyInvite={copyGroupInvite}
-          onDeleteInvite={deleteGroupInvite}
-          onRespondJoinRequest={respondToGroupJoinRequest}
-          onModerationComplete={refreshGroupAfterModeration}
         />
-        {:else}
-          <div class="workspace-loading"><span></span><span></span><span></span></div>
-        {/if}
       {:else if view === "multistream"}
         {#if MultistreamPage}
           <svelte:component
