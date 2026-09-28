@@ -315,7 +315,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Webhooks de entrada.
   - [x] Persistir webhooks por grupo/canal com token armazenado somente como hash e gestão restrita ao dono do grupo.
   - [x] Executar mensagens sem sessão, publicar evento em tempo real e preservar autoria no histórico SQLite/PostgreSQL.
-- [ ] Tokens de aplicação e bots.
+- [x] Tokens de aplicação e bots.
   - [x] Persistir aplicações e identidades de bot separadas do usuário humano em SQLite/PostgreSQL.
   - [x] Criar tokens aleatórios armazenados somente como hash, com listagem de metadados e revogação.
   - [x] Instalar/remover o bot em grupos autorizados pelo dono e manter a associação no banco.
