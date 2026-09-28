@@ -46,6 +46,7 @@
   import { createApplicationCommandStateStore } from "./features/groups/application-command-state.js";
   import { createMentionController } from "./features/groups/mention-controller.js";
   import { createGroupThreadRuntime } from "./features/groups/thread-runtime.js";
+  import { createGroupActionsController } from "./features/groups/actions-controller.js";
   import {
     createSelectedVoiceAudioConstraints,
     createVoiceAudioConstraints,
@@ -2694,335 +2695,133 @@
     }
   }
 
-  async function saveGroupSettings() {
-    if (!selectedGroupId || groupSettingsName.trim().length < 2) return;
-    setSettingsState({ settingsBusy: true, settingsError: "" });
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}`, { method: "PATCH", body: JSON.stringify({ name: groupSettingsName.trim() }) });
-      setGroupState({
-        groups: groups.map((group) => group.id === selectedGroupId ? { ...group, name: result.group.name, slug: result.group.slug } : group),
-        groupOverview: groupOverview ? { ...groupOverview, group: { ...groupOverview.group, ...result.group } } : groupOverview,
-      });
-      notice = "Configurações do grupo salvas.";
-    } catch (error) { setSettingsState({ settingsError: error.message }); }
-    finally { setSettingsState({ settingsBusy: false }); }
-  }
-
-  async function createGroupRole() {
-    if (!selectedGroupId || newRoleName.trim().length < 2) return;
-    groupAdminError = "";
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/roles`, { method: "POST", body: JSON.stringify({ name: newRoleName.trim(), color: newRoleColor }) });
-      groupRoles = [...groupRoles, result.role].sort((left, right) => (left.sortOrder ?? Number.MAX_SAFE_INTEGER) - (right.sortOrder ?? Number.MAX_SAFE_INTEGER) || left.name.localeCompare(right.name, "pt-BR"));
-      newRoleName = "";
-      notice = "Cargo criado.";
-    } catch (error) { groupAdminError = error.message; }
-  }
-
-  async function assignMemberRole(member, event) {
-    if (!selectedGroupId || member.role === "owner") return;
-    const roleId = event.currentTarget.value;
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/members/${encodeURIComponent(member.id)}/role`, { method: "PATCH", body: JSON.stringify({ roleId }) });
-      const assignedRole = groupRoles.find((role) => role.id === result.roleId);
-      setGroupState({ groupOverview: { ...groupOverview, members: groupOverview.members.map((item) => item.id === member.id ? { ...item, roleId: result.roleId, roleName: assignedRole?.name || "Membro", roleColor: assignedRole?.color || "#5865f2", ...Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, Boolean(assignedRole?.[key])] )) } : item) } });
-      notice = `Cargo de ${member.displayName} atualizado.`;
-    } catch (error) { groupAdminError = error.message; }
-  }
-
-  async function updateRolePermission(role, permission, event) {
-    if (!selectedGroupId || selectedGroup?.role !== "owner") return;
-    const nextValue = event.currentTarget.checked;
-    const nextPermissions = Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, key === permission ? nextValue : Boolean(role[key])]));
-    groupAdminError = "";
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/roles/${encodeURIComponent(role.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: role.name, color: role.color, ...nextPermissions }),
-      });
-      const updatedRole = result.role;
-      groupRoles = groupRoles.map((item) => item.id === role.id ? { ...item, ...updatedRole } : item);
-      setGroupState({ groupOverview: {
-        ...groupOverview,
-        members: groupOverview.members.map((member) => member.roleId === role.id ? { ...member, ...updatedRole } : member),
-      } });
-      notice = `Permissão “${rolePermissionOptions.find((item) => item.key === permission)?.label || permission}” do cargo ${role.name} atualizada.`;
-    } catch (error) {
-      event.currentTarget.checked = Boolean(role[permission]);
-      groupAdminError = error.message;
-    }
-  }
-
-  async function deleteGroupRole(role) {
-    if (!selectedGroupId || !role || role.isDefault || selectedGroup?.role !== "owner") return;
-    if (!window.confirm(`Excluir o cargo “${role.name}”? Os membros serão movidos para o cargo padrão.`)) return;
-    groupAdminError = "";
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/roles/${encodeURIComponent(role.id)}`, { method: "DELETE" });
-      const fallbackRole = groupRoles.find((item) => item.id === result.fallbackRoleId) || groupRoles.find((item) => item.isDefault);
-      groupRoles = groupRoles.filter((item) => item.id !== role.id);
-      selectedRoleId = fallbackRole?.id || "";
-      setGroupState({ groupOverview: {
-        ...groupOverview,
-        members: groupOverview.members.map((member) => member.roleId === role.id
-          ? {
-              ...member,
-              roleId: fallbackRole?.id || result.fallbackRoleId,
-              roleName: fallbackRole?.name || "Membro",
-              roleColor: fallbackRole?.color || "#5865f2",
-              ...Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, Boolean(fallbackRole?.[key])])),
-            }
-          : member),
-      } });
-      notice = `Cargo ${role.name} excluído.`;
-    } catch (error) {
-      groupAdminError = error.message;
-    }
-  }
-
-  async function saveGroupRoleDetails() {
-    if (!selectedGroupId || !selectedRole || selectedGroup?.role !== "owner" || roleEditName.trim().length < 2 || roleEditBusy) return;
-    roleEditBusy = true;
-    groupAdminError = "";
-    try {
-      const permissions = Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, Boolean(selectedRole[key])]));
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/roles/${encodeURIComponent(selectedRole.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: roleEditName.trim(), color: roleEditColor, ...permissions }),
-      });
-      const updatedRole = result.role;
-      groupRoles = groupRoles.map((role) => role.id === updatedRole.id ? { ...role, ...updatedRole } : role);
-      setGroupState({ groupOverview: {
-        ...groupOverview,
-        members: groupOverview.members.map((member) => member.roleId === updatedRole.id
-          ? { ...member, roleName: updatedRole.name, roleColor: updatedRole.color, ...permissions }
-          : member),
-      } });
-      roleEditName = updatedRole.name;
-      roleEditColor = updatedRole.color;
-      notice = `Cargo ${updatedRole.name} atualizado.`;
-    } catch (error) {
-      groupAdminError = error.message;
-    } finally {
-      roleEditBusy = false;
-    }
-  }
-
-  async function setRoleMember(role, member, checked) {
-    if (!selectedGroupId || !role || !member || member.role === "owner" || selectedGroup?.role !== "owner") return;
-    if (!checked && role.isDefault) return;
-    const defaultRole = groupRoles.find((item) => item.isDefault);
-    const roleId = checked ? role.id : defaultRole?.id || "";
-    roleMemberActionId = member.id;
-    groupAdminError = "";
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/members/${encodeURIComponent(member.id)}/role`, {
-        method: "PATCH",
-        body: JSON.stringify({ roleId }),
-      });
-      const assignedRole = groupRoles.find((item) => item.id === result.roleId) || defaultRole;
-      setGroupState({ groupOverview: {
-        ...groupOverview,
-        members: groupOverview.members.map((item) => item.id === member.id
-          ? {
-              ...item,
-              roleId: result.roleId,
-              roleName: assignedRole?.name || "Membro",
-              roleColor: assignedRole?.color || "#5865f2",
-              ...Object.fromEntries(rolePermissionOptions.map(({ key }) => [key, Boolean(assignedRole?.[key])])),
-            }
-          : item),
-      } });
-      notice = checked ? `${member.displayName} entrou no cargo ${role.name}.` : `${member.displayName} voltou para ${assignedRole?.name || "Membro"}.`;
-    } catch (error) {
-      groupAdminError = error.message;
-    } finally {
-      roleMemberActionId = "";
-    }
-  }
-
-  async function createGroupInvite() {
-    if (!selectedGroupId || groupInviteCreating) return;
-    groupInviteCreating = true;
-    groupAdminError = "";
-    try {
-      const result = await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/invites`, { method: "POST", body: JSON.stringify({ hours: 72, maxUses: 5 }) });
-      groupInviteLink = `${window.location.origin}/?invite=${encodeURIComponent(result.token)}`;
-      const copied = await copyText(groupInviteLink, "Convite criado e copiado.", "Convite criado. Copie o link manualmente.");
-      await loadGroupAdministration();
-      if (!copied) notice = "Convite criado. Copie o link manualmente.";
-    } catch (error) { groupAdminError = error.message; }
-    finally { groupInviteCreating = false; }
-  }
-
-  async function copyGroupInvite() {
-    if (!groupInviteLink) return;
-    await copyText(groupInviteLink, "Convite copiado.", "Não foi possível copiar o convite.");
-  }
-
-  async function deleteGroupInvite(invite) {
-    if (!selectedGroupId || !invite?.tokenHash || !window.confirm("Revogar este convite? O link deixará de funcionar.")) return;
-    groupInviteBusyId = invite.tokenHash;
-    groupAdminError = "";
-    try {
-      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/invites/${encodeURIComponent(invite.tokenHash)}`, { method: "DELETE" });
-      groupInvites = groupInvites.filter((item) => item.tokenHash !== invite.tokenHash);
-      notice = "Convite revogado.";
-    } catch (error) { groupAdminError = error.message; }
-    finally { groupInviteBusyId = ""; }
-  }
-
-  function openGroupContextMenu(event, group) {
-    event.preventDefault();
-    event.stopPropagation();
-    closeVoiceContextMenu();
-    const width = 244;
-    const height = 286;
-    groupContextMenu = {
-      x: Math.min(event.clientX, Math.max(8, window.innerWidth - width - 8)),
-      y: Math.min(event.clientY, Math.max(8, window.innerHeight - height - 8)),
-      group,
-    };
-    void tick().then(() => document.querySelector(".group-context-menu")?.focus());
-  }
-
-  function closeGroupContextMenu() {
-    groupContextMenu = null;
-  }
-
-  function handleGroupContextMenuKeydown(event) {
-    if (event.key === "Escape") closeGroupContextMenu();
-  }
-
-  function openRoomContextMenu(event, room) {
-    if (!room || !["text", "voice"].includes(room.kind)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    closeGroupContextMenu();
-    closeVoiceContextMenu();
-    const width = 244;
-    const height = 238;
-    roomContextMenu = {
-      x: Math.min(event.clientX, Math.max(8, window.innerWidth - width - 8)),
-      y: Math.min(event.clientY, Math.max(8, window.innerHeight - height - 8)),
-      room,
-    };
-    void tick().then(() => document.querySelector(".room-context-menu")?.focus());
-  }
-
-  function closeRoomContextMenu() {
-    roomContextMenu = null;
-  }
-
-  function handleRoomContextMenuKeydown(event) {
-    if (event.key === "Escape") closeRoomContextMenu();
-  }
-
-  async function copyRoomLink(room) {
-    const url = new URL(window.location.origin);
-    url.searchParams.set("group", selectedGroupId || "");
-    url.searchParams.set("room", room.id);
-    await copyText(url.href, "Link do canal copiado.", "Não foi possível copiar o link do canal.");
-    closeRoomContextMenu();
-  }
-
-  function openRoomForEditing(room) {
-    if (!room || selectedGroup?.role !== "owner" || room.slug === "geral") return;
-    roomDialogMode = "edit";
-    editingRoomId = room.id;
-    roomName = room.name;
-    roomKind = room.kind;
-    roomMaxParticipants = Number(room.maxParticipants) || 8;
-    closeRoomContextMenu();
-    showRoomDialog = true;
-  }
-
-  function deleteGroupRoom(room) {
-    if (!room || selectedGroup?.role !== "owner" || room.slug === "geral") return;
-    closeRoomContextMenu();
-    deleteRoomTarget = room;
-    deleteRoomError = "";
-    showDeleteRoomDialog = true;
-  }
-
-  async function confirmDeleteGroupRoom() {
-    const room = deleteRoomTarget;
-    if (!room || deleteRoomBusy) return;
-    deleteRoomBusy = true;
-    deleteRoomError = "";
-    try {
-      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}/rooms/${encodeURIComponent(room.id)}`, { method: "DELETE" });
-      await loadGroup(selectedGroupId);
-      notice = `Canal #${room.name} excluído.`;
-      showDeleteRoomDialog = false;
-      deleteRoomTarget = null;
-    } catch (error) {
-      deleteRoomError = error.message || "Não foi possível excluir o canal.";
-    } finally {
-      deleteRoomBusy = false;
-    }
-  }
-
-  function runRoomContextAction(action) {
-    const room = roomContextMenu?.room;
-    if (!room) return;
-    if (action === "open") {
-      closeRoomContextMenu();
-      void selectRoom(room.id);
-    } else if (action === "read") {
-      setGroupState({ knownGroupMessageIds: new Set([...knownGroupMessageIds, ...(groupOverview?.messages || []).filter((message) => messageBelongsToRoom(message, room)).map((message) => message.id)]) });
-      if (room.kind === "text") void markGroupRoomRead(room);
-      closeRoomContextMenu();
-      notice = `#${room.name} marcado como lido.`;
-    } else if (action === "copy") {
-      void copyRoomLink(room);
-    } else if (action === "edit") {
-      openRoomForEditing(room);
-    } else if (action === "delete") {
-      void deleteGroupRoom(room);
-    }
-  }
-
-  async function runGroupContextAction(action) {
-    const group = groupContextMenu?.group;
-    closeGroupContextMenu();
-    if (!group) return;
-    if (selectedGroupId !== group.id) await loadGroup(group.id);
-    setGroupsView();
-    if (action === "open") return;
-    if (action === "invite") return openInviteDialog();
-    if (action === "invite-link") return createGroupInvite();
-    if (action === "settings") return openSettings("group", "groups");
-    if (action === "leave") return openLeaveGroupDialog();
-    if (action === "delete") return openDeleteGroupDialog();
-  }
-
-  function openDeleteGroupDialog() {
-    if (!selectedGroupId || selectedGroup?.role !== "owner") return;
-    deleteGroupError = "";
-    showDeleteGroupDialog = true;
-  }
-
-  async function deleteSelectedGroup() {
-    if (!selectedGroupId || selectedGroup?.role !== "owner" || deleteGroupBusy) return;
-    deleteGroupBusy = true;
-    deleteGroupError = "";
-    const deletedGroupName = selectedGroup?.name || "o grupo";
-    try {
-      if (voiceState === "connected" && voiceRoomId && voiceRooms.some((room) => room.id === voiceRoomId)) leaveVoiceRoom({ silent: true });
-      await api(`/api/groups/${encodeURIComponent(selectedGroupId)}`, { method: "DELETE" });
-      const nextGroups = groups.filter((group) => group.id !== selectedGroupId);
-      setGroupState({ groups: nextGroups, groupOverview: null, selectedRoomId: null, selectedGroupId: nextGroups[0]?.id || null });
-      showDeleteGroupDialog = false;
-      if (selectedGroupId) await loadGroup(selectedGroupId);
-      else setNavigationState({ view: "home" });
-      notice = `${deletedGroupName} foi excluído.`;
-    } catch (error) {
-      deleteGroupError = error.message || "Não foi possível excluir o grupo agora.";
-    } finally {
-      deleteGroupBusy = false;
-    }
-  }
+  const groupActionsController = createGroupActionsController({
+    getState: () => ({
+      selectedGroupId,
+      selectedGroup,
+      selectedRole,
+      selectedRoleId,
+      selectedRoomId,
+      groupSettingsName,
+      groups,
+      groupOverview,
+      groupRoles,
+      rolePermissionOptions,
+      newRoleName,
+      newRoleColor,
+      roleEditName,
+      roleEditColor,
+      roleEditBusy,
+      roleMemberActionId,
+      groupInviteCreating,
+      groupInviteLink,
+      groupInvites,
+      groupInviteBusyId,
+      groupAdminError,
+      groupContextMenu,
+      roomContextMenu,
+      roomDialogMode,
+      editingRoomId,
+      roomName,
+      roomKind,
+      roomMaxParticipants,
+      showRoomDialog,
+      deleteRoomTarget,
+      deleteRoomBusy,
+      deleteRoomError,
+      showDeleteRoomDialog,
+      deleteGroupBusy,
+      deleteGroupError,
+      showDeleteGroupDialog,
+      knownGroupMessageIds,
+      voiceState,
+      voiceRoomId,
+      voiceRooms,
+    }),
+    setState: (next) => {
+      const settingsPatch = {};
+      const groupPatch = {};
+      const navigationPatch = {};
+      for (const key of ["settingsBusy", "settingsError"]) if (key in next) settingsPatch[key] = next[key];
+      for (const key of [
+        "groups",
+        "groupOverview",
+        "groupRoles",
+        "selectedRoleId",
+        "groupInviteLink",
+        "groupInvites",
+        "groupInviteCreating",
+        "groupInviteBusyId",
+        "groupAdminError",
+        "roleEditBusy",
+        "roleEditName",
+        "roleEditColor",
+        "roleMemberActionId",
+        "knownGroupMessageIds",
+      ]) if (key in next) groupPatch[key] = next[key];
+      for (const key of ["groupSettingsName"]) if (key in next) settingsPatch[key] = next[key];
+      for (const key of ["selectedGroupId", "selectedRoomId"]) if (key in next) groupPatch[key] = next[key];
+      if ("groupContextMenu" in next) groupContextMenu = next.groupContextMenu;
+      if ("roomContextMenu" in next) roomContextMenu = next.roomContextMenu;
+      if ("roomDialogMode" in next) roomDialogMode = next.roomDialogMode;
+      if ("editingRoomId" in next) editingRoomId = next.editingRoomId;
+      if ("roomName" in next) roomName = next.roomName;
+      if ("roomKind" in next) roomKind = next.roomKind;
+      if ("roomMaxParticipants" in next) roomMaxParticipants = next.roomMaxParticipants;
+      if ("showRoomDialog" in next) showRoomDialog = next.showRoomDialog;
+      if ("deleteRoomTarget" in next) deleteRoomTarget = next.deleteRoomTarget;
+      if ("deleteRoomBusy" in next) deleteRoomBusy = next.deleteRoomBusy;
+      if ("deleteRoomError" in next) deleteRoomError = next.deleteRoomError;
+      if ("showDeleteRoomDialog" in next) showDeleteRoomDialog = next.showDeleteRoomDialog;
+      if ("deleteGroupBusy" in next) deleteGroupBusy = next.deleteGroupBusy;
+      if ("deleteGroupError" in next) deleteGroupError = next.deleteGroupError;
+      if ("showDeleteGroupDialog" in next) showDeleteGroupDialog = next.showDeleteGroupDialog;
+      if ("notice" in next) notice = next.notice;
+      if ("view" in next) navigationPatch.view = next.view;
+      if (Object.keys(settingsPatch).length) setSettingsState(settingsPatch);
+      if (Object.keys(groupPatch).length) setGroupState(groupPatch);
+      if (Object.keys(navigationPatch).length) setNavigationState(navigationPatch);
+    },
+    api,
+    copyText,
+    loadGroup: (...args) => loadGroup(...args),
+    loadGroupAdministration: (...args) => loadGroupAdministration(...args),
+    selectRoom: (...args) => selectRoom(...args),
+    setGroupsView: (...args) => setGroupsView(...args),
+    openInviteDialog: (...args) => openInviteDialog(...args),
+    openSettings: (...args) => openSettings(...args),
+    openLeaveGroupDialog: (...args) => openLeaveGroupDialog(...args),
+    leaveVoiceRoom: (...args) => leaveVoiceRoom(...args),
+    closeVoiceContextMenu: (...args) => closeVoiceContextMenu(...args),
+    markGroupRoomRead: (...args) => markGroupRoomRead(...args),
+    messageBelongsToRoom,
+    tick,
+    reportClientError,
+  });
+  const saveGroupSettings = (...args) => groupActionsController.saveGroupSettings(...args);
+  const createGroupRole = (...args) => groupActionsController.createGroupRole(...args);
+  const assignMemberRole = (...args) => groupActionsController.assignMemberRole(...args);
+  const updateRolePermission = (...args) => groupActionsController.updateRolePermission(...args);
+  const deleteGroupRole = (...args) => groupActionsController.deleteGroupRole(...args);
+  const saveGroupRoleDetails = (...args) => groupActionsController.saveGroupRoleDetails(...args);
+  const setRoleMember = (...args) => groupActionsController.setRoleMember(...args);
+  const createGroupInvite = (...args) => groupActionsController.createGroupInvite(...args);
+  const copyGroupInvite = (...args) => groupActionsController.copyGroupInvite(...args);
+  const deleteGroupInvite = (...args) => groupActionsController.deleteGroupInvite(...args);
+  const openGroupContextMenu = (...args) => groupActionsController.openGroupContextMenu(...args);
+  const closeGroupContextMenu = (...args) => groupActionsController.closeGroupContextMenu(...args);
+  const handleGroupContextMenuKeydown = (...args) => groupActionsController.handleGroupContextMenuKeydown(...args);
+  const openRoomContextMenu = (...args) => groupActionsController.openRoomContextMenu(...args);
+  const closeRoomContextMenu = (...args) => groupActionsController.closeRoomContextMenu(...args);
+  const handleRoomContextMenuKeydown = (...args) => groupActionsController.handleRoomContextMenuKeydown(...args);
+  const copyRoomLink = (...args) => groupActionsController.copyRoomLink(...args);
+  const openRoomForEditing = (...args) => groupActionsController.openRoomForEditing(...args);
+  const deleteGroupRoom = (...args) => groupActionsController.deleteGroupRoom(...args);
+  const confirmDeleteGroupRoom = (...args) => groupActionsController.confirmDeleteGroupRoom(...args);
+  const runRoomContextAction = (...args) => groupActionsController.runRoomContextAction(...args);
+  const runGroupContextAction = (...args) => groupActionsController.runGroupContextAction(...args);
+  const openDeleteGroupDialog = (...args) => groupActionsController.openDeleteGroupDialog(...args);
+  const deleteSelectedGroup = (...args) => groupActionsController.deleteSelectedGroup(...args);
 
   const broadcastRuntimeController = createBroadcastRuntimeController({
     getState: () => ({
