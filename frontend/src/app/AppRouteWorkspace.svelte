@@ -5,6 +5,7 @@
   import FollowingPage from "../features/social/FollowingPage.svelte";
   import DirectMessagesPage from "../features/direct/DirectMessagesPage.svelte";
   import BroadcastPage from "../features/broadcast/BroadcastPage.svelte";
+  import LivePage from "../features/live/LivePage.svelte";
 
   export let state = {};
   export let actions = {};
@@ -145,5 +146,32 @@
     onSwitchSource={actions.switchBroadcastSource}
     onCopyInvite={actions.copyBroadcastInvite}
     onRequestCameraStart={actions.requestCameraBroadcastStart}
+  />
+{:else if state.view === "multistream"}
+  {#if state.MultistreamPage}
+    <svelte:component
+      this={state.MultistreamPage}
+      streams={state.streams}
+      selectedStreams={state.selectedStreams}
+      onClose={actions.closeMultistream}
+      onSelectLive={actions.openLive}
+      onToggleStream={actions.toggleStream}
+    />
+  {:else}
+    <div class="workspace-loading"><span></span><span></span><span></span></div>
+  {/if}
+{:else}
+  <LivePage
+    streams={state.streams}
+    selectedStreams={state.selectedStreams}
+    followingOnly={state.followingOnly}
+    socialActionId={state.socialActionId}
+    onToggleFollowing={actions.toggleFollowing}
+    onOpenMultistream={actions.openMultistream}
+    onStreamCardClick={actions.handleStreamCardClick}
+    onStreamCardKeydown={actions.handleStreamCardKeydown}
+    onToggleStream={actions.toggleStream}
+    onOpenStreamViewer={actions.openStreamViewer}
+    onToggleFollowStream={actions.toggleFollowStream}
   />
 {/if}

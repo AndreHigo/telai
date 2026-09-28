@@ -8,7 +8,6 @@
   import { createNotificationStateStore } from "./features/notifications/notification-state.js";
   import { createSocialStateStore } from "./features/social/social-state.js";
   import { createBroadcastStateStore } from "./features/broadcast/broadcast-state.js";
-  import LivePage from "./features/live/LivePage.svelte";
   import { createLiveStateStore } from "./features/live/live-state.js";
   import AppGroupsWorkspace from "./app/AppGroupsWorkspace.svelte";
   import AppSettingsWorkspace from "./app/AppSettingsWorkspace.svelte";
@@ -3934,7 +3933,7 @@
           onDismiss={clearVoiceReconnectSession}
         />
       {/if}
-      {#if ["home", "notifications", "friends", "following", "direct", "broadcast"].includes(view)}
+      {#if ["home", "notifications", "friends", "following", "direct", "broadcast", "multistream", "live"].includes(view)}
         <AppRouteWorkspace
           state={{
             view,
@@ -3985,7 +3984,11 @@
             broadcastMediaSwitching,
             voiceDevicesBusy,
             broadcastInvite,
-            pendingBroadcastContext
+            pendingBroadcastContext,
+            MultistreamPage,
+            streams,
+            selectedStreams,
+            followingOnly
           }}
           actions={{
             requestBroadcastStart,
@@ -4027,7 +4030,15 @@
             refreshBroadcastDevices,
             switchBroadcastSource,
             copyBroadcastInvite,
-            requestCameraBroadcastStart
+            requestCameraBroadcastStart,
+            closeMultistream,
+            toggleStream,
+            openMultistream,
+            handleStreamCardClick,
+            handleStreamCardKeydown,
+            openStreamViewer,
+            toggleFollowStream,
+            toggleFollowing: () => { setLiveState({ followingOnly: !followingOnly }); void loadStreams().catch((error) => { notice = error.message; }); }
           }}
           bind:directMessageDraft
           bind:selectedQuality
@@ -4317,33 +4328,8 @@
           bind:roleMemberSearchQuery
           bind:selectedRoomPermissionId
         />
-      {:else if view === "multistream"}
-        {#if MultistreamPage}
-          <svelte:component
-            this={MultistreamPage}
-            {streams}
-            {selectedStreams}
-            onClose={closeMultistream}
-            onSelectLive={() => selectView("live")}
-            onToggleStream={toggleStream}
-          />
-        {:else}
-          <div class="workspace-loading"><span></span><span></span><span></span></div>
-        {/if}
-       {:else}
-        <LivePage
-          {streams}
-          {selectedStreams}
-          {followingOnly}
-          {socialActionId}
-          onToggleFollowing={() => { setLiveState({ followingOnly: !followingOnly }); void loadStreams().catch((error) => { notice = error.message; }); }}
-          onOpenMultistream={openMultistream}
-          onStreamCardClick={handleStreamCardClick}
-          onStreamCardKeydown={handleStreamCardKeydown}
-          onToggleStream={toggleStream}
-          onOpenStreamViewer={openStreamViewer}
-          onToggleFollowStream={toggleFollowStream}
-        />
+      {:else}
+        <div class="workspace-loading"><span></span><span></span><span></span></div>
       {/if}
   </main>
   {/if}
