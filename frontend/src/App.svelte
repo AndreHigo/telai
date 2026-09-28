@@ -25,6 +25,7 @@
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
+  import AppOverlays from "./app/AppOverlays.svelte";
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
   import { createAccountController } from "./features/shell/account-controller.js";
@@ -36,7 +37,6 @@
   import { deriveAppState } from "./app/derived-state.js";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
-  import LegalConsentGate from "./LegalConsentGate.svelte";
   import { createApiClient } from "./services/api.js";
   import { createDirectStateStore } from "./features/direct/direct-state.js";
   import { createSettingsStateStore } from "./features/settings/settings-state.js";
@@ -4539,239 +4539,181 @@
   </main>
   {/if}
 
-  {#if selectedRoomRemoteVoice}
-    <div class="voice-remote-session-banner" role="status">
-      <div><strong>Você já está nesta sala em outra janela.</strong><span>Ao entrar pelo app, a outra janela sairá automaticamente da sala.</span></div>
-      <button class="primary rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={joinVoiceRoom}>Entrar nesta janela →</button>
-    </div>
-  {/if}
-  <LegalConsentGate user={user} on:accepted={handleLegalConsentAccepted} />
-  {#if voicePlaybackBlocked && voiceState === "connected" && !voiceDeafened}
-    <div class="voice-playback-banner" role="status">
-      <span>O navegador bloqueou o áudio da sala.</span>
-      <button class="primary rounded-lg px-3 py-2 text-xs font-extrabold" type="button" on:click={resumeVoiceRemoteAudio}>Ativar áudio da sala</button>
-    </div>
-  {/if}
-  {#if ContextMenus}
-    <svelte:component
-      this={ContextMenus}
-      {groupContextMenu}
-      {roomContextMenu}
-      {voiceContextMenu}
-      {profilePreview}
-      {selectedGroupId}
-      {currentGroupMember}
-      {selectedGroup}
-      {user}
-      {socialActionId}
-      {voiceVolumes}
-      {canMoveVoiceMembers}
-      {voiceRoomId}
-      {voiceRooms}
-      {activeVoiceRoom}
-      onGroupContextMenuKeydown={handleGroupContextMenuKeydown}
-      onRunGroupContextAction={runGroupContextAction}
-      onRoomContextMenuKeydown={handleRoomContextMenuKeydown}
-      onRunRoomContextAction={runRoomContextAction}
-      onVoiceContextMenuKeydown={handleVoiceContextMenuKeydown}
-      onVoiceParticipantDisplayName={voiceParticipantDisplayName}
-      onShowVoiceProfile={showVoiceProfile}
-      onSendFriendRequest={sendFriendRequestFromContext}
-      onOpenDirectConversation={openDirectConversationWithUser}
-      onMentionVoiceParticipant={mentionVoiceParticipant}
-      onSetVoiceVolume={setVoiceVolume}
-      onToggleContextParticipantServerMute={toggleContextParticipantServerMute}
-      onToggleVoiceParticipantLocalMute={toggleVoiceParticipantLocalMute}
-      onIsVoiceParticipantLocallyMuted={isVoiceParticipantLocallyMuted}
-      onMoveContextParticipant={moveContextParticipant}
-      onDisconnectContextParticipant={disconnectContextParticipant}
-      onCloseProfilePreview={() => profilePreview = null}
-    />
-  {/if}
-  {#if GroupDialogs}
-    <svelte:component
-      this={GroupDialogs}
-      {showInviteDialog}
-      {showGroupSearchDialog}
-      {showLeaveGroupDialog}
-      {showDeleteRoomDialog}
-      {showDeleteGroupDialog}
-      {showGroupDialog}
-      {showRoomDialog}
-      {selectedGroup}
-      {deleteRoomTarget}
-      {inviteSearchQuery}
-      {inviteSearchBusy}
-      {inviteSearchError}
-      {inviteSearchResults}
-      {inviteActionId}
-      {groupInviteCreating}
-      {groupInviteLink}
-      {groupSearchQuery}
-      {groupSearchBusy}
-      {groupSearchError}
-      {groupSearchResults}
-      {groupJoinActionId}
-      {leaveGroupBusy}
-      {leaveGroupError}
-      {deleteRoomBusy}
-      {deleteRoomError}
-      {deleteGroupBusy}
-      {deleteGroupError}
-      {groupName}
-      {roomDialogMode}
-      {roomName}
-      {roomKind}
-      {roomMaxParticipants}
-      onCloseInvite={() => showInviteDialog = false}
-      onInviteSearchQueryChange={(value) => inviteSearchQuery = value}
-      onSearchUsers={searchUsers}
-      onInviteUser={inviteUser}
-      onCreateGroupInvite={createGroupInvite}
-      onCopyGroupInvite={copyGroupInvite}
-      onCloseGroupSearch={() => showGroupSearchDialog = false}
-      onGroupSearchQueryChange={(value) => groupSearchQuery = value}
-      onSearchGroups={searchGroups}
-      onRequestGroupEntry={requestGroupEntry}
-      onCloseLeaveGroup={() => showLeaveGroupDialog = false}
-      onLeaveSelectedGroup={leaveSelectedGroup}
-      onCloseDeleteRoom={() => showDeleteRoomDialog = false}
-      onConfirmDeleteGroupRoom={confirmDeleteGroupRoom}
-      onCloseDeleteGroup={() => showDeleteGroupDialog = false}
-      onDeleteSelectedGroup={deleteSelectedGroup}
-      onCloseGroup={() => showGroupDialog = false}
-      onGroupNameChange={(value) => groupName = value}
-      onCreateGroup={createGroup}
-      onCloseRoom={() => showRoomDialog = false}
-      onRoomNameChange={(value) => roomName = value}
-      onRoomKindChange={(value) => roomKind = value}
-      onRoomMaxParticipantsChange={(value) => roomMaxParticipants = value}
-      onCreateRoom={createRoom}
-    />
-  {:else if showInviteDialog || showGroupSearchDialog || showLeaveGroupDialog || showDeleteRoomDialog || showDeleteGroupDialog || showGroupDialog || showRoomDialog}
-    <div class="workspace-loading" role="status" aria-label="Carregando diálogos"><span></span><span></span><span></span></div>
-  {/if}
-  {#if showGroupMessageSearch}
-    {#if GroupMessageSearchDialog}
-      <svelte:component
-        this={GroupMessageSearchDialog}
-        query={groupMessageSearchQuery}
-        results={groupMessageSearchResults}
-        busy={groupMessageSearchBusy}
-        error={groupMessageSearchError}
-        {rooms}
-        onQueryChange={(value) => setMessageState({ groupMessageSearchQuery: value })}
-        onSearch={searchGroupMessages}
-        onClose={() => showGroupMessageSearch = false}
-        onSelect={openGroupMessageSearchResult}
-      />
-    {:else}
-      <div class="workspace-loading" role="status" aria-label="Carregando busca de mensagens"><span></span><span></span><span></span></div>
-    {/if}
-  {/if}
-  {#if activeGroupThread}
-    {#if GroupThreadDialog}
-      <svelte:component
-        this={GroupThreadDialog}
-        parent={activeGroupThread}
-        messages={groupThreadMessages}
-        currentUserId={user?.id}
-        draft={groupThreadDraft}
-        busy={groupThreadBusy}
-        error={groupThreadError}
-        onDraftChange={updateGroupThreadDraft}
-        onSend={sendGroupThreadMessage}
-        onClose={closeGroupThread}
-        onStartEdit={startEditMessage}
-        onDelete={deleteMessage}
-      />
-    {:else}
-      <div class="workspace-loading" role="status" aria-label="Carregando respostas"><span></span><span></span><span></span></div>
-    {/if}
-  {/if}
-  {#if BroadcastDialogs}
-    <svelte:component
-      this={BroadcastDialogs}
-      {isDesktop}
-      {showPublicBroadcastSetup}
-      {showPublicBroadcastReview}
-      {showBroadcastVisibilityDialog}
-      {showDisplayPicker}
-      {showBroadcastAudioPicker}
-      {publicBroadcastTitle}
-      {publicBroadcastSourceKind}
-      {publicBroadcastMicrophoneEnabled}
-      {publicBroadcastCameraEnabled}
-      {publicBroadcastCameraDeviceId}
-      {publicBroadcastQuality}
-      {selectedInputDeviceId}
-      {audioInputDevices}
-      {cameraInputDevices}
-      {broadcastError}
-      {broadcastTitle}
-      {broadcastSelectionKind}
-      {broadcastSelectedSourceName}
-      {broadcastMicrophoneEnabled}
-      {broadcastCameraEnabled}
-      {qualityProfiles}
-      {selectedQuality}
-      {broadcastVisibility}
-      {displayPickerAvailability}
-      {displaySourceFilter}
-      {displaySourceGroups}
-      {broadcastAudioSourceCandidates}
-      {publicBroadcastAudioLabel}
-      {publicBroadcastSourceLabel}
-      onPublicBroadcastTitleChange={(value) => setBroadcastState({ publicBroadcastTitle: value })}
-      onPublicBroadcastSourceKindChange={(value) => setBroadcastState({ publicBroadcastSourceKind: value })}
-      onPublicBroadcastMicrophoneChange={(value) => setBroadcastState({ publicBroadcastMicrophoneEnabled: value })}
-      onPublicBroadcastCameraChange={(value) => setBroadcastState({ publicBroadcastCameraEnabled: value })}
-      onPublicBroadcastCameraDeviceChange={(value) => setBroadcastState({ publicBroadcastCameraDeviceId: value })}
-      onPublicBroadcastQualityChange={(value) => setBroadcastState({ publicBroadcastQuality: value })}
-      onSelectedInputDeviceChange={(value) => selectedInputDeviceId = value}
-      onCancelPublicBroadcastSetup={cancelPublicBroadcastSetup}
-      onConfirmPublicBroadcastSetup={confirmPublicBroadcastSetup}
-      onCancelPublicBroadcastReview={cancelPublicBroadcastReview}
-      onConfirmPublicBroadcastReview={confirmPublicBroadcastReview}
-      onCancelBroadcastVisibility={cancelBroadcastVisibility}
-      onBroadcastVisibilityChange={(value) => setBroadcastState({ broadcastVisibility: value })}
-      onConfirmBroadcastVisibility={confirmBroadcastVisibility}
-      onCancelDisplayPicker={cancelDisplayPicker}
-      onDisplaySourceFilterChange={(value) => displaySourceFilter = value}
-      onSelectDisplaySource={selectDisplaySource}
-      onCancelBroadcastAudioPicker={cancelBroadcastAudioPicker}
-      onSelectBroadcastAudioSource={selectBroadcastAudioSource}
-      onSkipBroadcastAudioSource={skipBroadcastAudioSource}
-    />
-  {:else if showPublicBroadcastSetup || showPublicBroadcastReview || showBroadcastVisibilityDialog || showDisplayPicker || showBroadcastAudioPicker}
-    <div class="workspace-loading" role="status" aria-label="Carregando controles de transmissão"><span></span><span></span><span></span></div>
-  {/if}
-  {#if showReleaseNotes && releaseNotes}
-    <div class="modal-backdrop release-notes-backdrop" role="presentation" on:click={dismissReleaseNotes}>
-      <div class="modal-shell release-notes-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="release-notes-title" on:click|stopPropagation on:keydown|stopPropagation>
-        <header class="modal-header">
-          <div>
-            <p class="eyebrow">atualização do Telai · {releaseNotes.platformLabel} · {releaseNotes.version}</p>
-            <h2 id="release-notes-title">{releaseNotes.title}</h2>
-            <p>{releaseNotes.summary}</p>
-          </div>
-          <button class="modal-close outline" type="button" aria-label="Fechar notas da atualização" on:click={dismissReleaseNotes}>×</button>
-        </header>
-        <div class="modal-body release-notes-body">
-          {#each releaseNotes.sections as section, sectionIndex}
-            <section class="release-notes-section" aria-labelledby={`release-notes-section-${sectionIndex}`}>
-              <h3 id={`release-notes-section-${sectionIndex}`}>{section.title}</h3>
-              <ul>
-                {#each section.items as item}<li>{item}</li>{/each}
-              </ul>
-            </section>
-          {/each}
-        </div>
-        <footer class="modal-footer">
-          <span class="muted">Você poderá rever estas notas em “Notas da atualização”, no menu da conta.</span>
-          <button class="primary rounded-xl px-4 py-2 text-sm font-extrabold" type="button" on:click={dismissReleaseNotes}>Entendi</button>
-        </footer>
-      </div>
-    </div>
-  {/if}
+  <AppOverlays
+    state={{
+      selectedRoomRemoteVoice,
+      user,
+      voicePlaybackBlocked,
+      voiceState,
+      voiceDeafened,
+      ContextMenus,
+      groupContextMenu,
+      roomContextMenu,
+      voiceContextMenu,
+      profilePreview,
+      selectedGroupId,
+      currentGroupMember,
+      selectedGroup,
+      socialActionId,
+      voiceVolumes,
+      canMoveVoiceMembers,
+      voiceRoomId,
+      voiceRooms,
+      activeVoiceRoom,
+      GroupDialogs,
+      showInviteDialog,
+      showGroupSearchDialog,
+      showLeaveGroupDialog,
+      showDeleteRoomDialog,
+      showDeleteGroupDialog,
+      showGroupDialog,
+      showRoomDialog,
+      deleteRoomTarget,
+      inviteSearchQuery,
+      inviteSearchBusy,
+      inviteSearchError,
+      inviteSearchResults,
+      inviteActionId,
+      groupInviteCreating,
+      groupInviteLink,
+      groupSearchQuery,
+      groupSearchBusy,
+      groupSearchError,
+      groupSearchResults,
+      groupJoinActionId,
+      leaveGroupBusy,
+      leaveGroupError,
+      deleteRoomBusy,
+      deleteRoomError,
+      deleteGroupBusy,
+      deleteGroupError,
+      groupName,
+      roomDialogMode,
+      roomName,
+      roomKind,
+      roomMaxParticipants,
+      GroupMessageSearchDialog,
+      showGroupMessageSearch,
+      groupMessageSearchQuery,
+      groupMessageSearchResults,
+      groupMessageSearchBusy,
+      groupMessageSearchError,
+      rooms,
+      GroupThreadDialog,
+      activeGroupThread,
+      groupThreadMessages,
+      groupThreadDraft,
+      groupThreadBusy,
+      groupThreadError,
+      BroadcastDialogs,
+      isDesktop,
+      showPublicBroadcastSetup,
+      showPublicBroadcastReview,
+      showBroadcastVisibilityDialog,
+      showDisplayPicker,
+      showBroadcastAudioPicker,
+      publicBroadcastTitle,
+      publicBroadcastSourceKind,
+      publicBroadcastMicrophoneEnabled,
+      publicBroadcastCameraEnabled,
+      publicBroadcastCameraDeviceId,
+      publicBroadcastQuality,
+      selectedInputDeviceId,
+      audioInputDevices,
+      cameraInputDevices,
+      broadcastError,
+      broadcastTitle,
+      broadcastSelectionKind,
+      broadcastSelectedSourceName,
+      broadcastMicrophoneEnabled,
+      broadcastCameraEnabled,
+      qualityProfiles,
+      selectedQuality,
+      broadcastVisibility,
+      displayPickerAvailability,
+      displaySourceFilter,
+      displaySourceGroups,
+      broadcastAudioSourceCandidates,
+      publicBroadcastAudioLabel,
+      publicBroadcastSourceLabel,
+      showReleaseNotes,
+      releaseNotes,
+    }}
+    actions={{
+      joinVoiceRoom,
+      handleLegalConsentAccepted,
+      resumeVoiceRemoteAudio,
+      handleGroupContextMenuKeydown,
+      runGroupContextAction,
+      handleRoomContextMenuKeydown,
+      runRoomContextAction,
+      handleVoiceContextMenuKeydown,
+      voiceParticipantDisplayName,
+      showVoiceProfile,
+      sendFriendRequestFromContext,
+      openDirectConversationWithUser,
+      mentionVoiceParticipant,
+      setVoiceVolume,
+      toggleContextParticipantServerMute,
+      toggleVoiceParticipantLocalMute,
+      isVoiceParticipantLocallyMuted,
+      moveContextParticipant,
+      disconnectContextParticipant,
+      closeProfilePreview: () => profilePreview = null,
+      closeInvite: () => showInviteDialog = false,
+      setInviteSearchQuery: (value) => inviteSearchQuery = value,
+      searchUsers,
+      inviteUser,
+      createGroupInvite,
+      copyGroupInvite,
+      closeGroupSearch: () => showGroupSearchDialog = false,
+      setGroupSearchQuery: (value) => groupSearchQuery = value,
+      searchGroups,
+      requestGroupEntry,
+      closeLeaveGroup: () => showLeaveGroupDialog = false,
+      leaveSelectedGroup,
+      closeDeleteRoom: () => showDeleteRoomDialog = false,
+      confirmDeleteGroupRoom,
+      closeDeleteGroup: () => showDeleteGroupDialog = false,
+      deleteSelectedGroup,
+      closeGroup: () => showGroupDialog = false,
+      setGroupName: (value) => groupName = value,
+      createGroup,
+      closeRoom: () => showRoomDialog = false,
+      setRoomName: (value) => roomName = value,
+      setRoomKind: (value) => roomKind = value,
+      setRoomMaxParticipants: (value) => roomMaxParticipants = value,
+      createRoom,
+      setGroupMessageSearchQuery: (value) => setMessageState({ groupMessageSearchQuery: value }),
+      searchGroupMessages,
+      closeGroupMessageSearch: () => showGroupMessageSearch = false,
+      openGroupMessageSearchResult,
+      updateGroupThreadDraft,
+      sendGroupThreadMessage,
+      closeGroupThread,
+      startEditMessage,
+      deleteMessage,
+      setPublicBroadcastTitle: (value) => setBroadcastState({ publicBroadcastTitle: value }),
+      setPublicBroadcastSourceKind: (value) => setBroadcastState({ publicBroadcastSourceKind: value }),
+      setPublicBroadcastMicrophone: (value) => setBroadcastState({ publicBroadcastMicrophoneEnabled: value }),
+      setPublicBroadcastCamera: (value) => setBroadcastState({ publicBroadcastCameraEnabled: value }),
+      setPublicBroadcastCameraDevice: (value) => setBroadcastState({ publicBroadcastCameraDeviceId: value }),
+      setPublicBroadcastQuality: (value) => setBroadcastState({ publicBroadcastQuality: value }),
+      setSelectedInputDevice: (value) => selectedInputDeviceId = value,
+      cancelPublicBroadcastSetup,
+      confirmPublicBroadcastSetup,
+      cancelPublicBroadcastReview,
+      confirmPublicBroadcastReview,
+      cancelBroadcastVisibility,
+      setBroadcastVisibility: (value) => setBroadcastState({ broadcastVisibility: value }),
+      confirmBroadcastVisibility,
+      cancelDisplayPicker,
+      setDisplaySourceFilter: (value) => displaySourceFilter = value,
+      selectDisplaySource,
+      cancelBroadcastAudioPicker,
+      selectBroadcastAudioSource,
+      skipBroadcastAudioSource,
+      dismissReleaseNotes,
+    }}
+  />
 </div>
