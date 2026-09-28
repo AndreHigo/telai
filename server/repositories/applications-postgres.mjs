@@ -57,6 +57,19 @@ export function createPostgresApplicationRepository(database, { createId = rando
     });
   }
 
+  async function updateApplication({ ownerId, applicationId, name, description, updatedAt = new Date().toISOString() }) {
+    return withPostgresTransaction(database, async (client) => {
+      const result = await client.query('SELECT bot_user_id AS "botUserId", name, description FROM applications WHERE owner_id = $1 AND id = $2', [ownerId, applicationId]);
+      const current = result.rows[0];
+      if (!current) return null;
+      const nextName = name ?? current.name;
+      const nextDescription = description ?? current.description;
+      await client.query("UPDATE applications SET name = $1, description = $2, updated_at = $3 WHERE owner_id = $4 AND id = $5", [nextName, nextDescription, updatedAt, ownerId, applicationId]);
+      await client.query("UPDATE users SET display_name = $1 WHERE id = $2 AND is_bot = TRUE", [`${nextName} Bot`.slice(0, 48), current.botUserId]);
+      return findOwned(ownerId, applicationId, client);
+    });
+  }
+
   async function createToken({ applicationId, label, tokenHash, createdAt = new Date().toISOString() }) {
     const id = createId();
     await database.query("INSERT INTO application_tokens (id, application_id, label, token_hash, created_at) VALUES ($1, $2, $3, $4, $5)", [id, applicationId, label, tokenHash, createdAt]);
@@ -200,5 +213,5 @@ export function createPostgresApplicationRepository(database, { createId = rando
     });
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, updateApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }

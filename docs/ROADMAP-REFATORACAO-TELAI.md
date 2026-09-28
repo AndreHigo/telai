@@ -322,8 +322,9 @@ enviada ao GitHub nem publicada em produção.
    - [x] Adicionar gerenciamento visual de aplicações, tokens, comandos e instalação de bots na área de configurações existente.
    - [x] Separar rotas de gerenciamento do proprietário das rotas de bot e interações em módulos HTTP independentes, preservando os contratos existentes.
    - [x] Adicionar escopos persistentes por instalação para comandos, mensagens e interações, mantendo todos habilitados por compatibilidade.
-   - [x] Separar presenters, parsing de comandos e conversão de permissões do repositório de aplicações em um módulo de domínio compartilhado pelos drivers.
-   - [x] Separar as implementações SQLite e PostgreSQL do repositório de aplicações, mantendo uma fachada de importação estável.
+    - [x] Separar presenters, parsing de comandos e conversão de permissões do repositório de aplicações em um módulo de domínio compartilhado pelos drivers.
+    - [x] Separar as implementações SQLite e PostgreSQL do repositório de aplicações, mantendo uma fachada de importação estável.
+    - [x] Permitir atualizar nome e descrição da aplicação, sincronizando a identidade do bot em SQLite/PostgreSQL.
    - [x] Aplicar a permissão de interações no catálogo e no polling de bots para não expor nem capturar comandos desativados.
    - [ ] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
 - [x] Comandos, componentes e modais.

@@ -68,6 +68,7 @@ const paths = {
   }),
   "/applications/{applicationId}": pathItem("Aplicações", {
     get: ["getApplication", "Retorna uma aplicação"],
+    patch: ["updateApplication", "Atualiza nome e descrição da aplicação"],
     delete: ["deleteApplication", "Exclui uma aplicação"],
   }),
   "/applications/{applicationId}/tokens": pathItem("Aplicações", {

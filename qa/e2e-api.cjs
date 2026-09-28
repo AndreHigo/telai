@@ -371,6 +371,10 @@ async function main() {
     const applicationList = await api(owner, "/api/applications");
     assert.equal(applicationList.response.status, 200);
     assert.ok(applicationList.body.applications.some((item) => item.id === applicationId));
+    const applicationUpdate = await api(owner, `/api/applications/${applicationId}`, "PATCH", { name: "QA Integration Updated", description: "Descrição atualizada" });
+    assert.equal(applicationUpdate.response.status, 200);
+    assert.equal(applicationUpdate.body.application.name, "QA Integration Updated");
+    assert.equal(applicationUpdate.body.application.bot.displayName, "QA Integration Updated Bot");
     const tokenCreation = await api(owner, `/api/applications/${applicationId}/tokens`, "POST", { label: "QA token" });
     assert.equal(tokenCreation.response.status, 201);
     assert.match(tokenCreation.body.token, /^[A-Za-z0-9_-]{32,}$/);

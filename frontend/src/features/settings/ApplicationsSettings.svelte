@@ -18,6 +18,8 @@
   let revealedToken = "";
   let applicationName = "";
   let applicationDescription = "";
+  let applicationEditName = "";
+  let applicationEditDescription = "";
   let tokenLabel = "";
   let commandName = "";
   let commandDescription = "";
@@ -47,6 +49,9 @@
       applications = result.applications || [];
       const nextId = applications.some((application) => application.id === preferredId) ? preferredId : applications[0]?.id || "";
       selectedApplicationId = nextId;
+      const nextApplication = applications.find((application) => application.id === nextId);
+      applicationEditName = nextApplication?.name || "";
+      applicationEditDescription = nextApplication?.description || "";
       if (nextId) await loadApplicationDetails(nextId);
       else {
         tokens = [];
@@ -300,10 +305,32 @@
 
   async function selectApplication(applicationId) {
     selectedApplicationId = applicationId;
+    const application = applications.find((item) => item.id === applicationId);
+    applicationEditName = application?.name || "";
+    applicationEditDescription = application?.description || "";
     revealedToken = "";
     error = "";
     notice = "";
     await loadApplicationDetails(applicationId);
+  }
+
+  async function updateApplication() {
+    if (busy || !selectedApplicationId || applicationEditName.trim().length < 2) return;
+    busy = true;
+    error = "";
+    notice = "";
+    try {
+      const result = await api(`/api/applications/${encodeURIComponent(selectedApplicationId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: applicationEditName.trim(), description: applicationEditDescription.trim() }),
+      });
+      applications = applications.map((item) => item.id === selectedApplicationId ? result.application : item);
+      notice = "Aplicação atualizada.";
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      busy = false;
+    }
   }
 
   onMount(refresh);
@@ -332,7 +359,15 @@
 
     {#if selectedApplication}
       <div class="applications-details">
-        <div class="settings-card application-identity-card"><div class="settings-card-heading"><div><p class="eyebrow">aplicação selecionada</p><h2>{selectedApplication.name}</h2><p class="muted">{selectedApplication.description || "Sem descrição cadastrada."}</p></div><button class="danger-outline" type="button" disabled={busy} on:click={deleteApplication}>Excluir</button></div><div class="application-bot-identity"><span class="application-list-icon"><HugeiconsIcon icon={iconFor("communities")} size={18} strokeWidth={1.8} /></span><span><strong>{selectedApplication.bot.displayName}</strong><small>@{selectedApplication.bot.username} · identidade do bot</small></span></div></div>
+        <div class="settings-card application-identity-card">
+          <div class="settings-card-heading"><div><p class="eyebrow">aplicação selecionada</p><h2>{selectedApplication.name}</h2><p class="muted">{selectedApplication.description || "Sem descrição cadastrada."}</p></div><button class="danger-outline" type="button" disabled={busy} on:click={deleteApplication}>Excluir</button></div>
+          <form class="application-form" on:submit|preventDefault={updateApplication}>
+            <label class="modal-field">Nome<input class="settings-input" bind:value={applicationEditName} minlength="2" maxlength="64" required /></label>
+            <label class="modal-field">Descrição<textarea class="settings-input" bind:value={applicationEditDescription} maxlength="280" rows="2"></textarea></label>
+            <button class="outline" type="submit" disabled={busy || applicationEditName.trim().length < 2}>Salvar identidade</button>
+          </form>
+          <div class="application-bot-identity"><span class="application-list-icon"><HugeiconsIcon icon={iconFor("communities")} size={18} strokeWidth={1.8} /></span><span><strong>{selectedApplication.bot.displayName}</strong><small>@{selectedApplication.bot.username} · identidade do bot</small></span></div>
+        </div>
 
         <div class="application-detail-grid">
           <section class="settings-card"><div class="settings-card-heading"><div><h3>Tokens</h3><p class="muted">Guarde o token em um cofre. O Telai nunca o exibe novamente.</p></div></div>{#if revealedToken}<div class="application-token-reveal" role="status"><code>{revealedToken}</code><button class="outline" type="button" on:click={copyToken}>Copiar</button></div>{/if}<form class="inline-settings-form" on:submit|preventDefault={createToken}><input class="settings-input" bind:value={tokenLabel} maxlength="64" placeholder="Rótulo do token" /><button class="primary" type="submit" disabled={busy}>Gerar token</button></form><div class="application-token-list">{#each tokens as token}<div class="application-row"><span><strong>{token.label}</strong><small>{token.revokedAt ? "Revogado" : token.lastUsedAt ? `Usado em ${new Date(token.lastUsedAt).toLocaleString()}` : "Nunca utilizado"}</small></span>{#if !token.revokedAt}<button class="outline" type="button" disabled={busy} on:click={() => revokeToken(token)}>Revogar</button>{/if}</div>{/each}{#if !tokens.length}<p class="muted">Nenhum token criado.</p>{/if}</div></section>

@@ -47,6 +47,18 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     }
   }
 
+  function updateApplication({ ownerId, applicationId, name, description, updatedAt = new Date().toISOString() }) {
+    const current = database.prepare("SELECT bot_user_id AS botUserId, name, description FROM applications WHERE owner_id = ? AND id = ?").get(ownerId, applicationId);
+    if (!current) return null;
+    const nextName = name ?? current.name;
+    const nextDescription = description ?? current.description;
+    database.prepare("UPDATE applications SET name = ?, description = ?, updated_at = ? WHERE owner_id = ? AND id = ?")
+      .run(nextName, nextDescription, updatedAt, ownerId, applicationId);
+    database.prepare("UPDATE users SET display_name = ? WHERE id = ? AND is_bot = 1")
+      .run(`${nextName} Bot`.slice(0, 48), current.botUserId);
+    return findOwned(ownerId, applicationId);
+  }
+
   function createToken({ applicationId, label, tokenHash, createdAt = new Date().toISOString() }) {
     const id = createId();
     database.prepare("INSERT INTO application_tokens (id, application_id, label, token_hash, created_at) VALUES (?, ?, ?, ?, ?)")
@@ -220,5 +232,5 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     }
   }
 
-  return { listOwned, findOwned, createApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, uninstallGroup, deleteApplication };
+  return { listOwned, findOwned, createApplication, updateApplication, createToken, listTokens, listCommands, listInstalledCommandsForGroup, createCommand, updateCommand, deleteCommand, findInstalledCommand, findByTokenHash, touchToken, revokeToken, installGroup, updateInstallation, findInstallation, listInstallations, uninstallGroup, deleteApplication };
 }

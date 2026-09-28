@@ -76,6 +76,22 @@ export function createApplicationOwnerRoutes({
       json(response, 200, { application: applicationPayload(context.application) });
       return true;
     }
+    if (!segment && request.method === "PATCH") {
+      try {
+        const body = await readJson(request, 16 * 1024);
+        const name = body.name === undefined ? undefined : normalizeText(body.name, 64);
+        const description = body.description === undefined ? undefined : normalizeText(body.description, 280);
+        if (body.name !== undefined && name.length < 2) {
+          json(response, 400, { error: "Informe um nome de aplicação com pelo menos 2 caracteres." });
+          return true;
+        }
+        const application = await applicationRepository.updateApplication({ ownerId: context.user.id, applicationId, name, description });
+        json(response, 200, { application: applicationPayload(application) });
+      } catch {
+        json(response, 400, { error: "Não foi possível atualizar a aplicação." });
+      }
+      return true;
+    }
     if (!segment && request.method === "DELETE") {
       await applicationRepository.deleteApplication(context.user.id, applicationId);
       json(response, 200, { ok: true, applicationId });
