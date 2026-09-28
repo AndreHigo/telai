@@ -55,7 +55,7 @@
   import { createVoiceTrackSyncService } from "./services/media/voice-track-sync.js";
   import { createVoiceReconnectStorage } from "./services/media/voice-reconnect-storage.js";
   import { createVoiceQualityController } from "./features/voice/quality-controller.js";
-  import { createVoiceSignalingController } from "./features/voice/signaling-controller.js";
+  import { createVoiceSignalingController, shouldInitiateVoicePeer } from "./features/voice/signaling-controller.js";
   import { createVoicePeerHealthController } from "./features/voice/peer-health-controller.js";
   import { createVoicePeerRecoveryController } from "./features/voice/peer-recovery-controller.js";
   import { createVoicePeerController } from "./features/voice/peer-controller.js";
@@ -3172,11 +3172,7 @@
   }
 
   function voicePeerShouldInitiate(participantId) {
-    if (!voiceClientId || !participantId) return false;
-    // Cada par escolhe o iniciador de forma determinística. Assim, a
-    // negociação não depende da ordem em que voice-user-joined e voice-joined
-    // chegaram quando várias pessoas entram quase ao mesmo tempo.
-    return String(voiceClientId) < String(participantId);
+    return shouldInitiateVoicePeer(voiceClientId, participantId);
   }
 
   function closeVoicePeer(participantId) {

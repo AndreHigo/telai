@@ -1,3 +1,8 @@
+export function shouldInitiateVoicePeer(clientId, participantId) {
+  if (!clientId || !participantId) return false;
+  return String(clientId) < String(participantId);
+}
+
 export function createVoiceSignalingController({
   getState,
   setState,

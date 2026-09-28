@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { createVoiceSignalingController } from "../frontend/src/features/voice/signaling-controller.js";
+import { createVoiceSignalingController, shouldInitiateVoicePeer } from "../frontend/src/features/voice/signaling-controller.js";
+
+assert.equal(shouldInitiateVoicePeer("a", "b"), true);
+assert.equal(shouldInitiateVoicePeer("b", "a"), false);
+assert.equal(shouldInitiateVoicePeer("same", "same"), false);
+assert.equal(shouldInitiateVoicePeer("", "peer"), false);
 
 const sent = [];
 const diagnostics = [];
