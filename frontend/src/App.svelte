@@ -86,7 +86,7 @@
   import { createAppComponentLoaders } from "./app/component-loader-registry.js";
   import { copyTextValue } from "./services/clipboard.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
-  import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
+  import { createVoiceActivityController } from "./features/voice/activity-controller.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { PlayIcon } from "@hugeicons/core-free-icons";
@@ -303,12 +303,6 @@
   let voiceReconnectVisible = false;
   let voiceReconnectBusy = false;
   let voiceReconnectTimer = null;
-  let voiceAnalyzers = new Map();
-  let voiceAnalyzerPendingIds = new Set();
-  let voiceAnalyzerTokens = new Map();
-  let voiceRtcSpeakingParticipantIds = new Set();
-  let voiceRtcStatSnapshots = new Map();
-  let voiceRtcActivityPending = false;
   let speakingVoiceParticipantIds = new Set();
   // O estado de fala enviado pelo servidor é a fonte autoritativa da borda
   // para participantes atuais. O analisador remoto fica apenas como fallback
@@ -544,20 +538,27 @@
   $: if (settingsSection === "profile" && !ProfileSettingsExtras) void loadProfileSettingsExtras();
 
   $: if (settingsSection === "voice" && !VoiceSettingsPanel) void loadVoiceSettingsPanel();
-  let voiceActivityTimer;
-  // Para o microfone local, a borda acompanha a janela de áudio do analisador.
-  // A saída usa uma cauda curta para não piscar com ruído e o tempo mínimo
-  // entre mudanças impede excesso de eventos no WebSocket durante uma fala.
-  const VOICE_ACTIVITY_POLL_MS = 16;
-  const VOICE_ACTIVITY_RELEASE_MS = 120;
-  const VOICE_ACTIVITY_MIN_STATE_MS = 160;
-  const VOICE_ACTIVITY_CALIBRATION_MS = 32;
-  const VOICE_ACTIVITY_ONSET_GUARD_MS = 48;
-  // Publica transições no mesmo ciclo do detector e só enfileira se o fluxo
-  // se aproximar do limite por janela do servidor.
-  const voiceSpeakingPublisher = createVoiceSpeakingPublisher({
-    send: (message) => sendVoice(message),
-    isReady: (participantId) => participantId === voiceClientId && voiceSocket?.readyState === WebSocket.OPEN,
+  const voiceActivityController = createVoiceActivityController({
+    getState: () => ({
+      voiceClientId,
+      voiceSocketReady: voiceSocket?.readyState === WebSocket.OPEN,
+      sendVoice,
+      voiceSpeakingSignalKnownParticipantIds,
+      isDesktop,
+      voiceInputProfile,
+      voiceSensitivityAuto,
+      voiceSensitivity,
+      voicePeerConnections,
+    }),
+    getAudioContext: () => getVoiceSoundContext(),
+    reportClientError,
+    onSpeakingStateChange: (participantId, speaking) => markVoiceParticipantSpeaking(participantId, speaking),
+    onRtcSpeakingStateChange: (participantId, speaking) => markVoiceParticipantSpeaking(participantId, speaking, "rtc"),
+    onTrackEnded: (participantId, track) => reportClientError(
+      "voice_activity_track_ended",
+      new Error("A faixa do microfone/áudio terminou durante a sala de voz."),
+      { participantId, isDesktop, trackReadyState: track?.readyState },
+    ),
   });
   const VOICE_PEER_AUDIO_GRACE_MS = 4_000;
   const VOICE_PEER_CONNECTION_TIMEOUT_MS = 8_000;
@@ -2631,13 +2632,7 @@
   }
 
   function resetVoiceActivityCalibration() {
-    const calibrationUntil = Date.now() + VOICE_ACTIVITY_CALIBRATION_MS;
-    for (const state of voiceAnalyzers.values()) {
-      state.calibrationUntil = calibrationUntil;
-      state.silentSince = 0;
-      state.speaking = false;
-      markVoiceParticipantSpeaking(state.participantId, false);
-    }
+    voiceActivityController.resetCalibration();
   }
 
   function updateVoiceSensitivityAuto(event) {
@@ -3319,7 +3314,7 @@
     // servidor já fornece o estado autoritativo desse participante.
     if (source === "rtc") return;
     if (source === "analyser" && participantId !== voiceClientId && voiceSpeakingSignalKnownParticipantIds.has(participantId)) return;
-    const analyzer = voiceAnalyzers.get(participantId);
+    const analyzer = voiceActivityController.getAnalyzer(participantId);
     const nextSpeaking = source === "signal" ? Boolean(speaking) : analyzer ? Boolean(analyzer.speaking) : false;
     const changed = speakingVoiceParticipantIds.has(participantId) !== nextSpeaking;
     if (changed) {
@@ -3335,31 +3330,8 @@
     return Boolean(participant?.id && (speakingVoiceParticipantIds.has(participant.id) || participant.speaking === true));
   }
 
-  // O servidor já transmite voice-user-speaking para participantes remotos.
-  // O analisador local continua necessário para a própria fala, mas manter
-  // um AnalyserNode e um polling de 16 ms por participante remoto duplica o
-  // trabalho e pode pressionar o renderer enquanto a janela está na bandeja.
-  function detachVoiceActivityAnalyzer(participantId) {
-    const analyzer = voiceAnalyzers.get(participantId);
-    if (analyzer) {
-      analyzer.track?.removeEventListener("ended", analyzer.onEnded);
-      try { analyzer.source.disconnect(); } catch {}
-      try { analyzer.analyser.disconnect(); } catch {}
-      try { analyzer.silentGain.disconnect(); } catch {}
-    }
-    voiceAnalyzers.delete(participantId);
-    voiceAnalyzerPendingIds.delete(participantId);
-    voiceAnalyzerTokens.delete(participantId);
-    voiceRtcStatSnapshots.delete(`activity:${participantId}`);
-    for (const key of voiceRtcStatSnapshots.keys()) if (key.startsWith(`${participantId}:`)) voiceRtcStatSnapshots.delete(key);
-    if (!voiceAnalyzers.size && voiceActivityTimer) {
-      clearInterval(voiceActivityTimer);
-      voiceActivityTimer = null;
-    }
-  }
-
   function clearVoiceActivityAnalyzer(participantId) {
-    detachVoiceActivityAnalyzer(participantId);
+    voiceActivityController.clearAnalyzer(participantId);
     markVoiceParticipantSpeaking(participantId, false, "cleanup");
     markVoiceParticipantSpeaking(participantId, false, "rtc");
   }
@@ -3373,226 +3345,19 @@
   }
 
   function ensureVoiceActivityTimer() {
-    if (!voiceActivityTimer) voiceActivityTimer = window.setInterval(pollVoiceActivity, VOICE_ACTIVITY_POLL_MS);
-  }
-
-  function publishVoiceSpeakingState(participantId, speaking) {
-    voiceSpeakingPublisher.publish(participantId, speaking);
+    voiceActivityController.ensureTimer();
   }
 
   function clearVoiceSpeakingPublishTimer() {
-    voiceSpeakingPublisher.reset();
+    voiceActivityController.resetPublisher();
   }
 
   async function attachVoiceActivityStream(participantId, stream) {
-    if (!participantId || !stream?.getAudioTracks?.().length || voiceAnalyzers.has(participantId) || voiceAnalyzerPendingIds.has(participantId)) return;
-    // Para participantes remotos, o sinal do servidor é a fonte autoritativa.
-    // Só criamos o analisador como fallback enquanto esse sinal não existe.
-    if (participantId !== voiceClientId && voiceSpeakingSignalKnownParticipantIds.has(participantId)) return;
-    const context = getVoiceSoundContext();
-    if (!context) {
-      reportClientError("voice_activity_analyzer_unavailable", new Error("O analisador de voz não está disponível neste navegador."), { participantId, isDesktop });
-      return;
-    }
-    voiceAnalyzerPendingIds.add(participantId);
-    const attachmentToken = Symbol(participantId);
-    voiceAnalyzerTokens.set(participantId, attachmentToken);
-    try {
-      if (context.state === "suspended") await context.resume();
-      if (voiceAnalyzerTokens.get(participantId) !== attachmentToken) return;
-      const track = stream.getAudioTracks().find((candidate) => candidate.readyState === "live");
-      if (!track) throw new Error("A faixa de áudio não está ativa para detectar fala.");
-      const source = context.createMediaStreamSource(stream);
-      const analyser = context.createAnalyser();
-      const silentGain = context.createGain();
-       // 128 amostras em 48 kHz mantêm a detecção responsiva (~2,7 ms por
-       // janela), reduzindo o atraso percebido sem polling agressivo.
-       analyser.fftSize = 128;
-      // A borda de fala não pode herdar a cauda do áudio renderizado. A
-      // suavização padrão do analisador mantém energia antiga por mais tempo.
-      analyser.smoothingTimeConstant = 0;
-      silentGain.gain.value = 0;
-      source.connect(analyser).connect(silentGain).connect(context.destination);
-      const onEnded = () => {
-        if (voiceAnalyzers.get(participantId)?.track !== track) return;
-        clearVoiceActivityAnalyzer(participantId);
-        reportClientError("voice_activity_track_ended", new Error("A faixa do microfone/áudio terminou durante a sala de voz."), { participantId, isDesktop, trackReadyState: track.readyState });
-      };
-      track.addEventListener("ended", onEnded, { once: true });
-      voiceAnalyzers.set(participantId, {
-        participantId,
-        track,
-        onEnded,
-        source,
-        analyser,
-        silentGain,
-        samples: new Float32Array(analyser.fftSize),
-        speaking: false,
-        silentSince: 0,
-        noiseFloor: 0.004,
-        previousSample: 0,
-        previousAnalysisSample: 0,
-        highpassState: 0,
-        voiceBand: 0,
-        highpassCoefficient: Math.exp((-2 * Math.PI * 140) / Math.max(context.sampleRate || 48000, 1)),
-        voiceBandCoefficient: 1 - Math.exp((-2 * Math.PI * 4200) / Math.max(context.sampleRate || 48000, 1)),
-        calibrationUntil: Date.now() + VOICE_ACTIVITY_CALIBRATION_MS,
-        lastStateChangeAt: 0,
-        lastDiagnosticAt: 0,
-      });
-      if (isDesktop) {
-        const settings = track.getSettings?.() || {};
-        reportClientError("voice_activity_analyzer_ready", new Error("Detector de fala inicializado."), { participantId, trackReadyState: track.readyState, trackEnabled: track.enabled, audioContextState: context.state, sampleRate: context.sampleRate, trackSampleRate: settings.sampleRate, channelCount: settings.channelCount, echoCancellation: settings.echoCancellation, noiseSuppression: settings.noiseSuppression, autoGainControl: settings.autoGainControl });
-      }
-      ensureVoiceActivityTimer();
-    } catch (error) {
-      reportClientError("voice_activity_analyzer_error", error, { participantId, isDesktop, audioContextState: context.state });
-    } finally {
-      voiceAnalyzerPendingIds.delete(participantId);
-      if (voiceAnalyzerTokens.get(participantId) === attachmentToken) voiceAnalyzerTokens.delete(participantId);
-    }
+    return voiceActivityController.attachStream(participantId, stream);
   }
 
   function attachVoiceActivityDetector(participantId, audio) {
-    if (participantId !== voiceClientId && voiceSpeakingSignalKnownParticipantIds.has(participantId)) return;
-    void attachVoiceActivityStream(participantId, audio?.srcObject);
-  }
-
-  function pollVoiceActivity() {
-    const now = Date.now();
-    for (const state of voiceAnalyzers.values()) {
-      state.analyser.getFloatTimeDomainData(state.samples);
-      let energy = 0;
-      for (const sample of state.samples) {
-        energy += sample * sample;
-      }
-      const rms = Math.sqrt(energy / state.samples.length);
-      // Calibra o ruído real do dispositivo antes de armar a detecção. Sem
-      // isso, o ruído de fundo/codec pode cruzar o limiar e reiniciar o
-      // temporizador de silêncio a cada ciclo, deixando a borda presa.
-      if (now < state.calibrationUntil) {
-        state.noiseFloor = state.noiseFloor * 0.85 + Math.min(rms, 0.03) * 0.15;
-        state.silentSince = 0;
-        if (state.speaking) {
-          state.speaking = false;
-          markVoiceParticipantSpeaking(state.participantId, false);
-        }
-        continue;
-      }
-      const useAutomaticSensitivity = voiceInputProfile !== "custom" || voiceSensitivityAuto;
-      const sensitivity = useAutomaticSensitivity ? 0.5 : voiceSensitivity;
-      const attackMultiplier = useAutomaticSensitivity ? 2.25 : 2.8 - sensitivity * 1.8;
-      const releaseMultiplier = useAutomaticSensitivity ? 1.25 : 1.7 - sensitivity * 0.9;
-      const attackBase = useAutomaticSensitivity ? 0.0015 : 0.004 - sensitivity * 0.0032;
-      const releaseBase = useAutomaticSensitivity ? 0.0007 : 0.0015 - sensitivity * 0.0008;
-      const attackThreshold = Math.max(0.003, state.noiseFloor * attackMultiplier + attackBase);
-      const releaseThreshold = Math.max(0.0015, state.noiseFloor * releaseMultiplier + releaseBase);
-      if (!state.speaking && rms < attackThreshold) state.noiseFloor = state.noiseFloor * 0.96 + Math.min(rms, 0.03) * 0.04;
-      const wasSpeaking = state.speaking;
-      let voiceBandEnergy = 0;
-      let zeroCrossings = 0;
-      let peak = 0;
-      let previousSample = state.previousSample || 0;
-      let previousAnalysisSample = state.previousAnalysisSample || 0;
-      let highpassState = state.highpassState || 0;
-      let voiceBand = state.voiceBand || 0;
-      for (const sample of state.samples) {
-        const absoluteSample = Math.abs(sample);
-        peak = Math.max(peak, absoluteSample);
-        const highpassed = state.highpassCoefficient * (highpassState + sample - previousSample);
-        previousSample = sample;
-        highpassState = highpassed;
-        voiceBand += (highpassed - voiceBand) * state.voiceBandCoefficient;
-        voiceBandEnergy += voiceBand * voiceBand;
-        if ((sample >= 0) !== (previousAnalysisSample >= 0)) zeroCrossings += 1;
-        previousAnalysisSample = sample;
-      }
-      state.previousSample = previousSample;
-      state.previousAnalysisSample = previousAnalysisSample;
-      state.highpassState = highpassState;
-      state.voiceBand = voiceBand;
-      const voiceBandRms = Math.sqrt(voiceBandEnergy / Math.max(state.samples.length, 1));
-      const voiceBandRatio = voiceBandRms / Math.max(rms, 0.0001);
-      const zeroCrossingRate = zeroCrossings / Math.max(state.samples.length, 1);
-      const speechLike = voiceBandRatio >= 0.26 && zeroCrossingRate <= 0.48;
-      const loudEnoughToOverrideBand = rms > attackThreshold * 1.8;
-      const active = state.speaking
-        ? rms > releaseThreshold && (voiceBandRatio >= 0.16 || rms > attackThreshold * 1.35)
-        : rms > attackThreshold && (speechLike || loudEnoughToOverrideBand);
-      const stateChanged = updateVoiceActivitySpeakingState(state, active, now, {
-        releaseMs: VOICE_ACTIVITY_RELEASE_MS,
-        minimumSpeakingMs: VOICE_ACTIVITY_MIN_STATE_MS,
-        onsetGuardMs: VOICE_ACTIVITY_ONSET_GUARD_MS,
-      });
-      if (stateChanged) markVoiceParticipantSpeaking(state.participantId, state.speaking);
-      if (wasSpeaking !== state.speaking && state.participantId === voiceClientId) {
-        publishVoiceSpeakingState(state.participantId, state.speaking);
-      }
-      if (isDesktop && now - (state.lastDiagnosticAt || 0) >= 2000) {
-        state.lastDiagnosticAt = now;
-        reportClientError("voice_activity_sample", new Error("Amostra numérica do detector de fala."), { participantId: state.participantId, rms: Number(rms.toFixed(5)), peak: Number(peak.toFixed(5)), voiceBandRatio: Number(voiceBandRatio.toFixed(5)), zeroCrossingRate: Number(zeroCrossingRate.toFixed(5)), speechLike, attackThreshold: Number(attackThreshold.toFixed(5)), releaseThreshold: Number(releaseThreshold.toFixed(5)), noiseFloor: Number(state.noiseFloor.toFixed(5)), trackReadyState: state.track?.readyState, trackEnabled: state.track?.enabled });
-      }
-      if (isDesktop && wasSpeaking !== state.speaking) reportClientError("voice_activity_state", new Error(state.speaking ? "Detector de fala: falando." : "Detector de fala: silencioso."), { participantId: state.participantId, speaking: state.speaking, rms: Number(rms.toFixed(5)), peak: Number(peak.toFixed(5)), voiceBandRatio: Number(voiceBandRatio.toFixed(5)), zeroCrossingRate: Number(zeroCrossingRate.toFixed(5)), speechLike, attackThreshold: Number(attackThreshold.toFixed(5)), releaseThreshold: Number(releaseThreshold.toFixed(5)), noiseFloor: Number(state.noiseFloor.toFixed(5)), trackReadyState: state.track?.readyState, trackEnabled: state.track?.enabled });
-    }
-  }
-
-  async function pollVoiceRtcActivity() {
-    if (voiceRtcActivityPending || !voicePeerConnections.size) return;
-    voiceRtcActivityPending = true;
-    try {
-      const detectedByParticipant = new Map();
-      for (const [participantId, peer] of voicePeerConnections) {
-        if (peer.connectionState === "closed" || typeof peer.getStats !== "function") continue;
-        const stats = await peer.getStats();
-        for (const report of stats.values()) {
-          const isAudio = report.kind === "audio" || report.mediaType === "audio";
-          const isInbound = report.type === "inbound-rtp" && isAudio;
-          const isOutboundLocal = report.type === "outbound-rtp" && isAudio;
-          if (!isInbound && !isOutboundLocal) continue;
-          const targetParticipantId = isOutboundLocal ? voiceClientId : participantId;
-          if (!targetParticipantId) continue;
-          let active = detectedByParticipant.get(targetParticipantId) === true;
-          if (typeof report.audioLevel === "number") {
-            active ||= report.audioLevel > 0.045;
-            detectedByParticipant.set(targetParticipantId, active);
-            continue;
-          }
-          if (typeof report.totalAudioEnergy !== "number" || typeof report.totalSamplesDuration !== "number") continue;
-          const snapshotKey = `${targetParticipantId}:${report.id}`;
-          const previous = voiceRtcStatSnapshots.get(snapshotKey);
-          voiceRtcStatSnapshots.set(snapshotKey, { energy: report.totalAudioEnergy, duration: report.totalSamplesDuration });
-          if (!previous) continue;
-          const energyDelta = Math.max(0, report.totalAudioEnergy - previous.energy);
-          const durationDelta = Math.max(0, report.totalSamplesDuration - previous.duration);
-          if (durationDelta > 0) {
-            active ||= Math.sqrt(energyDelta / durationDelta) > 0.055;
-            detectedByParticipant.set(targetParticipantId, active);
-          }
-        }
-      }
-      for (const participantId of new Set([...voicePeerConnections.keys(), voiceClientId].filter(Boolean))) {
-        const active = detectedByParticipant.get(participantId) === true;
-        const stateKey = `activity:${participantId}`;
-        const state = voiceRtcStatSnapshots.get(stateKey) || { silentSince: 0, speaking: false };
-        const now = Date.now();
-        if (active) {
-          state.silentSince = 0;
-          state.speaking = true;
-          markVoiceParticipantSpeaking(participantId, true, "rtc");
-        } else if (state.speaking) {
-          state.silentSince ||= now;
-          if (now - state.silentSince > VOICE_ACTIVITY_RELEASE_MS) {
-            state.speaking = false;
-            markVoiceParticipantSpeaking(participantId, false, "rtc");
-          }
-        }
-        voiceRtcStatSnapshots.set(`activity:${participantId}`, state);
-      }
-    } catch (error) {
-      reportClientError("voice_rtc_activity_error", error, { isDesktop });
-    } finally {
-      voiceRtcActivityPending = false;
-    }
+    voiceActivityController.attachDetector(participantId, audio);
   }
 
   function handleVoiceSoundEffectsChange(event) {
@@ -3888,7 +3653,7 @@
             const participantId = String(message.participantId || "");
             if (participantId) {
               voiceSpeakingSignalKnownParticipantIds = new Set(voiceSpeakingSignalKnownParticipantIds).add(participantId);
-              if (participantId !== voiceClientId) detachVoiceActivityAnalyzer(participantId);
+              if (participantId !== voiceClientId) clearVoiceActivityAnalyzer(participantId);
               markVoiceParticipantSpeaking(participantId, Boolean(message.speaking), "signal");
             }
           } else if (message.type === "voice-user-deafened") {
@@ -4123,8 +3888,7 @@
     voicePlaybackBlocked = false;
     speakingVoiceParticipantIds = new Set();
     voiceSpeakingSignalKnownParticipantIds = new Set();
-    voiceRtcSpeakingParticipantIds = new Set();
-    voiceRtcStatSnapshots.clear();
+    voiceActivityController.reset();
     voicePeerAudioHealth.clear();
     voicePeerRelayRecoveryAttempted.clear();
     voiceSignalingControllerQueues.clear();
@@ -4982,7 +4746,7 @@
     stopVoiceInputStream(voiceLocalStream);
     clientPollingController.stop();
     groupEventRuntime.close();
-    clearInterval(voiceActivityTimer);
+    voiceActivityController.reset();
     voiceQualityController.stop();
     window.removeEventListener("click", closeVoiceContextMenu);
     window.removeEventListener("click", closeRoomContextMenu);
