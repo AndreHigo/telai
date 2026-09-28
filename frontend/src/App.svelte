@@ -1,7 +1,5 @@
 <script>
   import { onDestroy, onMount, tick } from "svelte";
-  import Viewer from "./Viewer.svelte";
-  import AuthPage from "./features/auth/AuthPage.svelte";
   import { createAuthController } from "./features/auth/controller.js";
   import { createAuthStateStore } from "./features/auth/auth-state.js";
   import { createNotificationController } from "./features/notifications/controller.js";
@@ -13,6 +11,7 @@
   import AppSettingsWorkspace from "./app/AppSettingsWorkspace.svelte";
   import AppRouteWorkspace from "./app/AppRouteWorkspace.svelte";
   import AppMainShell from "./app/AppMainShell.svelte";
+  import AppEntryWorkspace from "./app/AppEntryWorkspace.svelte";
   import AppOverlays from "./app/AppOverlays.svelte";
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
@@ -3858,30 +3857,40 @@
 <div class:light={!isDark} class:desktop-app={isDesktop} class:home-shell={view === "home"} class:groups-shell={view === "groups"} class:settings-shell={view === "settings"} class:broadcast-shell={view === "broadcast"} class:multistream-mode={view === "multistream"} class:viewer-shell-active={isViewer || view === "viewer"} class:viewer-parent-fullscreen={viewerParentFullscreen} class:broadcast-active={broadcastState === "live"} class:voice-reconnect-active={voiceReconnectVisible && voiceReconnectSession} class:global-sidebar-collapsed={globalSidebarCollapsed} class="mirante-shell" style={visualStyle}>
   {#if isDesktop}<div class="desktop-titlebar" aria-hidden="true"></div>{/if}
   {#if maintenanceNotice}<div class="maintenance-banner" role="alert" aria-live="assertive"><div><strong>Manutenção programada</strong><span>{maintenanceRemainingSeconds > 0 ? `O Telai será atualizado em ${maintenanceRemainingSeconds}s.` : "A atualização está começando agora."}</span><small>{maintenanceNotice.message}</small></div><b>{maintenanceRemainingSeconds > 0 ? `${maintenanceRemainingSeconds}s` : "agora"}</b></div>{/if}
-  {#if loading}
-    <div class="grid min-h-screen place-items-center"><div class="text-sm text-slate-400">Abrindo seu espaço…</div></div>
-  {:else if isViewer || view === "viewer"}
-    <div class:light={!isDark} class="mirante-shell viewer-shell" style={visualStyle}>
-      <Viewer roomId={viewerRoomId} streamPath={viewerStreamPath} streamData={viewerStream} initialMediaMode={mediaMode} initialRtcConfig={rtcConfig} appVersion={runtimeVersion()} isDark={isDark} currentUser={user} onToggleTheme={toggleTheme} onBack={returnFromViewer} onNavigate={navigateFromViewer} />
-    </div>
-  {:else if !user}
-    <AuthPage
-      {authMode}
-      {authError}
-      {loginUsername}
-      {loginPassword}
-      {registerDisplayName}
-      {registerUsername}
-      {registerPassword}
-      {registerLegalAccepted}
-      {isDark}
-      {providers}
-      {authBusy}
-      onStateChange={setAuthState}
-      onSubmit={submitAuth}
-      onStartOAuth={startOAuth}
-    />
-  {:else}
+  <AppEntryWorkspace
+    state={{
+      loading,
+      isViewer,
+      view,
+      isDark,
+      visualStyle,
+      viewerRoomId,
+      viewerStreamPath,
+      viewerStream,
+      mediaMode,
+      rtcConfig,
+      appVersion: runtimeVersion(),
+      user,
+      authMode,
+      authError,
+      loginUsername,
+      loginPassword,
+      registerDisplayName,
+      registerUsername,
+      registerPassword,
+      registerLegalAccepted,
+      providers,
+      authBusy
+    }}
+    actions={{
+      toggleTheme,
+      returnFromViewer,
+      navigateFromViewer,
+      setAuthState,
+      submitAuth,
+      startOAuth
+    }}
+  >
     <AppMainShell
       state={{
         compactViewport,
@@ -4324,7 +4333,7 @@
         <div class="workspace-loading"><span></span><span></span><span></span></div>
       {/if}
     </AppMainShell>
-  {/if}
+  </AppEntryWorkspace>
 
   <AppOverlays
     state={{
