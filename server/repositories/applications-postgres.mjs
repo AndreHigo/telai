@@ -65,7 +65,7 @@ export function createPostgresApplicationRepository(database, { createId = rando
       const nextName = name ?? current.name;
       const nextDescription = description ?? current.description;
       await client.query("UPDATE applications SET name = $1, description = $2, updated_at = $3 WHERE owner_id = $4 AND id = $5", [nextName, nextDescription, updatedAt, ownerId, applicationId]);
-      await client.query("UPDATE users SET display_name = $1 WHERE id = $2 AND is_bot = TRUE", [`${nextName} Bot`.slice(0, 48), current.botUserId]);
+      await client.query("UPDATE users SET display_name = $1 WHERE id = $2 AND is_bot = 1", [`${nextName} Bot`.slice(0, 48), current.botUserId]);
       return findOwned(ownerId, applicationId, client);
     });
   }
