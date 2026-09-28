@@ -222,6 +222,7 @@ enviada ao GitHub nem publicada em produção.
     - [x] Extrair detecção de fala, publicação do estado e snapshots RTC para `frontend/src/features/voice/activity-controller.js`, preservando limiares, eventos e identidade visual.
     - [x] Extrair deduplicação, snapshot e merge da presença de voz para `frontend/src/features/voice/participant-state.js`, preservando a origem autoritativa do socket.
     - [x] Extrair a projeção visual de participantes de voz e nomes de fallback para o mesmo controlador, mantendo sessões em outras janelas identificadas.
+    - [x] Mover perfil de entrada, filtros WebRTC nativos, sensibilidade e opções avançadas de voz para `frontend/src/features/settings/controller.js`, mantendo os callbacks da tela.
     - [x] Extrair notas de atualização e seu estado de leitura para `frontend/src/features/shell/release-notes-controller.js` em chunk lazy.
     - [x] Extrair atualização, inicialização com o sistema, aceleração gráfica e seletores de captura Electron para `frontend/src/features/shell/desktop-controller.js` em chunk lazy.
     - [x] Extrair transporte WebSocket, pares WebRTC, ICE, renegociação e chat do host para `frontend/src/features/broadcast/transport-controller.js` em chunk lazy.

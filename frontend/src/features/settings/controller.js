@@ -42,6 +42,86 @@ export function createSettingsController({
 }) {
   const state = () => getState();
 
+  function persistLocalPreference(key, value, errorKind = "preferences_local_persist_error") {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch (error) {
+      reportClientError(errorKind, error);
+    }
+  }
+
+  function shouldProcessVoiceInput(current = state()) {
+    return current.voiceInputProfile === "isolation"
+      || (current.voiceInputProfile === "custom" && current.voiceAdvancedOptions?.noiseSuppression);
+  }
+
+  function voiceProcessingStatus(current = state()) {
+    return shouldProcessVoiceInput(current) ? "idle" : "off";
+  }
+
+  async function applyVoiceInputProfile(nextProfile) {
+    const current = state();
+    const voiceInputProfile = ["isolation", "studio", "custom"].includes(nextProfile) ? nextProfile : "isolation";
+    const voiceNoiseMode = voiceInputProfile === "studio" ? "off" : "native";
+    setState({
+      voiceInputProfile,
+      voiceNoiseMode,
+      voiceNoiseSuppressionStatus: voiceProcessingStatus({ ...current, voiceInputProfile }),
+    });
+    persistLocalPreference("mirante-voice-profile", voiceInputProfile);
+    persistLocalPreference("mirante-voice-noise-mode", voiceNoiseMode);
+    await reapplyVoiceInputSettings();
+  }
+
+  function updateVoiceSensitivityAuto(event) {
+    const voiceSensitivityAuto = Boolean(event?.currentTarget?.checked);
+    setState({ voiceSensitivityAuto });
+    persistLocalPreference("mirante-voice-sensitivity-auto", voiceSensitivityAuto);
+    resetVoiceActivityCalibration();
+  }
+
+  function updateVoiceSensitivity(event) {
+    const voiceSensitivity = Math.min(1, Math.max(0, Number(event?.currentTarget?.value) / 100));
+    setState({ voiceSensitivity });
+    persistLocalPreference("mirante-voice-sensitivity", Math.round(voiceSensitivity * 100));
+    resetVoiceActivityCalibration();
+  }
+
+  function toggleVoiceAdvanced(event) {
+    const voiceAdvancedOpen = Boolean(event?.currentTarget?.checked);
+    setState({ voiceAdvancedOpen });
+    persistLocalPreference("mirante-voice-advanced-open", voiceAdvancedOpen);
+  }
+
+  function updateVoiceAdvancedOption(key, event) {
+    const current = state();
+    if (!Object.hasOwn(current.voiceAdvancedOptions || {}, key)) return;
+    const voiceInputProfile = "custom";
+    const voiceAdvancedOptions = { ...current.voiceAdvancedOptions, [key]: Boolean(event?.currentTarget?.checked) };
+    setState({
+      voiceInputProfile,
+      voiceAdvancedOptions,
+      voiceNoiseSuppressionStatus: voiceProcessingStatus({ ...current, voiceInputProfile, voiceAdvancedOptions }),
+    });
+    persistLocalPreference("mirante-voice-profile", voiceInputProfile);
+    persistLocalPreference("mirante-voice-advanced", JSON.stringify(voiceAdvancedOptions));
+    void reapplyVoiceInputSettings();
+  }
+
+  async function applyVoiceNoiseMode(nextMode) {
+    const current = state();
+    const voiceInputProfile = "custom";
+    const voiceAdvancedOptions = { ...current.voiceAdvancedOptions, noiseSuppression: nextMode !== "off" };
+    setState({
+      voiceInputProfile,
+      voiceAdvancedOptions,
+      voiceNoiseSuppressionStatus: voiceProcessingStatus({ ...current, voiceInputProfile, voiceAdvancedOptions }),
+    });
+    persistLocalPreference("mirante-voice-profile", voiceInputProfile);
+    persistLocalPreference("mirante-voice-advanced", JSON.stringify(voiceAdvancedOptions));
+    await reapplyVoiceInputSettings();
+  }
+
   async function loadPreferences() {
     const result = await api("/api/auth/preferences");
     const preferences = result.preferences || {};
@@ -301,11 +381,17 @@ export function createSettingsController({
   }
 
   return {
+    applyVoiceInputProfile,
+    applyVoiceNoiseMode,
     loadPreferences,
     loadVoiceUserPreferences,
     saveChannelProfile,
     saveProfile,
     savePreferences,
     resetPreferencesToDefaults,
+    toggleVoiceAdvanced,
+    updateVoiceAdvancedOption,
+    updateVoiceSensitivity,
+    updateVoiceSensitivityAuto,
   };
 }

@@ -50,6 +50,7 @@
     "test:voice-activity": "node qa/test-voice-activity.cjs",
     "test:voice-activity-controller": "node qa/test-voice-activity-controller.mjs",
     "test:voice-participant-state-controller": "node qa/test-voice-participant-state-controller.mjs",
+    "test:voice-settings-controller": "node qa/test-voice-settings-controller.mjs",
     "test:voice-sound-controller": "node qa/test-voice-sound-controller.mjs",
     "test:voice-audio-test-controller": "node qa/test-voice-audio-test-controller.mjs",
     "test:voice-remote-playback-controller": "node qa/test-voice-remote-playback-controller.mjs",

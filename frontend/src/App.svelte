@@ -1893,6 +1893,7 @@
           voiceRemoteAudio,
           voiceDeafened,
           voiceNoiseMode,
+          voiceNoiseSuppressionStatus,
           voiceInputProfile,
           voiceSensitivityAuto,
           voiceSensitivity,
@@ -1934,6 +1935,7 @@
             voiceVolumes: (value) => { voiceVolumes = value; },
             voiceLocallyMutedParticipants: (value) => { voiceLocallyMutedParticipants = value; },
             voiceNoiseMode: (value) => { voiceNoiseMode = value; },
+            voiceNoiseSuppressionStatus: (value) => { voiceNoiseSuppressionStatus = value; },
             voiceInputProfile: (value) => { voiceInputProfile = value; },
             voiceSensitivityAuto: (value) => { voiceSensitivityAuto = value; },
             voiceSensitivity: (value) => { voiceSensitivity = value; },
@@ -2623,54 +2625,17 @@
 
   const reapplyVoiceInputSettings = () => voiceInputLifecycleController.reapplySettings();
 
-  async function applyVoiceInputProfile(nextProfile) {
-    voiceInputProfile = ["isolation", "studio", "custom"].includes(nextProfile) ? nextProfile : "isolation";
-    localStorage.setItem("mirante-voice-profile", voiceInputProfile);
-    voiceNoiseMode = voiceInputProfile === "studio" ? "off" : "native";
-    localStorage.setItem("mirante-voice-noise-mode", voiceNoiseMode);
-    voiceNoiseSuppressionStatus = shouldProcessVoiceInput() ? "idle" : "off";
-    await reapplyVoiceInputSettings();
-  }
+  async function applyVoiceInputProfile(...args) { return (await getSettingsController()).applyVoiceInputProfile(...args); }
 
   function resetVoiceActivityCalibration() {
     voiceActivityController.resetCalibration();
   }
 
-  function updateVoiceSensitivityAuto(event) {
-    voiceSensitivityAuto = Boolean(event.currentTarget.checked);
-    localStorage.setItem("mirante-voice-sensitivity-auto", String(voiceSensitivityAuto));
-    resetVoiceActivityCalibration();
-  }
-
-  function updateVoiceSensitivity(event) {
-    voiceSensitivity = Math.min(1, Math.max(0, Number(event.currentTarget.value) / 100));
-    localStorage.setItem("mirante-voice-sensitivity", String(Math.round(voiceSensitivity * 100)));
-    resetVoiceActivityCalibration();
-  }
-
-  function toggleVoiceAdvanced(event) {
-    voiceAdvancedOpen = Boolean(event.currentTarget.checked);
-    localStorage.setItem("mirante-voice-advanced-open", String(voiceAdvancedOpen));
-  }
-
-  function updateVoiceAdvancedOption(key, event) {
-    if (!Object.hasOwn(voiceAdvancedOptions, key)) return;
-    voiceInputProfile = "custom";
-    voiceAdvancedOptions = { ...voiceAdvancedOptions, [key]: Boolean(event.currentTarget.checked) };
-    localStorage.setItem("mirante-voice-profile", voiceInputProfile);
-    localStorage.setItem("mirante-voice-advanced", JSON.stringify(voiceAdvancedOptions));
-    voiceNoiseSuppressionStatus = shouldProcessVoiceInput() ? "idle" : "off";
-    void reapplyVoiceInputSettings();
-  }
-
-  async function applyVoiceNoiseMode(nextMode) {
-    voiceInputProfile = "custom";
-    voiceAdvancedOptions = { ...voiceAdvancedOptions, noiseSuppression: nextMode !== "off" };
-    localStorage.setItem("mirante-voice-profile", voiceInputProfile);
-    localStorage.setItem("mirante-voice-advanced", JSON.stringify(voiceAdvancedOptions));
-    voiceNoiseSuppressionStatus = shouldProcessVoiceInput() ? "idle" : "off";
-    await reapplyVoiceInputSettings();
-  }
+  function updateVoiceSensitivityAuto(...args) { return getSettingsController().then((controller) => controller.updateVoiceSensitivityAuto(...args)); }
+  function updateVoiceSensitivity(...args) { return getSettingsController().then((controller) => controller.updateVoiceSensitivity(...args)); }
+  function toggleVoiceAdvanced(...args) { return getSettingsController().then((controller) => controller.toggleVoiceAdvanced(...args)); }
+  function updateVoiceAdvancedOption(...args) { return getSettingsController().then((controller) => controller.updateVoiceAdvancedOption(...args)); }
+  async function applyVoiceNoiseMode(...args) { return (await getSettingsController()).applyVoiceNoiseMode(...args); }
 
   const stopVoiceTest = (options) => voiceAudioTestController.stop(options);
   const startVoiceTest = () => voiceAudioTestController.start();
