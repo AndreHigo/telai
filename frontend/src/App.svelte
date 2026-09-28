@@ -78,7 +78,7 @@
     readStoredVoiceDeviceLabel,
   } from "./services/media/voice-device-utils.js";
   import { createClientDiagnostics } from "./services/client-diagnostics.js";
-  import { createClientPollingController } from "./services/client-polling.js";
+  import { createAppLifecycleController } from "./app/lifecycle-controller.js";
   import { createGatewaySequenceGuard } from "./services/gateway-sequence.js";
   import { createMaintenanceController } from "./features/shell/maintenance-controller.js";
   import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
@@ -97,6 +97,7 @@
   import { createVoiceSocketController } from "./features/voice/socket-controller.js";
   import { createVoiceLiveController } from "./features/voice/live-controller.js";
   import { createVoiceReconnectController } from "./features/voice/reconnect-controller.js";
+  import { createVoiceRoomController } from "./features/voice/room-controller.js";
   import { createVoiceMessageController } from "./features/voice/message-controller.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
@@ -262,7 +263,6 @@
   let activeDisplayProcessId = null;
   let broadcastSourceSwitching = false;
   let broadcastMediaSwitching = false;
-  let windowAudioStatusUnsubscribe = null;
   let viewerCount = 0;
   let peerConnections = new Map();
   let pendingBroadcastCandidates = new Map();
@@ -761,10 +761,7 @@
   let voiceTestSpeakerStatus = "";
   let isDesktop = false;
   let desktopPushToTalkGlobal = false;
-  let desktopPushToTalkUnsubscribe = null;
   let desktopMuteShortcutGlobal = false;
-  let desktopMuteShortcutUnsubscribe = null;
-  let desktopTrayUnsubscribe = null;
   let desktopVersion = APP_VERSION;
   let desktopUpdate = { status: "idle", version: "", percent: 0, message: "" };
   let showReleaseNotes = false;
@@ -3569,167 +3566,100 @@
     }
   }
 
-  function voiceMicrophoneJoinMessage(error) {
-    if (error?.name === "NotAllowedError" || error?.name === "SecurityError") {
-      return "Você entrou sem microfone porque o acesso foi bloqueado. Permita o microfone nas configurações do navegador e tente selecionar novamente.";
-    }
-    if (error?.voiceInputFallbackAttempted) {
-      return "Você entrou sem microfone porque o microfone padrão também não está disponível. Verifique as permissões do Windows e escolha outro dispositivo em Áudio e voz.";
-    }
-    if (["NotFoundError", "OverconstrainedError"].includes(error?.name)) {
-      return "Você entrou sem microfone porque o dispositivo escolhido não está disponível. Abra Áudio e voz, atualize os dispositivos e tente novamente.";
-    }
-    if (error?.name === "NotReadableError") {
-      return "Você entrou sem microfone porque o dispositivo está sendo usado por outro aplicativo. Feche o outro uso e tente novamente.";
-    }
-    return "Você entrou sem microfone. Abra Áudio e voz para testar ou escolher outro dispositivo.";
-  }
-
-  async function joinVoiceRoom({ reconnecting = false } = {}) {
-    if (!selectedRoom || selectedRoom.kind !== "voice" || !selectedGroupId) return;
-    if (voiceRoomId === selectedRoom.id) {
-      return;
-    }
-    if (voiceState === "connecting") return;
-    const targetRoomId = selectedRoom.id;
-    const targetGroupId = selectedGroupId;
-    leaveVoiceRoom({ preserveLocalStream: true, preserveReconnect: true, silent: true });
-    getVoiceSoundContext();
-    voiceState = "connecting";
-    voiceError = "";
-    voiceRoomId = targetRoomId;
-    voiceParticipants = new Map([[
-      "local-pending",
-      {
-        id: "local-pending",
-        userId: user?.id || null,
-        displayName: user?.displayName || "Você",
-        username: user?.username || "você",
-        avatarData: user?.avatarData || null,
-        isLocal: true,
-        muted: voiceMuted,
-        deafened: voiceDeafened,
-        connecting: true,
-      },
-    ]]);
-    upsertVoiceRoomParticipant(targetRoomId, [...voiceParticipants.values()][0]);
-    try {
-      await refreshIceConfigurationIfNeeded();
-      await connectVoiceSocket();
-      let microphoneJoinError = null;
-      try {
-        const existingTrack = voiceLocalStream?.getAudioTracks?.().find((track) => track.readyState === "live");
-        if (!existingTrack || !voiceInputStreamMatchesSelectedDevice(voiceLocalStream)) {
-          stopVoiceInputStream(voiceLocalStream);
-          voiceLocalStream = await captureVoiceInputStream();
+  const voiceRoomController = createVoiceRoomController({
+    getState: () => ({
+      selectedRoom,
+      selectedGroupId,
+      selectedInputDeviceId,
+      user,
+      voiceClientId,
+      voiceDeafened,
+      voiceError,
+      voiceLocalStream,
+      voiceMuted,
+      voiceMutedByCaptureFailure,
+      voiceParticipants,
+      voicePeerConnections,
+      voicePeerAudioHealth,
+      voicePeerRelayRecoveryAttempted,
+      voicePlaybackBlocked,
+      voiceReconnectSession,
+      voiceRemoteAudio,
+      voiceRoomId,
+      voiceServerMuted,
+      voiceSpeakingSignalKnownParticipantIds,
+      voiceState,
+    }),
+    setState: (next) => {
+      if ("settingsSection" in next) setSettingsState({ settingsSection: next.settingsSection });
+      for (const key of [
+        "voiceClientId",
+        "voiceDeafened",
+        "voiceError",
+        "voiceLocalStream",
+        "voiceMuted",
+        "voiceMutedByCaptureFailure",
+        "voiceParticipants",
+        "voicePlaybackBlocked",
+        "voiceRoomId",
+        "voiceServerMuted",
+        "voiceSpeakingSignalKnownParticipantIds",
+        "voiceState",
+      ]) {
+        if (key in next) {
+          if (key === "voiceClientId") voiceClientId = next[key];
+          if (key === "voiceDeafened") voiceDeafened = next[key];
+          if (key === "voiceError") voiceError = next[key];
+          if (key === "voiceLocalStream") voiceLocalStream = next[key];
+          if (key === "voiceMuted") voiceMuted = next[key];
+          if (key === "voiceMutedByCaptureFailure") voiceMutedByCaptureFailure = next[key];
+          if (key === "voiceParticipants") voiceParticipants = next[key];
+          if (key === "voicePlaybackBlocked") voicePlaybackBlocked = next[key];
+          if (key === "voiceRoomId") voiceRoomId = next[key];
+          if (key === "voiceServerMuted") voiceServerMuted = next[key];
+          if (key === "voiceSpeakingSignalKnownParticipantIds") voiceSpeakingSignalKnownParticipantIds = next[key];
+          if (key === "voiceState") voiceState = next[key];
         }
-        const liveTrack = voiceLocalStream?.getAudioTracks?.().find((track) => track.readyState === "live");
-        if (!liveTrack) throw new Error("O microfone não ficou disponível para a sala de voz.");
-        liveTrack.enabled = true;
-        bindVoiceLocalTrack(liveTrack);
-        voiceMuted = false;
-        voiceMutedByCaptureFailure = false;
-      } catch (error) {
-        // A captura não pode impedir a entrada na sala: o usuário ainda deve
-        // conseguir ouvir quem já está conectado e corrigir o microfone por
-        // dentro das configurações, sem cair silenciosamente no padrão do SO.
-        microphoneJoinError = error;
-        reportClientError("voice_microphone_unavailable_on_join", error, { roomId: targetRoomId, deviceSelected: Boolean(selectedInputDeviceId) });
-        stopVoiceInputStream(voiceLocalStream);
-        voiceLocalStream = null;
-        voiceMuted = true;
-        voiceMutedByCaptureFailure = true;
       }
-      sendVoice({ type: "voice-join", voiceRoomId: targetRoomId, groupId: targetGroupId });
-      if (microphoneJoinError) voiceError = voiceMicrophoneJoinMessage(microphoneJoinError);
-      return true;
-    } catch (error) {
-      reportClientError("voice_join_error", error, { roomId: targetRoomId, groupId: targetGroupId });
-      voiceError = error.name === "NotAllowedError" ? "Permita o microfone para entrar nesta sala." : error.message;
-      leaveVoiceRoom({ preserveLocalStream: reconnecting, preserveReconnect: reconnecting, silent: true });
-      return false;
-    }
-  }
-
-  function leaveVoiceRoom({ preserveLocalStream = false, preserveReconnect = false, silent = false } = {}) {
-    const wasInVoice = voiceState === "connected" || voiceState === "connecting";
-    releasePushToTalk();
-    clearVoiceSpeakingPublishTimer();
-    const previousVoiceRoomId = voiceRoomId;
-    const previousVoiceClientId = voiceClientId;
-    if (previousVoiceRoomId) {
-      removeVoiceRoomParticipant(previousVoiceRoomId, previousVoiceClientId, user?.id || null);
-      sendVoice({ type: "voice-leave" });
-    }
-    for (const participantId of voicePeerConnections.keys()) closeVoicePeer(participantId);
-    voicePeerRecoveryController.clearAll();
-    clearVoiceActivityAnalyzer(previousVoiceClientId);
-    if (!preserveLocalStream) {
-      stopVoiceInputStream(voiceLocalStream);
-      voiceLocalStream = null;
-    }
-    voiceSocketController.close();
-    voiceRoomId = null;
-    voiceClientId = null;
-    voiceParticipants = new Map();
-    voicePlaybackBlocked = false;
-    speakingVoiceParticipantIds = new Set();
-    voiceSpeakingSignalKnownParticipantIds = new Set();
-    voiceActivityController.reset();
-    voicePeerAudioHealth.clear();
-    voicePeerRelayRecoveryAttempted.clear();
-    voiceSignalingControllerQueues.clear();
-    voicePendingSignals.clear();
-    stopVoicePeerHealthTimer();
-    voiceState = "idle";
-    voiceMuted = false;
-    voiceMutedByCaptureFailure = false;
-    voiceServerMuted = false;
-    voiceDeafened = false;
-    if (!preserveReconnect) clearVoiceReconnectSession();
-    if (wasInVoice && !silent) playVoiceSound("leave");
-  }
-
-  function toggleVoiceMute() {
-    setVoiceMuted(!voiceMuted);
-  }
-
-  function setVoiceMuted(nextMuted) {
-    const track = voiceLocalStream?.getAudioTracks()[0];
-    if (!track || !voiceClientId) return false;
-    const local = voiceParticipants.get(voiceClientId);
-    if (!nextMuted && (voiceServerMuted || local?.serverMuted)) return false;
-    voiceMuted = Boolean(nextMuted);
-    track.enabled = !(voiceMuted || voiceServerMuted);
-    if (local) {
-      const updated = { ...local, muted: voiceMuted || Boolean(local.serverMuted) };
-      voiceParticipants = new Map(voiceParticipants).set(voiceClientId, updated);
-      upsertVoiceRoomParticipant(voiceRoomId, updated);
-    }
-    sendVoice({ type: "voice-mute-state", muted: voiceMuted });
-    playVoiceSound(voiceMuted ? "mute" : "unmute");
-    return true;
-  }
-
-  function toggleVoiceDeafen() {
-    const nextDeafened = !voiceDeafened;
-    voiceDeafened = nextDeafened;
-    for (const [participantId, audio] of voiceRemoteAudio) audio.muted = voiceDeafened || voiceLocallyMutedParticipants.has(voicePreferenceTargetId(participantId));
-    if (!nextDeafened) resumeVoiceRemoteAudio();
-    const local = voiceParticipants.get(voiceClientId);
-    if (local) {
-      const updated = { ...local, deafened: voiceDeafened };
-      voiceParticipants = new Map(voiceParticipants).set(voiceClientId, updated);
-      upsertVoiceRoomParticipant(voiceRoomId, updated);
-    }
-    sendVoice({ type: "voice-deafen-state", deafened: voiceDeafened });
-    playVoiceSound(nextDeafened ? "deafen" : "undeafen");
-  }
-
-  function openVoiceSettings() {
-    void openSettings("user", "groups").then(() => loadAudioDevices(true));
-    setSettingsState({ settingsSection: "voice" });
-  }
+      if ("speakingVoiceParticipantIds" in next) speakingVoiceParticipantIds = next.speakingVoiceParticipantIds;
+    },
+    refreshIceConfiguration: (...args) => refreshIceConfigurationIfNeeded(...args),
+    connectSocket: (...args) => connectVoiceSocket(...args),
+    closeSocket: (...args) => voiceSocketController.close(...args),
+    getVoiceSoundContext: (...args) => getVoiceSoundContext(...args),
+    captureVoiceInputStream: (...args) => captureVoiceInputStream(...args),
+    inputStreamMatchesSelectedDevice: (...args) => voiceInputStreamMatchesSelectedDevice(...args),
+    stopVoiceInputStream: (...args) => stopVoiceInputStream(...args),
+    bindVoiceLocalTrack: (...args) => bindVoiceLocalTrack(...args),
+    sendVoice: (...args) => sendVoice(...args),
+    upsertVoiceRoomParticipant: (...args) => upsertVoiceRoomParticipant(...args),
+    removeVoiceRoomParticipant: (...args) => removeVoiceRoomParticipant(...args),
+    closeVoicePeer: (...args) => closeVoicePeer(...args),
+    clearPeerRecovery: () => voicePeerRecoveryController.clearAll(),
+    clearVoiceActivityAnalyzer: (...args) => clearVoiceActivityAnalyzer(...args),
+    resetVoiceActivity: () => voiceActivityController.reset(),
+    clearVoicePeerHealth: () => voicePeerAudioHealth.clear(),
+    clearVoicePeerRelayRecovery: () => voicePeerRelayRecoveryAttempted.clear(),
+    clearVoiceSignalingQueues: () => voiceSignalingControllerQueues.clear(),
+    clearVoicePendingSignals: () => voicePendingSignals.clear(),
+    stopVoicePeerHealthTimer: () => stopVoicePeerHealthTimer(),
+    clearReconnectSession: () => clearVoiceReconnectSession(),
+    clearSpeakingPublishTimer: () => clearVoiceSpeakingPublishTimer(),
+    releasePushToTalk: () => releasePushToTalk(),
+    resumeVoiceRemoteAudio: () => resumeVoiceRemoteAudio(),
+    isLocallyMuted: (participantId) => voiceLocallyMutedParticipants.has(participantId),
+    voicePreferenceTargetId: (...args) => voicePreferenceTargetId(...args),
+    playVoiceSound: (...args) => playVoiceSound(...args),
+    openSettings: (...args) => openSettings(...args),
+    loadAudioDevices: (...args) => loadAudioDevices(...args),
+    reportClientError,
+  });
+  const joinVoiceRoom = (...args) => voiceRoomController.joinVoiceRoom(...args);
+  const leaveVoiceRoom = (...args) => voiceRoomController.leaveVoiceRoom(...args);
+  const toggleVoiceMute = (...args) => voiceRoomController.toggleVoiceMute(...args);
+  const setVoiceMuted = (...args) => voiceRoomController.setVoiceMuted(...args);
+  const toggleVoiceDeafen = (...args) => voiceRoomController.toggleVoiceDeafen(...args);
+  const openVoiceSettings = (...args) => voiceRoomController.openVoiceSettings(...args);
 
   const voiceLiveController = createVoiceLiveController({
     getStreams: () => groupLiveStreams,
@@ -4203,96 +4133,92 @@
     mediaBindings: [["devicechange", handleVoiceDeviceChange]],
   });
 
-  onMount(async () => {
-    detectViewerRoute();
-    void loadMaintenance();
-    handleNavigationViewport();
-    voiceReconnectSession = readVoiceReconnectSession();
-    voiceReconnectVisible = Boolean(voiceReconnectSession);
-    windowLifecycle.start();
-    setVisualState({ theme: localStorage.getItem("mirante-theme") === "light" ? "light" : "dark" });
-    if (window.miranteDesktop?.isDesktop) {
-      isDesktop = true;
-      desktopPushToTalkUnsubscribe = window.miranteDesktop.onPushToTalk?.(handleDesktopPushToTalk) || null;
-      desktopMuteShortcutUnsubscribe = window.miranteDesktop.onMuteShortcut?.(handleDesktopMuteShortcut) || null;
-      desktopTrayUnsubscribe = window.miranteDesktop.onTrayAction?.(handleDesktopTrayAction) || null;
-      window.miranteDesktop.onUpdateStatus?.(handleDesktopUpdate);
-      windowAudioStatusUnsubscribe = window.miranteDesktop.onWindowAudioStatus?.((status) => { void handleWindowAudioStatus(status); }) || null;
-      loadDesktopVersion();
-      loadDesktopLaunchAtLogin();
-      loadDesktopHardwareAcceleration();
-      window.miranteDesktop.setTheme?.(theme);
-      window.miranteDesktop.onDisplayMediaSources?.((sources) => {
-        displaySources = sources || [];
-        displaySourceFilter = broadcastSelectionKind === "screen" ? "screen" : "window";
-        showDisplayPicker = displaySources.length > 0;
-      });
-    }
-    try {
-      const runtimeResponse = await fetch("/runtime-config", { cache: "no-store" });
-      const runtime = await runtimeResponse.json().catch(() => ({}));
-      mediaMode = runtime.mediaMode === "relay" ? "relay" : "p2p";
-    } catch {}
-    try {
-      const [session, availableProviders] = await Promise.all([
-        api("/api/auth/session"),
-        api("/api/auth/providers"),
-        loadIceConfiguration(),
-      ]);
-      setAuthState({ providers: availableProviders });
-      user = session.user || null;
-      if (user) canonicalizeAuthenticatedRoute();
-      if (user && !isViewer && view !== "viewer") maybeShowReleaseNotes(user);
-      // O visualizador já possui seu próprio WebSocket/player. Evite carregar
-      // grupos, streams e notificações em segundo plano enquanto ele está aberto.
-      if (user && !isViewer && view !== "viewer") {
-        await Promise.all([refresh(), loadAudioDevices(false)]);
-      }
-      await redeemPendingInvite();
-      await openPendingChannelRoute();
-    } catch (error) { notice = error.message; }
-    loading = false;
-  });
-
-  const clientPollingController = createClientPollingController({
-    getState: () => ({ user, isViewer, view, groupsWorkspaceOpen, selectedGroupId, directConversationId }),
-    refreshGroupOverview: () => refreshGroupOverview({ includeMessages: false }).catch((error) => reportClientError("group_overview_refresh_error", error, { groupId: selectedGroupId })),
-    loadStreams: () => loadStreams().catch(() => {}),
-    loadNotifications: () => loadNotifications({ silent: true }).catch(() => {}),
-    loadDirectConversationMessages: () => loadDirectConversationMessages({ silent: true }).catch(() => {}),
+  const appLifecycleController = createAppLifecycleController({
+    getState: () => ({
+      user,
+      isViewer,
+      view,
+      groupsWorkspaceOpen,
+      selectedGroupId,
+      directConversationId,
+      theme,
+      broadcastSelectionKind,
+      voiceLocalStream,
+      voiceReconnectTimer,
+      refreshGroupOverview,
+      loadStreams,
+      loadNotifications,
+      loadDirectConversationMessages,
+    }),
+    setState: (next) => {
+      if ("user" in next) user = next.user;
+      if ("loading" in next) loading = next.loading;
+      if ("notice" in next) notice = next.notice;
+      if ("isDesktop" in next) isDesktop = next.isDesktop;
+      if ("mediaMode" in next) mediaMode = next.mediaMode;
+      if ("voiceReconnectSession" in next) voiceReconnectSession = next.voiceReconnectSession;
+      if ("voiceReconnectVisible" in next) voiceReconnectVisible = next.voiceReconnectVisible;
+      if ("displaySources" in next) displaySources = next.displaySources;
+      if ("displaySourceFilter" in next) displaySourceFilter = next.displaySourceFilter;
+      if ("showDisplayPicker" in next) showDisplayPicker = next.showDisplayPicker;
+    },
+    windowLifecycle,
+    stateUnsubscribers: [
+      unsubscribeNavigationState,
+      unsubscribeAuthState,
+      unsubscribeVisualState,
+      unsubscribeViewerState,
+      unsubscribeLiveState,
+      unsubscribeBroadcastState,
+      unsubscribeMaintenanceState,
+      unsubscribeNotificationState,
+      unsubscribeSocialState,
+      unsubscribeSettingsState,
+      unsubscribeGroupState,
+      unsubscribeApplicationCommandState,
+      unsubscribeMessageState,
+      unsubscribeDirectState,
+    ],
+    detectViewerRoute,
     loadMaintenance,
+    handleNavigationViewport,
+    readVoiceReconnectSession,
+    setVisualState,
+    api,
+    setAuthState,
+    canonicalizeAuthenticatedRoute,
+    maybeShowReleaseNotes,
+    refresh,
+    loadAudioDevices,
+    loadIceConfiguration,
+    redeemPendingInvite,
+    openPendingChannelRoute,
+    loadDesktopVersion,
+    loadDesktopLaunchAtLogin,
+    loadDesktopHardwareAcceleration,
+    handleDesktopPushToTalk,
+    handleDesktopMuteShortcut,
+    handleDesktopUpdate,
+    handleDesktopTrayAction,
+    handleWindowAudioStatus,
+    clearBroadcastCaptureRecoveryTimer,
+    clearVoiceSpeakingPublishTimer,
+    stopVoiceTest,
+    stopVoiceInputStream,
+    groupEventRuntime,
+    resetVoiceActivity: () => voiceActivityController.reset(),
+    stopVoiceQuality: () => voiceQualityController.stop(),
+    voiceReconnectTimer,
+    reportClientError,
     updateMaintenanceCountdown,
   });
-  clientPollingController.start();
+
+  onMount(() => {
+    void appLifecycleController.start();
+  });
+
   onDestroy(() => {
-    unsubscribeNavigationState();
-    unsubscribeAuthState();
-    unsubscribeVisualState();
-    unsubscribeViewerState();
-    unsubscribeLiveState();
-    unsubscribeBroadcastState();
-    unsubscribeMaintenanceState();
-    unsubscribeNotificationState();
-    unsubscribeSocialState();
-    unsubscribeSettingsState();
-    unsubscribeGroupState();
-    unsubscribeApplicationCommandState();
-    unsubscribeMessageState();
-    unsubscribeDirectState();
-    clearBroadcastCaptureRecoveryTimer();
-    clearVoiceSpeakingPublishTimer();
-    stopVoiceTest();
-    stopVoiceInputStream(voiceLocalStream);
-    clientPollingController.stop();
-    groupEventRuntime.close();
-    voiceActivityController.reset();
-    voiceQualityController.stop();
-    windowLifecycle.stop();
-    desktopPushToTalkUnsubscribe?.();
-    desktopMuteShortcutUnsubscribe?.();
-    desktopTrayUnsubscribe?.();
-    windowAudioStatusUnsubscribe?.();
-    if (voiceReconnectTimer) window.clearTimeout(voiceReconnectTimer);
+    appLifecycleController.stop();
   });
 
   function setTheme(nextTheme) {
