@@ -1073,6 +1073,7 @@
       rooms,
       selectedGroupId,
       user,
+      broadcastState,
     }),
     setState: (next) => {
       if ("authError" in next) setAuthState({ authError: next.authError });
@@ -1086,8 +1087,10 @@
     loadGroup: (...args) => loadGroup(...args),
     setGroupState,
     setGroupsView: () => setGroupsView(),
+    setViewerState,
+    setNavigationView: (view) => setNavigationState({ view }),
   });
-  const { canonicalizeAuthenticatedRoute, detectViewerRoute, openPendingChannelRoute, replaceBrowserPath } = routeController;
+  const { canonicalizeAuthenticatedRoute, detectViewerRoute, handleBrowserPopState, openPendingChannelRoute, replaceBrowserPath } = routeController;
 
   $: selectedGroup = groups.find((group) => group.id === selectedGroupId) || null;
   $: normalizedGroupPickerQuery = groupPickerQuery.trim().toLocaleLowerCase();
@@ -5053,11 +5056,6 @@
     voiceReconnectVisible = Boolean(voiceReconnectSession);
     const handleWindowError = (event) => reportClientError("window_error", event.error || event.message, { filename: event.filename, line: event.lineno, column: event.colno });
     const handleUnhandledRejection = (event) => reportClientError("unhandled_rejection", event.reason);
-    const handleBrowserPopState = () => {
-      setViewerState({ isViewer: false, viewerRoomId: "", viewerStreamPath: "", viewerStream: null });
-      detectViewerRoute();
-      if (!isViewer) setNavigationState({ view: broadcastState === "live" ? "broadcast" : "home" });
-    };
     window.addEventListener("error", handleWindowError);
     window.addEventListener("unhandledrejection", handleUnhandledRejection);
     window.addEventListener("click", closeVoiceContextMenu);

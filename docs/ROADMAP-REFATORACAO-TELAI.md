@@ -183,6 +183,7 @@ enviada ao GitHub nem publicada em produção.
   - [x] Extrair estado de navegação, grupos, mensagens e configurações para stores/serviços sem duplicar contratos.
     - [x] Extrair seleção de telas, abertura do workspace de grupos e navegação da sidebar para `frontend/src/features/shell/navigation-controller.js` em chunk lazy, preservando o layout.
     - [x] Extrair parsing de rotas públicas, visualizador, convites pendentes e canonicalização de login para `frontend/src/features/shell/route-controller.js`, preservando URLs e layout.
+    - [x] Extrair o tratamento de `popstate` para o controller de rotas, preservando retorno ao visualizador e à tela anterior.
     - [x] Extrair o controle do breakpoint responsivo e fechamento da sidebar para `frontend/src/features/shell/viewport-controller.js`, preservando o layout.
     - [x] Extrair polling condicionado por visibilidade, manutenção e countdown para `frontend/src/services/client-polling.js`, preservando frequências e condições do shell.
     - [x] Extrair o controller de manutenção programada, countdown e reload protegido para `frontend/src/features/shell/maintenance-controller.js`, preservando o banner existente.

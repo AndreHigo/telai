@@ -4,7 +4,7 @@ const AUTH_ERROR_MESSAGES = {
   "oauth-failed": "Não foi possível concluir o acesso externo.",
 };
 
-export function createRouteController({ getState, setState, windowObject = globalThis.window, loadGroup, setGroupState, setGroupsView } = {}) {
+export function createRouteController({ getState, setState, windowObject = globalThis.window, loadGroup, setGroupState, setGroupsView, setViewerState, setNavigationView } = {}) {
   function replaceBrowserPath(pathname, { preserveQuery = true } = {}) {
     const url = new URL(windowObject.location.href);
     url.pathname = pathname;
@@ -62,5 +62,12 @@ export function createRouteController({ getState, setState, windowObject = globa
     } catch {}
   }
 
-  return { replaceBrowserPath, canonicalizeAuthenticatedRoute, detectViewerRoute, openPendingChannelRoute };
+  function handleBrowserPopState() {
+    setViewerState?.({ isViewer: false, viewerRoomId: "", viewerStreamPath: "", viewerStream: null });
+    detectViewerRoute();
+    const state = getState();
+    if (!state.isViewer) setNavigationView?.(state.broadcastState === "live" ? "broadcast" : "home");
+  }
+
+  return { replaceBrowserPath, canonicalizeAuthenticatedRoute, detectViewerRoute, openPendingChannelRoute, handleBrowserPopState };
 }

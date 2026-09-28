@@ -85,4 +85,16 @@ assert.equal(pendingState.selectedRoomId, "room-2");
 assert.equal(pendingState.pendingGroupRouteId, "");
 assert.equal(pendingState.pendingRoomRouteId, "");
 
-console.log(JSON.stringify({ ok: true, viewerQuery: true, friendlyPath: true, loginCanonicalization: true, pendingChannelRoute: true }));
+const popstateState = { isViewer: true, broadcastState: "live", viewerRoomId: "old-room", viewerStreamPath: "/old", viewerStream: { id: "old" } };
+const popstateCalls = [];
+const popstateController = createRouteController({
+  windowObject: fakeWindow("https://telai.test/"),
+  getState: () => popstateState,
+  setState: (next) => Object.assign(popstateState, next),
+  setViewerState: (next) => Object.assign(popstateState, next),
+  setNavigationView: (view) => popstateCalls.push(view),
+});
+popstateController.handleBrowserPopState();
+assert.deepEqual(popstateCalls, ["broadcast"]);
+
+console.log(JSON.stringify({ ok: true, viewerQuery: true, friendlyPath: true, loginCanonicalization: true, pendingChannelRoute: true, browserPopState: true }));
