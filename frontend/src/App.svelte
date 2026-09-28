@@ -16,12 +16,7 @@
   import LivePage from "./features/live/LivePage.svelte";
   import { createLiveStateStore } from "./features/live/live-state.js";
   import HomePage from "./features/home/HomePage.svelte";
-  import GroupPickerPage from "./features/groups/GroupPickerPage.svelte";
-  import GroupMemberRail from "./features/groups/GroupMemberRail.svelte";
-  import GroupServerRail from "./features/groups/GroupServerRail.svelte";
-  import GroupChannelRail from "./features/groups/GroupChannelRail.svelte";
-  import GroupWorkspaceHeader from "./features/groups/GroupWorkspaceHeader.svelte";
-  import GroupChatHeader from "./features/groups/GroupChatHeader.svelte";
+  import AppGroupsWorkspace from "./app/AppGroupsWorkspace.svelte";
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
@@ -104,7 +99,6 @@
   import { createVoiceRoomController } from "./features/voice/room-controller.js";
   import { createVoiceMessageController } from "./features/voice/message-controller.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
-  import { HugeiconsIcon } from "@hugeicons/svelte";
   import { PlayIcon } from "@hugeicons/core-free-icons";
 
   const APP_VERSION = typeof __MIRANTE_VERSION__ === "string" ? __MIRANTE_VERSION__ : "desconhecida";
@@ -4070,105 +4064,110 @@
           onRequestCameraStart={requestCameraBroadcastStart}
         />
       {:else if view === "groups"}
-        <div class="groups-view">
-        {#if !groupsWorkspaceOpen}
-          <GroupPickerPage
-            {groups}
-            bind:groupPickerQuery
-            {groupPickerGroups}
-            {groupLoading}
-            onSearch={openGroupSearchDialog}
-            onCreate={() => { showGroupDialog = true; }}
-            onOpenGroup={openGroupWorkspace}
-          />
-        {:else if !groups.length || !selectedGroupId}
-          <section class="groups-empty-state panel" aria-labelledby="groups-empty-title">
-            <span class="groups-empty-icon telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("communities")} size={28} strokeWidth={1.8} /></span>
-            <p class="eyebrow">suas comunidades</p>
-            <h1 id="groups-empty-title">Você ainda não faz parte de nenhum grupo</h1>
-            <p class="muted">Crie seu próprio grupo ou pesquise uma comunidade para começar a conversar, entrar em voz e acompanhar transmissões.</p>
-            <div class="groups-empty-actions">
-              <button class="primary rounded-xl px-4 py-3 text-sm font-extrabold" type="button" on:click={() => { showGroupDialog = true; }}>Criar grupo <span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("add")} size={15} strokeWidth={1.8} /></span></button>
-              <button class="outline rounded-xl px-4 py-3 text-sm font-extrabold" type="button" on:click={openGroupSearchDialog}>Pesquisar grupos <span class="telai-icon" aria-hidden="true"><HugeiconsIcon icon={iconFor("search")} size={15} strokeWidth={1.8} /></span></button>
-            </div>
-          </section>
-        {:else}
-        <GroupWorkspaceHeader
-          {selectedGroup}
-          {selectedGroupId}
-          {groupLoading}
-          {groupMembers}
-          {user}
-          onBack={() => setGroupsView({ openWorkspace: false })}
-          onInvite={openInviteDialog}
-          onOpenSettings={() => openSettings("group", "groups")}
-          onLeave={openLeaveGroupDialog}
+        <AppGroupsWorkspace
+          state={{
+            groupsWorkspaceOpen,
+            groups,
+            groupPickerGroups,
+            groupLoading,
+            selectedGroup,
+            selectedGroupId,
+            groupMembers,
+            user,
+            groupNavigationCollapsed,
+            showMobileChannels,
+            showMobileMembers,
+            showGroupPicker,
+            textRooms,
+            voiceRooms,
+            selectedRoomId,
+            voiceDropRoomId,
+            draggedVoiceParticipantId,
+            canMoveVoiceMembers,
+            voiceState,
+            voiceServerMuted,
+            voiceMuted,
+            voiceDeafened,
+            broadcastState,
+            selectedRoom,
+            GroupVoiceWorkspace,
+            selectedRoomLiveStreams,
+            watchingGroupLiveStreamId,
+            streamViewerUrl,
+            voiceLobbyParticipants,
+            voiceRoomId,
+            activeVoiceRoom,
+            voiceError,
+            GroupTextChatWorkspace,
+            messageDraft,
+            roomMessages,
+            groupApplicationCommands,
+            editingMessageId,
+            editingMessageDraft,
+            mentionSuggestions,
+            mentionActiveIndex,
+            messageAttachments,
+            memberRoleGroups
+          }}
+          actions={{
+            openGroupSearchDialog,
+            openCreateGroupDialog: () => { showGroupDialog = true; },
+            openGroupWorkspace,
+            closeGroupWorkspace: () => setGroupsView({ openWorkspace: false }),
+            openInviteDialog,
+            openGroupSettings: () => openSettings("group", "groups"),
+            openLeaveGroupDialog,
+            goHome: () => selectView("home"),
+            loadGroup,
+            openGroupContextMenu,
+            toggleGroupNavigation: () => { groupNavigationCollapsed = !groupNavigationCollapsed; setNavigationState({ showMobileChannels: false }); },
+            toggleGroupPicker: () => { showGroupPicker = !showGroupPicker; },
+            openCreateGroupFromChannelRail: () => { showGroupPicker = false; showGroupDialog = true; },
+            openCreateRoomDialog: (kind) => { showRoomDialog = true; if (kind) roomKind = kind; },
+            selectRoom,
+            visibleVoiceParticipants,
+            isVoiceParticipantSpeaking,
+            voiceParticipantDisplayName,
+            privateLiveForParticipant,
+            handleVoiceDragOver,
+            handleVoiceDragLeave,
+            handleVoiceDrop,
+            handleVoiceDragStart,
+            handleVoiceDragEnd,
+            toggleVoiceMute,
+            toggleVoiceDeafen,
+            requestBroadcastStart,
+            openVoiceSettings,
+            leaveVoiceRoom,
+            toggleMobileChannels: () => setNavigationState({ showMobileChannels: !showMobileChannels, showMobileMembers: false }),
+            toggleMobileMembers: () => setNavigationState({ showMobileMembers: !showMobileMembers, showMobileChannels: false }),
+            openGroupMessageSearch,
+            selectedRoomLiveStreams,
+            watchSelectedRoomLive,
+            closeSelectedRoomLive,
+            joinVoiceRoom,
+            setMessageDraft: (event) => setMessageState({ messageDraft: event.detail }),
+            setEditingMessageDraft: (event) => setMessageState({ editingMessageDraft: event.detail }),
+            sendMessage,
+            updateMentionSuggestions,
+            handleMessageKeydown,
+            insertMention,
+            startEditMessage,
+            cancelEditMessage,
+            saveEditMessage,
+            deleteMessage,
+            openGroupThread,
+            addMessageAttachments,
+            removeMessageAttachment,
+            submitBotComponent,
+            submitBotModal,
+            startApplicationInteraction,
+            openUserContextMenu,
+            openDirectConversationWithUser
+          }}
+          bind:groupPickerQuery
+          bind:messageComposerInput
         />
-        <section class:group-navigation-collapsed={groupNavigationCollapsed} class="discord-layout">
-        <GroupServerRail
-          {groups}
-          {selectedGroupId}
-          {groupLoading}
-          {groupNavigationCollapsed}
-          onGoHome={() => selectView("home")}
-          onLoadGroup={loadGroup}
-          onOpenGroupContextMenu={openGroupContextMenu}
-          onCreateGroup={() => { showGroupDialog = true; }}
-          onToggleNavigation={() => { groupNavigationCollapsed = !groupNavigationCollapsed; setNavigationState({ showMobileChannels: false }); }}
-          onSearchGroups={openGroupSearchDialog}
-          onOpenSettings={() => openSettings("group", "groups")}
-        />
-        <GroupChannelRail
-          {showMobileChannels}
-          {showGroupPicker}
-          {groups}
-          {selectedGroup}
-          {selectedGroupId}
-          {groupLoading}
-          {textRooms}
-          {voiceRooms}
-          {selectedRoomId}
-          {voiceDropRoomId}
-          {draggedVoiceParticipantId}
-          {canMoveVoiceMembers}
-          {user}
-          {voiceState}
-          {voiceServerMuted}
-          {voiceMuted}
-          {voiceDeafened}
-          {broadcastState}
-          onToggleGroupPicker={() => { showGroupPicker = !showGroupPicker; }}
-          onLoadGroup={loadGroup}
-          onCreateGroup={() => { showGroupPicker = false; showGroupDialog = true; }}
-          onCreateRoom={(kind) => { showRoomDialog = true; if (kind) roomKind = kind; }}
-          onSelectRoom={selectRoom}
-          onVisibleVoiceParticipants={visibleVoiceParticipants}
-          onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking}
-          onVoiceParticipantDisplayName={voiceParticipantDisplayName}
-          onPrivateLiveForParticipant={privateLiveForParticipant}
-          onHandleVoiceDragOver={handleVoiceDragOver}
-          onHandleVoiceDragLeave={handleVoiceDragLeave}
-          onHandleVoiceDrop={handleVoiceDrop}
-          onHandleVoiceDragStart={handleVoiceDragStart}
-          onHandleVoiceDragEnd={handleVoiceDragEnd}
-          onToggleVoiceMute={toggleVoiceMute}
-          onToggleVoiceDeafen={toggleVoiceDeafen}
-          onRequestBroadcastStart={requestBroadcastStart}
-          onOpenVoiceSettings={openVoiceSettings}
-          onLeaveVoiceRoom={leaveVoiceRoom}
-        />
-        <section class="chat-workspace"><GroupChatHeader {selectedGroup} {selectedGroupId} {groupLoading} {selectedRoom} {showMobileChannels} {showMobileMembers} onToggleChannels={() => setNavigationState({ showMobileChannels: !showMobileChannels, showMobileMembers: false })} onToggleMembers={() => setNavigationState({ showMobileMembers: !showMobileMembers, showMobileChannels: false })} onCreateChannel={() => { showRoomDialog = true; }} onSearchMessages={openGroupMessageSearch} />{#if groupLoading}<div class="workspace-loading"><span></span><span></span><span></span></div>{:else if selectedRoom?.kind === "voice"}{#if GroupVoiceWorkspace}<svelte:component this={GroupVoiceWorkspace} {selectedRoomLiveStreams} currentUserId={user?.id} watchingStreamId={watchingGroupLiveStreamId} streamUrl={streamViewerUrl} {voiceLobbyParticipants} {voiceState} {voiceRoomId} {selectedRoom} {activeVoiceRoom} {voiceError} onWatchSelectedRoomLive={watchSelectedRoomLive} onCloseSelectedRoomLive={closeSelectedRoomLive} onIsVoiceParticipantSpeaking={isVoiceParticipantSpeaking} onVoiceParticipantDisplayName={voiceParticipantDisplayName} onJoinVoiceRoom={joinVoiceRoom} onLeaveVoiceRoom={leaveVoiceRoom} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}{:else if GroupTextChatWorkspace}<svelte:component this={GroupTextChatWorkspace} bind:messageComposerInput messageDraft={messageDraft} on:messageDraft={(event) => setMessageState({ messageDraft: event.detail })} {selectedRoom} {roomMessages} {groupApplicationCommands} currentUserId={user?.id} {editingMessageId} editingMessageDraft={editingMessageDraft} on:editingMessageDraft={(event) => setMessageState({ editingMessageDraft: event.detail })} {mentionSuggestions} {mentionActiveIndex} {messageAttachments} onSendMessage={sendMessage} onUpdateMentionSuggestions={updateMentionSuggestions} onHandleMessageKeydown={handleMessageKeydown} onInsertMention={insertMention} onStartEditMessage={startEditMessage} onCancelEditMessage={cancelEditMessage} onSaveEditMessage={saveEditMessage} onDeleteMessage={deleteMessage} onOpenThread={openGroupThread} onAddMessageAttachments={addMessageAttachments} onRemoveMessageAttachment={removeMessageAttachment} onSubmitBotComponent={submitBotComponent} onSubmitBotModal={submitBotModal} onStartApplicationInteraction={startApplicationInteraction} />{:else}<div class="workspace-loading"><span></span><span></span><span></span></div>{/if}</section>
-        <GroupMemberRail
-          {user}
-          {memberRoleGroups}
-          memberCount={groupMembers.length}
-          {showMobileMembers}
-          onOpenUserContextMenu={openUserContextMenu}
-          onOpenDirectConversation={openDirectConversationWithUser}
-        />
-        </section>
-        {/if}
-        </div>
       {:else if view === "settings"}
         {#if SettingsPage}
         <svelte:component this={SettingsPage}
