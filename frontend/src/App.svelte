@@ -12,9 +12,7 @@
   import AppGroupsWorkspace from "./app/AppGroupsWorkspace.svelte";
   import AppSettingsWorkspace from "./app/AppSettingsWorkspace.svelte";
   import AppRouteWorkspace from "./app/AppRouteWorkspace.svelte";
-  import AppHeader from "./features/shell/AppHeader.svelte";
-  import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
-  import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
+  import AppMainShell from "./app/AppMainShell.svelte";
   import AppOverlays from "./app/AppOverlays.svelte";
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
@@ -3884,55 +3882,49 @@
       onStartOAuth={startOAuth}
     />
   {:else}
-    <AppHeader
-      {compactViewport}
-      {showGlobalSidebar}
-      {globalSidebarCollapsed}
-      {isDark}
-      {isDesktop}
-      {user}
-      {broadcastState}
-      {showUserMenu}
-      {showAboutInAccountMenu}
-      {notificationUnreadCount}
-      desktopVersion={desktopVersion}
-      webVersion={WEB_VERSION}
-      {desktopUpdate}
-      {desktopUpdateLabel}
-      onToggleGlobalNavigation={toggleGlobalNavigation}
-      onNavigateHome={() => setNavigationState({ view: "home" })}
-      onReturnToBroadcast={returnToBroadcast}
-      onStopBroadcast={stopBroadcast}
-      onRequestBroadcastStart={requestBroadcastStart}
-      onToggleUserMenu={() => { showUserMenu = !showUserMenu; showAboutInAccountMenu = false; }}
-      onOpenAccountDestination={openAccountDestination}
-      onOpenReleaseNotes={openReleaseNotes}
-      onToggleAbout={() => showAboutInAccountMenu = !showAboutInAccountMenu}
-      onUpdateDesktopApp={updateDesktopApp}
-      onToggleTheme={toggleTheme}
-      onLogout={() => { showUserMenu = false; void logout(); }}
-      onOpenNotifications={openNotifications}
-    />
-
-    <main class:groups-active={view === "groups"} class:direct-active={view === "direct"} class:broadcast-page-active={view === "broadcast"} class:global-sidebar-collapsed={globalSidebarCollapsed} class:voice-reconnect-visible={voiceReconnectVisible && voiceReconnectSession} class="app-main shell-width py-8 sm:py-10">
-      <GlobalSidebar
-        {showGlobalSidebar}
-        {globalSidebarCollapsed}
-        {view}
-        {notificationUnreadCount}
-        onClose={() => setNavigationState({ showGlobalSidebar: false })}
-        onSelectView={selectView}
-        onOpenSettings={() => void openAccountDestination("settings")}
-      />
-      {#if notice}<div class="app-notice" role="status">{notice}</div>{/if}
-      {#if voiceReconnectVisible && voiceReconnectSession}
-        <VoiceReconnectBanner
-          session={voiceReconnectSession}
-          busy={voiceReconnectBusy}
-          onReconnect={() => void reconnectSavedVoiceRoom()}
-          onDismiss={clearVoiceReconnectSession}
-        />
-      {/if}
+    <AppMainShell
+      state={{
+        compactViewport,
+        showGlobalSidebar,
+        globalSidebarCollapsed,
+        isDark,
+        isDesktop,
+        user,
+        broadcastState,
+        showUserMenu,
+        showAboutInAccountMenu,
+        notificationUnreadCount,
+        desktopVersion,
+        webVersion: WEB_VERSION,
+        desktopUpdate,
+        desktopUpdateLabel,
+        view,
+        notice,
+        voiceReconnectVisible,
+        voiceReconnectSession,
+        voiceReconnectBusy
+      }}
+      actions={{
+        toggleGlobalNavigation,
+        navigateHome: () => setNavigationState({ view: "home" }),
+        returnToBroadcast,
+        stopBroadcast,
+        requestBroadcastStart,
+        toggleUserMenu: () => { showUserMenu = !showUserMenu; showAboutInAccountMenu = false; },
+        openAccountDestination,
+        openReleaseNotes,
+        toggleAbout: () => showAboutInAccountMenu = !showAboutInAccountMenu,
+        updateDesktopApp,
+        toggleTheme,
+        logout: () => { showUserMenu = false; void logout(); },
+        openNotifications,
+        closeGlobalNavigation: () => setNavigationState({ showGlobalSidebar: false }),
+        selectView,
+        openSettings: () => void openAccountDestination("settings"),
+        reconnectVoice: () => void reconnectSavedVoiceRoom(),
+        clearVoiceReconnectSession
+      }}
+    >
       {#if ["home", "notifications", "friends", "following", "direct", "broadcast", "multistream", "live"].includes(view)}
         <AppRouteWorkspace
           state={{
@@ -4331,7 +4323,7 @@
       {:else}
         <div class="workspace-loading"><span></span><span></span><span></span></div>
       {/if}
-  </main>
+    </AppMainShell>
   {/if}
 
   <AppOverlays
