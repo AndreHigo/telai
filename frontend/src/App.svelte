@@ -96,6 +96,7 @@
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceActivityController } from "./features/voice/activity-controller.js";
   import { createVoiceActivityRuntime } from "./features/voice/activity-runtime.js";
+  import { createVoiceInputRuntime } from "./features/voice/input-runtime.js";
   import { createVoiceParticipantStateController } from "./features/voice/participant-state.js";
   import { createVoiceSocketController } from "./features/voice/socket-controller.js";
   import { createVoiceLiveController } from "./features/voice/live-controller.js";
@@ -553,6 +554,7 @@
 
   $: if (settingsSection === "voice" && !VoiceSettingsPanel) void loadVoiceSettingsPanel();
   let voiceActivityRuntime = null;
+  let voiceInputRuntime = null;
   const voiceActivityController = createVoiceActivityController({
     getState: () => ({
       voiceClientId,
@@ -1365,6 +1367,43 @@
     upsertVoiceRoomParticipant: (roomId, participant) => upsertVoiceRoomParticipant(roomId, participant),
     sendVoiceMuteState: (muted) => sendVoice({ type: "voice-mute-state", muted }),
     reportClientError,
+  });
+  voiceInputRuntime = createVoiceInputRuntime({
+    getState: () => ({
+      voiceInputProfile,
+      voiceAdvancedOptions,
+      selectedInputDeviceId,
+      selectedInputDeviceLabel,
+      allAudioInputDevices,
+      voiceInputDeviceByStream,
+      voiceInputSelectionRevision,
+      voiceMicrophoneVolume,
+      voiceLocalStream,
+      voiceMuted,
+      voiceServerMuted,
+      voiceClientId,
+      voiceState,
+      broadcastMicrophoneStream,
+    }),
+    setState: (next) => {
+      if ("selectedInputDeviceLabel" in next) selectedInputDeviceLabel = next.selectedInputDeviceLabel;
+      if ("voiceMicrophoneVolume" in next) voiceMicrophoneVolume = next.voiceMicrophoneVolume;
+      if ("voiceLocalStream" in next) voiceLocalStream = next.voiceLocalStream;
+    },
+    voiceInputPipeline,
+    voiceCaptureService,
+    voiceTrackSyncService,
+    voiceInputLifecycleController,
+    voiceAudioTestController,
+    createVoiceAudioConstraints,
+    createSelectedVoiceAudioConstraints,
+    normalizeAudioVolume,
+    rawAudioDeviceLabel,
+    reportClientError,
+    scheduleAudioVolumePersistence: (...args) => scheduleAudioVolumePersistence(...args),
+    clearVoiceActivityAnalyzer: (...args) => clearVoiceActivityAnalyzer(...args),
+    attachVoiceActivityStream: (...args) => attachVoiceActivityStream(...args),
+    ensureVoiceActivityTimer: (...args) => ensureVoiceActivityTimer(...args),
   });
   const voiceRemotePlaybackController = createVoiceRemotePlaybackController({
     audioByParticipant: voiceRemoteAudio,
@@ -2322,8 +2361,8 @@
         getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia(constraints),
         getDesktopBridge: () => window.miranteDesktop,
         loadAudioDevices,
-        processVoiceInputStream,
-        rememberCapturedInputDevice,
+        processVoiceInputStream: (...args) => processVoiceInputStream(...args),
+        rememberCapturedInputDevice: (...args) => rememberCapturedInputDevice(...args),
         reportClientError,
         setState: (next) => {
           if ("broadcastMicrophoneStream" in next) broadcastMicrophoneStream = next.broadcastMicrophoneStream;
@@ -2333,7 +2372,7 @@
           if ("notice" in next) notice = next.notice;
           if ("showDisplayPicker" in next) showDisplayPicker = next.showDisplayPicker;
         },
-        stopVoiceInputStream,
+        stopVoiceInputStream: (...args) => stopVoiceInputStream(...args),
       }));
     }
     return broadcastCaptureControllerPromise;
@@ -2418,7 +2457,7 @@
     stopBroadcastAudioMix,
     stopBroadcastVideoComposition,
     stopRelayRecorder,
-    stopVoiceInputStream,
+    stopVoiceInputStream: (...args) => stopVoiceInputStream(...args),
     stopWindowAudioBridge,
   });
   async function stopBroadcast(...args) { return broadcastLifecycleController.stop(...args); }
@@ -2528,111 +2567,21 @@
     return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
-  function voiceAudioConstraints() {
-    return createVoiceAudioConstraints(voiceInputProfile, voiceAdvancedOptions);
-  }
-
-  function selectedVoiceAudioConstraints() {
-    return createSelectedVoiceAudioConstraints(voiceInputProfile, voiceAdvancedOptions, selectedInputDeviceId);
-  }
-
-  function rememberCapturedInputDevice(track, requestedDeviceId = selectedInputDeviceId) {
-    const actualDeviceId = String(track?.getSettings?.().deviceId || "").trim();
-    if (requestedDeviceId && actualDeviceId && actualDeviceId !== requestedDeviceId) {
-      const error = new Error("O navegador entregou um microfone diferente do selecionado.");
-      error.name = "SelectedDeviceMismatchError";
-      error.requestedDeviceId = requestedDeviceId;
-      error.actualDeviceId = actualDeviceId;
-      throw error;
-    }
-    if (requestedDeviceId) {
-      const matchingDevice = allAudioInputDevices.find((device) => device.deviceId === (actualDeviceId || requestedDeviceId));
-      const actualLabel = rawAudioDeviceLabel(matchingDevice) || String(track?.label || "").replace(/\s+/g, " ").trim();
-      if (actualLabel) {
-        selectedInputDeviceLabel = actualLabel;
-        try { localStorage.setItem("mirante-voice-input-label", actualLabel); } catch {}
-      }
-    }
-    return { actualDeviceId, actualLabel: String(track?.label || "").replace(/\s+/g, " ").trim() };
-  }
-
-  function voiceInputStreamMatchesSelectedDevice(stream, requestedDeviceId = selectedInputDeviceId) {
-    if (!requestedDeviceId) return true;
-    const remembered = voiceInputDeviceByStream.get(stream);
-    const sourceTrack = voiceInputPipeline.getResource(stream)?.rawStream?.getAudioTracks?.()[0] || stream?.getAudioTracks?.()[0];
-    const actualDeviceId = remembered?.actualDeviceId || String(sourceTrack?.getSettings?.().deviceId || "").trim();
-    return !actualDeviceId || actualDeviceId === requestedDeviceId;
-  }
-
-  function shouldProcessVoiceInput() {
-    return voiceInputProfile === "isolation" || (voiceInputProfile === "custom" && voiceAdvancedOptions.noiseSuppression);
-  }
-
-  async function processVoiceInputStream(rawStream) {
-    return voiceInputPipeline.process(rawStream);
-  }
-
-  function stopVoiceInputStream(stream) {
-    voiceInputPipeline.stop(stream);
-  }
-
-  function updateVoiceMicrophoneGain(stream = voiceLocalStream) {
-    return voiceInputPipeline.updateGain(stream, voiceMicrophoneVolume);
-  }
-
-  async function setVoiceMicrophoneVolume(value) {
-    voiceMicrophoneVolume = normalizeAudioVolume(Number(value) / 100);
-    try { localStorage.setItem("mirante-voice-microphone-volume", String(voiceMicrophoneVolume)); } catch (error) { reportClientError("voice_microphone_volume_persist_error", error); }
-    scheduleAudioVolumePersistence();
-    // O teste de áudio e a transmissão podem ter seus próprios ganhos
-    // gerenciados. Eles não podem encerrar a atualização antes de aplicar o
-    // mesmo valor na faixa da sala: enquanto o teste estava ativo, o código
-    // anterior atualizava apenas voiceTestStream e deixava voiceLocalStream
-    // bruto sendo enviado aos participantes.
-    const updatedLocalGain = updateVoiceMicrophoneGain(voiceLocalStream);
-    updateVoiceMicrophoneGain(voiceAudioTestController.getState().stream);
-    updateVoiceMicrophoneGain(broadcastMicrophoneStream);
-    if (updatedLocalGain || !voiceLocalStream || voiceInputLifecycleController.isRecoveryInFlight()) return;
-    try {
-      const previousStream = voiceLocalStream;
-      const nextStream = await processVoiceInputStream(previousStream);
-      if (nextStream === previousStream) return;
-      voiceLocalStream = nextStream;
-      const nextTrack = nextStream.getAudioTracks()[0];
-      nextTrack.enabled = !(voiceMuted || voiceServerMuted);
-      bindVoiceLocalTrack(nextTrack);
-      await syncVoiceLocalTrackToPeers();
-      const resource = voiceInputPipeline.getResource(nextStream);
-      if (resource) resource.rawStream = null;
-      previousStream.getTracks().forEach((track) => track.stop());
-      clearVoiceActivityAnalyzer(voiceClientId);
-      void attachVoiceActivityStream(voiceClientId, voiceLocalStream);
-      ensureVoiceActivityTimer();
-    } catch (error) {
-      reportClientError("voice_microphone_volume_apply_error", error, { voiceState });
-    }
-  }
-
-  async function captureVoiceInputStream({ expectedDeviceId = selectedInputDeviceId, selectionRevision = voiceInputSelectionRevision, fallbackToDefault = true } = {}) {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Este navegador não permite acessar o microfone.");
-    const captured = await voiceCaptureService.capture({ expectedDeviceId, selectionRevision, fallbackToDefault });
-    voiceInputDeviceByStream.set(captured.stream, captured.device);
-    return captured.stream;
-  }
-
-  const bindVoiceLocalTrack = (track) => voiceInputLifecycleController.bindLocalTrack(track);
-
-  async function negotiateVoicePeer(participantId, peer, reason = "audio_track_added") {
-    return voiceTrackSyncService.negotiate(participantId, peer, reason);
-  }
-
-  async function syncVoiceLocalTrackToPeers({ negotiateMissing = true } = {}) {
-    return voiceTrackSyncService.sync({ negotiateMissing });
-  }
-
-  const recoverVoiceInputTrack = (reason = "track_unavailable") => voiceInputLifecycleController.recover(reason);
-
-  const reapplyVoiceInputSettings = () => voiceInputLifecycleController.reapplySettings();
+  function voiceAudioConstraints(...args) { return voiceInputRuntime?.voiceAudioConstraints(...args); }
+  function selectedVoiceAudioConstraints(...args) { return voiceInputRuntime?.selectedVoiceAudioConstraints(...args); }
+  function rememberCapturedInputDevice(...args) { return voiceInputRuntime?.rememberCapturedInputDevice(...args); }
+  function voiceInputStreamMatchesSelectedDevice(...args) { return voiceInputRuntime?.voiceInputStreamMatchesSelectedDevice(...args); }
+  function shouldProcessVoiceInput(...args) { return voiceInputRuntime?.shouldProcessVoiceInput(...args); }
+  function processVoiceInputStream(...args) { return voiceInputRuntime?.processVoiceInputStream(...args); }
+  function stopVoiceInputStream(...args) { return voiceInputRuntime?.stopVoiceInputStream(...args); }
+  function updateVoiceMicrophoneGain(...args) { return voiceInputRuntime?.updateVoiceMicrophoneGain(...args); }
+  function setVoiceMicrophoneVolume(...args) { return voiceInputRuntime?.setVoiceMicrophoneVolume(...args); }
+  function captureVoiceInputStream(...args) { return voiceInputRuntime?.captureVoiceInputStream(...args); }
+  function bindVoiceLocalTrack(...args) { return voiceInputRuntime?.bindVoiceLocalTrack(...args); }
+  function negotiateVoicePeer(...args) { return voiceInputRuntime?.negotiateVoicePeer(...args); }
+  function syncVoiceLocalTrackToPeers(...args) { return voiceInputRuntime?.syncVoiceLocalTrackToPeers(...args); }
+  function recoverVoiceInputTrack(...args) { return voiceInputRuntime?.recoverVoiceInputTrack(...args); }
+  function reapplyVoiceInputSettings(...args) { return voiceInputRuntime?.reapplyVoiceInputSettings(...args); }
 
   async function applyVoiceInputProfile(...args) { return (await getSettingsController()).applyVoiceInputProfile(...args); }
 
