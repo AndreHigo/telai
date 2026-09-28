@@ -53,6 +53,29 @@ export function createVoiceParticipantStateController({ getState, setGroupState 
     };
   }
 
+  function visibleParticipants(room) {
+    const current = getState();
+    if (!room) return [];
+    if (room.id === current.voiceRoomId && ["connected", "connecting"].includes(current.voiceState)) {
+      return uniqueParticipants([
+        ...(current.voiceParticipants?.values?.() || []),
+        ...(room.participants || []).filter((participant) => participant.userId !== current.currentUserId),
+      ]);
+    }
+    return uniqueParticipants((room.participants || []).map((participant) => (
+      participant.userId === current.currentUserId
+        ? { ...participant, remoteSession: true, displayName: `${participant.displayName || current.currentUserDisplayName || "Você"} · outra janela` }
+        : participant
+    )));
+  }
+
+  function participantDisplayName(participant) {
+    const current = getState();
+    return participant?.displayName || (participant?.isLocal
+      ? current.currentUserDisplayName || current.currentUserUsername
+      : "Participante") || "Participante";
+  }
+
   return {
     updateRoomSnapshot,
     uniqueParticipants,
@@ -60,5 +83,7 @@ export function createVoiceParticipantStateController({ getState, setGroupState 
     upsertRoomParticipant,
     removeRoomParticipant,
     mergeActivePresence,
+    visibleParticipants,
+    participantDisplayName,
   };
 }

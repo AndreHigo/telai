@@ -15,6 +15,8 @@ let state = {
     ["peer-2", { id: "peer-2", userId: "user-2", connecting: false }],
   ]),
   currentUserId: "local",
+  currentUserDisplayName: "Andre",
+  currentUserUsername: "andre",
 };
 const updates = [];
 const controller = createVoiceParticipantStateController({
@@ -70,6 +72,21 @@ assert.deepEqual(merged.rooms[0].participants, [
   { id: "peer-2", userId: "user-2", connecting: false },
 ]);
 assert.deepEqual(merged.rooms[1].participants, [{ id: "other-room", userId: "user-7" }]);
+
+assert.deepEqual(controller.visibleParticipants({
+  id: "room-1",
+  participants: [{ id: "old-local", userId: "local" }, { id: "overview-other", userId: "user-6" }],
+}), [
+  { id: "peer-local", userId: "local", isLocal: true },
+  { id: "peer-2", userId: "user-2", connecting: false },
+  { id: "overview-other", userId: "user-6" },
+]);
+assert.deepEqual(controller.visibleParticipants({
+  id: "room-2",
+  participants: [{ id: "remote-local", userId: "local", displayName: "Andre" }],
+}), [{ id: "remote-local", userId: "local", displayName: "Andre · outra janela", remoteSession: true }]);
+assert.equal(controller.participantDisplayName({ isLocal: true }), "Andre");
+assert.equal(controller.participantDisplayName({ id: "remote" }), "Participante");
 
 state = { ...state, voiceState: "idle" };
 const unchanged = { rooms: [{ id: "room-1", participants: [{ id: "stale" }] }] };

@@ -3152,6 +3152,8 @@
       voiceState,
       voiceParticipants,
       currentUserId: user?.id || null,
+      currentUserDisplayName: user?.displayName || "",
+      currentUserUsername: user?.username || "",
     }),
     setGroupState,
   });
@@ -3161,6 +3163,8 @@
   function upsertVoiceRoomParticipant(...args) { return voiceParticipantStateController.upsertRoomParticipant(...args); }
   function removeVoiceRoomParticipant(...args) { return voiceParticipantStateController.removeRoomParticipant(...args); }
   function mergeActiveVoicePresence(...args) { return voiceParticipantStateController.mergeActivePresence(...args); }
+  function visibleVoiceParticipants(...args) { return voiceParticipantStateController.visibleParticipants(...args); }
+  function voiceParticipantDisplayName(...args) { return voiceParticipantStateController.participantDisplayName(...args); }
 
   async function loadIceConfiguration() {
     try {
@@ -3918,30 +3922,6 @@
 
   function closeSelectedRoomLive() {
     setGroupState({ watchingGroupLiveStreamId: "" });
-  }
-
-  function visibleVoiceParticipants(room) {
-    if (!room) return [];
-    if (room.id === voiceRoomId && (voiceState === "connected" || voiceState === "connecting")) {
-      // Enquanto a sala está conectada, os ids do socket de voz são a fonte
-      // autoritativa. O overview pode conter um clientId antigo do mesmo
-      // usuário; se ele vencer a deduplicação, a borda de fala é aplicada ao
-      // id correto mas renderizada em outro elemento.
-      return uniqueVoiceParticipants([
-        ...voiceParticipants.values(),
-        ...(room.participants || []).filter((participant) => participant.userId !== user?.id),
-      ]);
-    }
-    return uniqueVoiceParticipants((room.participants || []).map((participant) => (
-      participant.userId === user?.id
-        ? { ...participant, remoteSession: true, displayName: `${participant.displayName || user?.displayName || "Você"} · outra janela` }
-        : participant
-    )));
-  }
-
-  function voiceParticipantDisplayName(participant) {
-    const name = participant?.displayName || (participant?.isLocal ? user?.displayName || user?.username : "Participante") || "Participante";
-    return name;
   }
 
   function privateLiveForParticipant(participant, roomId) {
