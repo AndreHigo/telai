@@ -84,6 +84,7 @@
   import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
   import { createBroadcastLifecycleController } from "./features/broadcast/lifecycle-controller.js";
   import { createBroadcastSourceController } from "./features/broadcast/source-controller.js";
+  import { createBroadcastPreviewController } from "./features/broadcast/preview-controller.js";
   import { createAppComponentLoaders } from "./app/component-loader-registry.js";
   import { createWindowLifecycle } from "./app/window-lifecycle.js";
   import { copyTextValue } from "./services/clipboard.js";
@@ -3784,57 +3785,33 @@
   const closeSelectedRoomLive = () => voiceLiveController.closeSelectedRoomLive();
   const privateLiveForParticipant = (...args) => voiceLiveController.privateLiveForParticipant(...args);
 
-  async function attachBroadcastPreview() {
-    await tick();
-    if (!broadcastVideo || !broadcastStream) return;
-    broadcastVideo.muted = true;
-    broadcastVideo.playsInline = true;
-    const sourceChanged = broadcastVideo.srcObject !== broadcastStream;
-    if (sourceChanged) {
-      broadcastVideo.srcObject = broadcastStream;
-      if (broadcastVideo.readyState < 1) await new Promise((resolve) => {
-          let timeoutId;
-          const finish = () => {
-            clearTimeout(timeoutId);
-            broadcastVideo.removeEventListener("loadedmetadata", finish);
-            resolve();
-          };
-          timeoutId = window.setTimeout(finish, 1_000);
-          broadcastVideo.addEventListener("loadedmetadata", finish, { once: true });
-        });
-    }
-    if (!broadcastVideo.paused) return;
-    try {
-      await broadcastVideo.play();
-    } catch (error) {
-      reportClientError("broadcast_preview_play_error", error, { roomId: broadcastRoomId });
-      notice = "A prévia foi conectada, mas o navegador bloqueou a reprodução automática. Clique no vídeo para reproduzir.";
-    }
-  }
+  const broadcastPreviewController = createBroadcastPreviewController({
+    tick,
+    getVideo: () => broadcastVideo,
+    getState: () => ({
+      activeDisplayProcessId,
+      broadcastCameraStream,
+      broadcastDisplayStream,
+      broadcastMicrophoneStream,
+      broadcastRoomId,
+      broadcastState,
+      broadcastStream,
+      selectedQuality,
+    }),
+    setState: (next) => {
+      if ("broadcastAudioWarning" in next) broadcastAudioWarning = next.broadcastAudioWarning;
+    },
+    setBroadcastState,
+    buildOutputStream: (...args) => buildBroadcastOutputStream(...args),
+    replaceTracks: (...args) => replaceBroadcastTracks(...args),
+    stopWindowAudioBridge: (...args) => stopWindowAudioBridge(...args),
+    reportClientError,
+    setNotice: (value) => { notice = value; },
+    qualityProfiles,
+  });
+  const attachBroadcastPreview = (...args) => broadcastPreviewController.attachPreview(...args);
+  const handleWindowAudioStatus = (...args) => broadcastPreviewController.handleWindowAudioStatus(...args);
 
-  async function handleWindowAudioStatus(status = {}) {
-    if (!broadcastStream || broadcastState !== "live" || !["ended", "error"].includes(status.status)) return;
-    const currentStream = broadcastStream;
-    currentStream.getAudioTracks().forEach((track) => track.stop());
-    await stopWindowAudioBridge();
-    try {
-      const fallbackStream = await buildBroadcastOutputStream({
-        displayStream: broadcastDisplayStream,
-        cameraStream: broadcastCameraStream,
-        microphoneStream: broadcastMicrophoneStream,
-        sourceAudioTrack: null,
-        profile: qualityProfiles[selectedQuality],
-      });
-      await replaceBroadcastTracks(fallbackStream);
-      if (broadcastStream === currentStream) setBroadcastState({ broadcastStream: fallbackStream });
-      broadcastAudioWarning = status.status === "ended"
-        ? "A captura de áudio da janela foi encerrada. A transmissão de vídeo continua ativa."
-        : "A captura de áudio da janela falhou. A transmissão de vídeo continua ativa.";
-      reportClientError("window_audio_capture_ended", new Error(broadcastAudioWarning), { status: status.status, processId: activeDisplayProcessId });
-    } catch (error) {
-      reportClientError("window_audio_fallback_error", error, { status: status.status, processId: activeDisplayProcessId });
-    }
-  }
 
   function publicBroadcastAudioLabel(sourceKind = publicBroadcastSourceKind) {
     if (sourceKind === "screen") return isDesktop ? "Áudio do computador, com Telai e Discord excluídos" : "Áudio do computador, conforme o seletor do navegador";
