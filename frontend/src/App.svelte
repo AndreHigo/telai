@@ -84,7 +84,7 @@
   import { createMaintenanceController } from "./features/shell/maintenance-controller.js";
   import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
   import { createBroadcastLifecycleController } from "./features/broadcast/lifecycle-controller.js";
-  import { createLazyComponentLoader } from "./services/lazy-component-loader.js";
+  import { createAppComponentLoaders } from "./app/component-loader-registry.js";
   import { copyTextValue } from "./services/clipboard.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceSpeakingPublisher, updateVoiceActivitySpeakingState } from "./voice-activity.js";
@@ -460,34 +460,44 @@
     },
   });
 
-  const loadGroupTextWorkspace = createLazyComponentLoader({
-    importer: () => import("./features/groups/GroupTextChatWorkspace.svelte"),
-    assign: (component) => { GroupTextChatWorkspace = component; },
-    onError: (error) => reportClientError("text_workspace_load_error", error),
-  }).load;
-
-  const loadGroupVoiceWorkspace = createLazyComponentLoader({
-    importer: () => import("./features/groups/GroupVoiceWorkspace.svelte"),
-    assign: (component) => { GroupVoiceWorkspace = component; },
-    onError: (error) => reportClientError("voice_workspace_load_error", error),
-  }).load;
+  const componentLoaders = createAppComponentLoaders({
+    setComponent: (name, component) => {
+      if (name === "GroupTextChatWorkspace") GroupTextChatWorkspace = component;
+      if (name === "GroupVoiceWorkspace") GroupVoiceWorkspace = component;
+      if (name === "GroupMessageSearchDialog") GroupMessageSearchDialog = component;
+      if (name === "GroupThreadDialog") GroupThreadDialog = component;
+      if (name === "GroupChannelPermissionsSettings") GroupChannelPermissionsSettings = component;
+      if (name === "GroupAuditLogSettings") GroupAuditLogSettings = component;
+      if (name === "SettingsPage") SettingsPage = component;
+      if (name === "MultistreamPage") MultistreamPage = component;
+      if (name === "ContextMenus") ContextMenus = component;
+      if (name === "GroupDialogs") GroupDialogs = component;
+      if (name === "BroadcastDialogs") BroadcastDialogs = component;
+      if (name === "ProfileSettingsExtras") ProfileSettingsExtras = component;
+      if (name === "VoiceSettingsPanel") VoiceSettingsPanel = component;
+    },
+    reportClientError,
+  });
+  const {
+    loadGroupTextWorkspace,
+    loadGroupVoiceWorkspace,
+    loadGroupMessageSearchDialog,
+    loadGroupThreadDialog,
+    loadGroupChannelPermissionsSettings,
+    loadGroupAuditLogSettings,
+    loadSettingsPage,
+    loadMultistreamPage,
+    loadContextMenus,
+    loadGroupDialogs,
+    loadBroadcastDialogs,
+    loadProfileSettingsExtras,
+    loadVoiceSettingsPanel,
+  } = componentLoaders;
 
   $: if (selectedRoom && selectedRoom.kind !== "voice" && !GroupTextChatWorkspace) void loadGroupTextWorkspace();
   $: if (selectedRoom?.kind === "voice" && !GroupVoiceWorkspace) void loadGroupVoiceWorkspace();
 
-  const loadGroupMessageSearchDialog = createLazyComponentLoader({
-    importer: () => import("./features/groups/GroupMessageSearchDialog.svelte"),
-    assign: (component) => { GroupMessageSearchDialog = component; },
-    onError: (error) => reportClientError("group_message_search_dialog_load_error", error),
-  }).load;
-
   $: if (showGroupMessageSearch && !GroupMessageSearchDialog) void loadGroupMessageSearchDialog();
-
-  const loadGroupThreadDialog = createLazyComponentLoader({
-    importer: () => import("./features/groups/GroupThreadDialog.svelte"),
-    assign: (component) => { GroupThreadDialog = component; },
-    onError: (error) => reportClientError("group_thread_dialog_load_error", error),
-  }).load;
 
   $: if (activeGroupThread && !GroupThreadDialog) void loadGroupThreadDialog();
 
@@ -516,75 +526,23 @@
   async function openGroupThread(...args) { return groupThreadRuntime.openGroupThread(...args); }
   async function sendGroupThreadMessage(...args) { return groupThreadRuntime.sendGroupThreadMessage(...args); }
 
-  const loadGroupChannelPermissionsSettings = createLazyComponentLoader({
-    importer: () => import("./features/settings/GroupChannelPermissionsSettings.svelte"),
-    assign: (component) => { GroupChannelPermissionsSettings = component; },
-    onError: (error) => reportClientError("group_channel_permissions_load_error", error),
-  }).load;
-
   $: if (settingsTab === "group" && !GroupChannelPermissionsSettings) void loadGroupChannelPermissionsSettings();
-
-  const loadGroupAuditLogSettings = createLazyComponentLoader({
-    importer: () => import("./features/settings/GroupAuditLogSettings.svelte"),
-    assign: (component) => { GroupAuditLogSettings = component; },
-    onError: (error) => reportClientError("group_audit_log_load_error", error),
-  }).load;
 
   $: if (settingsTab === "group" && !GroupAuditLogSettings) void loadGroupAuditLogSettings();
 
-  const loadSettingsPage = createLazyComponentLoader({
-    importer: () => import("./features/settings/SettingsPage.svelte"),
-    assign: (component) => { SettingsPage = component; },
-    onError: (error) => reportClientError("settings_page_load_error", error),
-  }).load;
-
   $: if (view === "settings" && !SettingsPage) void loadSettingsPage();
-
-  const loadMultistreamPage = createLazyComponentLoader({
-    importer: () => import("./features/live/MultistreamPage.svelte"),
-    assign: (component) => { MultistreamPage = component; },
-    onError: (error) => reportClientError("multistream_page_load_error", error),
-  }).load;
 
   $: if (view === "multistream" && !MultistreamPage) void loadMultistreamPage();
 
-  const loadContextMenus = createLazyComponentLoader({
-    importer: () => import("./features/shell/ContextMenus.svelte"),
-    assign: (component) => { ContextMenus = component; },
-    onError: (error) => reportClientError("context_menus_load_error", error),
-  }).load;
-
   $: if ((groupContextMenu || roomContextMenu || voiceContextMenu || profilePreview) && !ContextMenus) void loadContextMenus();
-
-  const loadGroupDialogs = createLazyComponentLoader({
-    importer: () => import("./features/groups/GroupDialogs.svelte"),
-    assign: (component) => { GroupDialogs = component; },
-    onError: (error) => reportClientError("group_dialogs_load_error", error),
-  }).load;
 
   $: if ((showInviteDialog || showGroupSearchDialog || showLeaveGroupDialog || showDeleteRoomDialog || showDeleteGroupDialog || showGroupDialog || showRoomDialog) && !GroupDialogs) void loadGroupDialogs();
 
-  const loadBroadcastDialogs = createLazyComponentLoader({
-    importer: () => import("./features/broadcast/BroadcastDialogs.svelte"),
-    assign: (component) => { BroadcastDialogs = component; },
-    onError: (error) => reportClientError("broadcast_dialogs_load_error", error),
-  }).load;
 
   $: if ((showPublicBroadcastSetup || showPublicBroadcastReview || showBroadcastVisibilityDialog || showDisplayPicker || showBroadcastAudioPicker) && !BroadcastDialogs) void loadBroadcastDialogs();
 
-  const loadProfileSettingsExtras = createLazyComponentLoader({
-    importer: () => import("./features/settings/ProfileSettingsExtras.svelte"),
-    assign: (component) => { ProfileSettingsExtras = component; },
-    onError: (error) => reportClientError("profile_settings_extras_load_error", error),
-  }).load;
 
   $: if (settingsSection === "profile" && !ProfileSettingsExtras) void loadProfileSettingsExtras();
-
-  const loadVoiceSettingsPanel = createLazyComponentLoader({
-    importer: () => import("./features/settings/VoiceSettingsPanel.svelte"),
-    assign: (component) => { VoiceSettingsPanel = component; },
-    onError: (error) => reportClientError("voice_settings_panel_load_error", error),
-  }).load;
 
   $: if (settingsSection === "voice" && !VoiceSettingsPanel) void loadVoiceSettingsPanel();
   let voiceActivityTimer;
