@@ -85,6 +85,7 @@
   import { createBroadcastLifecycleController } from "./features/broadcast/lifecycle-controller.js";
   import { createBroadcastSourceController } from "./features/broadcast/source-controller.js";
   import { createBroadcastPreviewController } from "./features/broadcast/preview-controller.js";
+  import { createBroadcastAudioModeController } from "./features/broadcast/audio-mode-controller.js";
   import { createAppComponentLoaders } from "./app/component-loader-registry.js";
   import { createWindowLifecycle } from "./app/window-lifecycle.js";
   import { copyTextValue } from "./services/clipboard.js";
@@ -4014,76 +4015,44 @@
   const handleBroadcastMicrophoneChange = (...args) => broadcastSourceController.handleMicrophoneChange(...args);
 
 
-  async function handleBroadcastAudioModeChange(event) {
-    const previousAudioMode = audioMode;
-    audioMode = String(event.currentTarget?.value || "source");
-    if (broadcastState !== "live" || broadcastSourceType !== "screen") return;
-    const applied = await applyLiveBroadcastAudioMode();
-    if (!applied) {
-      audioMode = previousAudioMode;
-      broadcastError ||= "A fonte não foi trocada; o áudio anterior continua ativo.";
-    }
-  }
+  const broadcastAudioModeController = createBroadcastAudioModeController({
+    getState: () => ({
+      activeDisplayProcessId,
+      audioMode,
+      broadcastAudioProcessId,
+      broadcastAudioSourceName,
+      broadcastAudioWarning,
+      broadcastDisplaySurface,
+      broadcastDisplayStream,
+      broadcastMediaSwitching,
+      broadcastSelectionKind,
+      broadcastSourceType,
+      broadcastSourceSwitching,
+      broadcastState,
+      isDesktop,
+      broadcastError,
+    }),
+    setState: (next) => {
+      if ("audioMode" in next) audioMode = next.audioMode;
+      if ("broadcastAudioProcessId" in next) broadcastAudioProcessId = next.broadcastAudioProcessId;
+      if ("broadcastAudioSourceName" in next) broadcastAudioSourceName = next.broadcastAudioSourceName;
+      if ("broadcastAudioWarning" in next) broadcastAudioWarning = next.broadcastAudioWarning;
+      const broadcastPatch = {};
+      for (const key of ["broadcastError"]) if (key in next) broadcastPatch[key] = next[key];
+      if (Object.keys(broadcastPatch).length) setBroadcastState(broadcastPatch);
+    },
+    stopWindowAudioBridge: (...args) => stopWindowAudioBridge(...args),
+    requestBroadcastAudioSource: (...args) => requestBroadcastAudioSource(...args),
+    startWindowAudioBridge: (...args) => startWindowAudioBridge(...args),
+    startSystemAudioBridge: (...args) => startSystemAudioBridge(...args),
+    rebuildOutput: (...args) => rebuildBroadcastOutput(...args),
+    formatMissingAudio: (...args) => formatBroadcastMissingAudio(...args),
+    reportClientError,
+    setNotice: (value) => { notice = value; },
+  });
+  const applyLiveBroadcastAudioMode = (...args) => broadcastAudioModeController.apply(...args);
+  const handleBroadcastAudioModeChange = (...args) => broadcastAudioModeController.handleChange(...args);
 
-  async function applyLiveBroadcastAudioMode() {
-    if (broadcastState !== "live" || broadcastSourceType !== "screen") return false;
-    if (broadcastSourceSwitching || broadcastMediaSwitching) return false;
-    let sourceAudioTrack = null;
-    try {
-      if (audioMode === "none") {
-        await stopWindowAudioBridge();
-        broadcastDisplayStream?.getAudioTracks?.().forEach((track) => track.stop());
-      } else if (audioMode === "source") {
-        if (broadcastDisplaySurface === "screen") {
-          const selectedAudioSource = await requestBroadcastAudioSource();
-          if (selectedAudioSource?.processId && window.miranteDesktop?.isDesktop) {
-            broadcastAudioProcessId = selectedAudioSource.processId;
-            broadcastAudioSourceName = selectedAudioSource.name;
-            broadcastDisplayStream?.getAudioTracks?.().forEach((track) => track.stop());
-            sourceAudioTrack = await startWindowAudioBridge(selectedAudioSource.processId);
-          } else {
-            audioMode = "none";
-            await stopWindowAudioBridge();
-            broadcastDisplayStream?.getAudioTracks?.().forEach((track) => track.stop());
-            broadcastAudioWarning = "Nenhum aplicativo disponível para o áudio isolado. A live continuará sem áudio do computador.";
-          }
-        } else if (window.miranteDesktop?.isDesktop && activeDisplayProcessId) {
-          sourceAudioTrack = await startWindowAudioBridge(activeDisplayProcessId);
-          broadcastDisplayStream?.getAudioTracks?.().forEach((track) => track.stop());
-        } else {
-          sourceAudioTrack = broadcastDisplayStream?.getAudioTracks?.()[0] || null;
-        }
-      } else {
-        if (window.miranteDesktop?.isDesktop) {
-          broadcastDisplayStream?.getAudioTracks?.().forEach((track) => track.stop());
-          try {
-            sourceAudioTrack = await startSystemAudioBridge();
-            if (!sourceAudioTrack) throw new Error("O Windows não encontrou aplicativos para incluir no áudio filtrado.");
-          } catch (error) {
-            audioMode = "none";
-            sourceAudioTrack = null;
-            broadcastAudioWarning = `${error.message || "Não foi possível preparar o áudio filtrado."} A live continuará sem áudio do computador.`;
-          }
-        } else {
-          sourceAudioTrack = broadcastDisplayStream?.getAudioTracks?.()[0] || null;
-          if (!sourceAudioTrack) throw new Error(formatBroadcastMissingAudio({ isDesktop, displaySurface: broadcastDisplaySurface, selectionKind: broadcastSelectionKind }));
-          await stopWindowAudioBridge();
-        }
-      }
-      const applied = await rebuildBroadcastOutput({ sourceAudioTrack });
-      if (applied) {
-        broadcastSourceAudioTrack = sourceAudioTrack;
-        notice = audioMode === "none"
-          ? "Áudio do computador desativado sem interromper a live."
-          : "Áudio da transmissão atualizado sem interromper a live.";
-      }
-      return applied;
-    } catch (error) {
-      reportClientError("broadcast_audio_switch_error", error, { audioMode });
-      setBroadcastState({ broadcastError: error.message || "Não foi possível trocar o áudio da transmissão." });
-      return false;
-    }
-  }
 
   async function switchBroadcastSource() {
     if (broadcastState !== "live" || broadcastSourceType !== "screen" || broadcastSourceSwitching) return;
