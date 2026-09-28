@@ -33,6 +33,7 @@ etapa.
 - O checkout possui um banco SQLite local ignorado pelo Git, com o schema de aplicação presente e atualmente sem linhas em nenhuma das 33 tabelas importáveis; o modo `--plan` confirma esse estado antes de qualquer importação.
 - Nenhum ambiente de produção foi apontado para PostgreSQL.
 - Nenhum banco SQLite foi apagado ou alterado por esta preparação.
+- A prévia local PostgreSQL desta branch usa o banco isolado `telai_refactor`, criado a partir do SQLite de desenvolvimento; o banco local anterior, que continha fixtures de QA, foi preservado separado.
 
 ## Ordem obrigatória
 
