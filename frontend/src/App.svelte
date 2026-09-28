@@ -91,6 +91,7 @@
   import { createVoiceParticipantStateController } from "./features/voice/participant-state.js";
   import { createVoiceSocketController } from "./features/voice/socket-controller.js";
   import { createVoiceLiveController } from "./features/voice/live-controller.js";
+  import { createVoiceReconnectController } from "./features/voice/reconnect-controller.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { PlayIcon } from "@hugeicons/core-free-icons";
@@ -2512,7 +2513,7 @@
   function clearVoiceReconnectSession() {
     voiceReconnectSession = null;
     voiceReconnectVisible = false;
-    if (voiceReconnectTimer) window.clearTimeout(voiceReconnectTimer);
+    voiceReconnectController.clearTimer();
     voiceReconnectTimer = null;
     voiceReconnectStorage.clear();
   }
@@ -3638,55 +3639,43 @@
     return voiceSocketController.connect();
   }
 
-  function scheduleVoiceReconnect(delayMs = 1500) {
-    if (voiceReconnectTimer || voiceReconnectBusy || !voiceReconnectSession || !user || !navigator.onLine) return;
-    voiceReconnectTimer = window.setTimeout(() => {
-      voiceReconnectTimer = null;
-      void reconnectSavedVoiceRoom({ automatic: true });
-    }, delayMs);
-  }
-
-  async function reconnectSavedVoiceRoom({ automatic = false } = {}) {
-    if (voiceReconnectBusy || !voiceReconnectSession || !user || !navigator.onLine) return false;
-    const saved = voiceReconnectSession;
-    voiceReconnectBusy = true;
-    voiceReconnectVisible = true;
-    setGroupsView();
-    try {
-      await loadGroup(saved.groupId);
-      const room = groupOverview?.rooms?.find((candidate) => candidate.id === saved.voiceRoomId && candidate.kind === "voice");
-      if (!room) throw new Error("A sala de voz salva não está mais disponível neste grupo.");
-      setGroupState({ selectedGroupId: saved.groupId, selectedRoomId: room.id });
-      await tick();
-      const joined = await joinVoiceRoom({ reconnecting: true });
-      if (!joined) throw new Error(voiceError || "Não foi possível reconectar à sala de voz.");
-      return true;
-    } catch (error) {
-      reportClientError("voice_reconnect_error", error, { automatic, groupId: saved.groupId, voiceRoomId: saved.voiceRoomId, online: navigator.onLine });
-      voiceError = error.message || "Não foi possível reconectar à sala de voz.";
-      voiceReconnectVisible = true;
-      if (automatic && navigator.onLine) scheduleVoiceReconnect(5000);
-      return false;
-    } finally {
-      voiceReconnectBusy = false;
-    }
-  }
-
-  function handleVoiceNetworkOffline() {
-    if (!voiceRoomId || !["connected", "connecting"].includes(voiceState)) return;
-    writeVoiceReconnectSession({
-      groupId: selectedGroupId,
+  const voiceReconnectController = createVoiceReconnectController({
+    getState: () => ({
+      voiceReconnectTimer,
+      voiceReconnectBusy,
+      voiceReconnectSession,
+      voiceReconnectVisible,
+      voiceState,
       voiceRoomId,
-      groupName: selectedGroup?.name,
-      roomName: activeVoiceRoom?.name || selectedRoom?.name,
-    });
-    voiceError = "Sem conexão com a internet. O Telai tentará reconectar quando ela voltar.";
-    leaveVoiceRoom({ preserveLocalStream: true, preserveReconnect: true, silent: true });
-  }
-
-  function handleVoiceNetworkOnline() {
-    if (voiceReconnectSession && user) scheduleVoiceReconnect(800);
-  }
+      voiceError,
+      user,
+      selectedGroupId,
+      selectedGroup,
+      selectedRoom,
+      activeVoiceRoom,
+      groupOverview,
+    }),
+    setState: (next) => {
+      if ("voiceReconnectTimer" in next) voiceReconnectTimer = next.voiceReconnectTimer;
+      if ("voiceReconnectBusy" in next) voiceReconnectBusy = next.voiceReconnectBusy;
+      if ("voiceReconnectVisible" in next) voiceReconnectVisible = next.voiceReconnectVisible;
+      if ("voiceError" in next) voiceError = next.voiceError;
+    },
+    setGroupsView,
+    loadGroup,
+    getGroupOverview: () => groupOverview,
+    setGroupState,
+    tick,
+    joinVoiceRoom: (...args) => joinVoiceRoom(...args),
+    leaveVoiceRoom: (...args) => leaveVoiceRoom(...args),
+    writeReconnectSession: (session, options) => writeVoiceReconnectSession(session, options),
+    clearReconnectSession: clearVoiceReconnectSession,
+    reportClientError,
+  });
+  const scheduleVoiceReconnect = (...args) => voiceReconnectController.schedule(...args);
+  const reconnectSavedVoiceRoom = (...args) => voiceReconnectController.reconnect(...args);
+  const handleVoiceNetworkOffline = () => voiceReconnectController.handleOffline();
+  const handleVoiceNetworkOnline = () => voiceReconnectController.handleOnline();
 
   async function handleVoiceDeviceChange() {
     const hadSelectedInput = Boolean(selectedInputDeviceId);
