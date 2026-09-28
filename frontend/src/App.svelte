@@ -32,7 +32,8 @@
   import { createNavigationStateStore } from "./features/shell/navigation-state.js";
   import { createViewerStateStore } from "./features/shell/viewer-state.js";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
-  import { createVisualStateStore, VISUAL_DEFAULTS, visualStyleFromState } from "./features/settings/visual-state.js";
+  import { createVisualStateStore, VISUAL_DEFAULTS } from "./features/settings/visual-state.js";
+  import { deriveAppState } from "./app/derived-state.js";
   import GroupLiveGallery from "./GroupLiveGallery.svelte";
   import AccountPrivacy from "./AccountPrivacy.svelte";
   import LegalConsentGate from "./LegalConsentGate.svelte";
@@ -1059,38 +1060,72 @@
   });
   const { canonicalizeAuthenticatedRoute, detectViewerRoute, handleBrowserPopState, openPendingChannelRoute, replaceBrowserPath } = routeController;
 
-  $: selectedGroup = groups.find((group) => group.id === selectedGroupId) || null;
-  $: normalizedGroupPickerQuery = groupPickerQuery.trim().toLocaleLowerCase();
-  $: groupPickerGroups = groups.filter((group) => {
-    if (!normalizedGroupPickerQuery) return true;
-    return `${group.name || ""} ${group.slug || ""}`.toLocaleLowerCase().includes(normalizedGroupPickerQuery);
-  });
-  $: displayPickerAvailability = {
-    screen: displaySources.some((source) => source.kind === "screen"),
-    window: displaySources.some((source) => !["screen", "tab", "browser-tab"].includes(source.kind)),
-    tab: displaySources.some((source) => ["tab", "browser-tab"].includes(source.kind)),
-  };
-  $: displaySourceGroups = [
-    { id: "screen", icon: "computerScreen", label: "Telas inteiras", description: "Compartilha tudo que aparece em um monitor.", sources: displaySources.filter((source) => source.kind === "screen") },
-    { id: "window", icon: "appWindow", label: broadcastSelectionKind === "app" ? "Aplicativos" : "Janelas de aplicativos", description: broadcastSelectionKind === "app" ? "Compartilha somente o aplicativo escolhido." : "Compartilha somente uma janela específica.", sources: displaySources.filter((source) => !["screen", "tab", "browser-tab"].includes(source.kind)) },
-  ].filter((group) => displaySourceFilter === "all" || group.id === displaySourceFilter).filter((group) => group.sources.length);
-  $: broadcastAudioSourceCandidates = broadcastAudioSources.filter((source) => source?.kind === "window" && source?.processId && !/(discord|telai|mirante)/i.test(`${source.processName || ""} ${source.name || ""}`));
-  $: rooms = groupOverview?.rooms || [];
-  $: textRooms = rooms.filter((room) => room.kind === "text");
-  $: voiceRooms = rooms.filter((room) => room.kind === "voice");
+  $: ({
+    selectedGroup,
+    normalizedGroupPickerQuery,
+    groupPickerGroups,
+    displayPickerAvailability,
+    displaySourceGroups,
+    broadcastAudioSourceCandidates,
+    rooms,
+    textRooms,
+    voiceRooms,
+    groupLiveStreams,
+    selectedRoomLiveStreams,
+    selectedRoomLiveStream,
+    watchedSelectedRoomLive,
+    watchingSelectedRoomLive,
+    activeVoiceRoom,
+    selectedRoom,
+    selectedRoomRemoteVoice,
+    groupMembers,
+    voiceLobbyParticipants,
+    homeLiveStreams,
+    homeCommunityGroups,
+    selectedRole,
+    currentGroupMember,
+    normalizedRoleMemberSearch,
+    filteredRoleMembers,
+    activeGroupInvites,
+    canMoveVoiceMembers,
+    memberRoleGroups,
+    isDark,
+    visibleNotifications,
+    readNotificationCount,
+    unreadDirectNotification,
+    visualStyle,
+    roomMessages,
+  } = deriveAppState({
+    groups,
+    selectedGroupId,
+    groupPickerQuery,
+    displaySources,
+    displaySourceFilter,
+    broadcastSelectionKind,
+    broadcastAudioSources,
+    groupOverview,
+    selectedRoomId,
+    watchingGroupLiveStreamId,
+    user,
+    voiceRoomId,
+    voiceState,
+    streams,
+    groupRoles,
+    selectedRoleId,
+    roleMemberSearchQuery,
+    groupInvites,
+    hideReadNotifications,
+    notifications,
+    buttonColor,
+    inputBackgroundColor,
+    backgroundColor,
+    theme,
+    visibleVoiceParticipants,
+  }));
   $: if (!showRoomDialog && roomDialogMode === "edit") {
     roomDialogMode = "create";
     editingRoomId = "";
   }
-  $: groupLiveStreams = groupOverview?.streams || [];
-  $: selectedRoomLiveStreams = selectedRoom?.kind === "voice"
-    ? groupLiveStreams.filter((stream) => stream.visibility === "private" && stream.voiceRoomId === selectedRoom.id)
-    : [];
-  $: selectedRoomLiveStream = selectedRoomLiveStreams[0] || null;
-  $: watchedSelectedRoomLive = selectedRoomLiveStreams.find((stream) => stream.id === watchingGroupLiveStreamId && stream.createdBy !== user?.id) || null;
-  $: watchingSelectedRoomLive = Boolean(watchedSelectedRoomLive);
-  $: activeVoiceRoom = voiceRooms.find((room) => room.id === voiceRoomId) || null;
-  $: selectedRoom = rooms.find((room) => room.id === selectedRoomId) || rooms[0] || null;
   $: if (selectedGroupId && selectedRoom?.kind === "text" && groupOverview?.group?.id === selectedGroupId) {
     const autoReadKey = `${selectedGroupId}:${selectedRoom.id}`;
     if (lastAutoMarkedGroupRoomKey !== autoReadKey) {
@@ -1098,54 +1133,12 @@
       void markGroupRoomRead(selectedRoom);
     }
   }
-  $: selectedRoomRemoteVoice = Boolean(
-    selectedRoom?.kind === "voice" &&
-    voiceState === "idle" &&
-    (selectedRoom.participants || []).some((participant) => participant.userId === user?.id),
-  );
-  $: groupMembers = groupOverview?.members || [];
-  $: voiceLobbyParticipants = selectedRoom?.kind === "voice" ? visibleVoiceParticipants(selectedRoom) : [];
-  $: homeLiveStreams = streams.filter((stream) => stream.visibility === "public").slice(0, 3);
-  $: homeCommunityGroups = groups.slice(0, 4);
-  $: selectedRole = groupRoles.find((role) => role.id === selectedRoleId) || groupRoles[0] || null;
   $: if (groupRoles.length && !groupRoles.some((role) => role.id === selectedRoleId)) selectedRoleId = groupRoles[0].id;
   $: if (selectedRole && selectedRole.id !== roleEditId) {
     roleEditId = selectedRole.id;
     roleEditName = selectedRole.name;
     roleEditColor = selectedRole.color;
   }
-  $: currentGroupMember = groupMembers.find((member) => member.id === user?.id) || null;
-  $: normalizedRoleMemberSearch = roleMemberSearchQuery.trim().toLocaleLowerCase();
-  $: filteredRoleMembers = groupMembers
-    .filter((member) => member.role !== "owner")
-    .filter((member) => {
-      if (!normalizedRoleMemberSearch) return true;
-      return `${member.displayName || ""} ${member.username || ""}`.toLocaleLowerCase().includes(normalizedRoleMemberSearch.replace(/^@/, ""));
-    });
-  $: activeGroupInvites = groupInvites.filter((invite) => new Date(invite.expiresAt) > new Date() && invite.uses < invite.maxUses);
-  $: canMoveVoiceMembers = selectedGroup?.role === "owner" || Boolean(currentGroupMember?.canMoveMembers);
-  $: memberRoleGroups = (() => {
-    const groupsByRole = new Map();
-    for (const member of groupMembers) {
-      const isOwner = member.role === "owner";
-      const key = isOwner ? "owner" : member.roleId || member.roleName || "default";
-      const current = groupsByRole.get(key) || { roleId: isOwner ? "" : member.roleId || "", name: isOwner ? "Dono" : member.roleName || "Membro", color: isOwner ? "#62d994" : member.roleColor || "#5865f2", sortOrder: isOwner ? -1 : member.roleSortOrder ?? Number.MAX_SAFE_INTEGER, members: [] };
-      current.members.push(member);
-      groupsByRole.set(key, current);
-    }
-    const roleOrder = new Map(groupRoles.map((role, index) => [role.id, role.sortOrder ?? index]));
-    return [...groupsByRole.values()].sort((left, right) => {
-      const leftOrder = left.name === "Dono" ? -1 : roleOrder.get(left.roleId) ?? left.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      const rightOrder = right.name === "Dono" ? -1 : roleOrder.get(right.roleId) ?? right.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      return leftOrder - rightOrder || left.name.localeCompare(right.name, "pt-BR");
-    });
-  })();
-  $: isDark = theme === "dark";
-  $: visibleNotifications = hideReadNotifications ? notifications.filter((notification) => notification.unread) : notifications;
-  $: readNotificationCount = notifications.filter((notification) => !notification.unread).length;
-  $: unreadDirectNotification = notifications.find((notification) => notification.unread && notification.type === "direct_message" && notification.directConversationId) || null;
-  $: visualStyle = visualStyleFromState({ buttonColor, inputBackgroundColor, backgroundColor });
-  $: roomMessages = (groupOverview?.messages || []).filter((message) => !selectedRoom || !message.roomId || message.roomId === selectedRoom.id);
   $: if (selectedGroupId !== groupApplicationCommandsGroupId) {
     void loadGroupApplicationCommands(selectedGroupId);
   }

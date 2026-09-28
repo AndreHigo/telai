@@ -71,6 +71,7 @@
     "test:media-contract": "node qa/test-media-contract.mjs",
     "test:group-controller": "node qa/test-group-controller.mjs",
     "test:group-actions-controller": "node qa/test-group-actions-controller.mjs",
+    "test:derived-state": "node qa/test-derived-state.mjs",
     "test:group-state": "node qa/test-group-state.mjs",
     "test:message-state": "node qa/test-message-state.mjs",
     "test:direct-state": "node qa/test-direct-state.mjs",
