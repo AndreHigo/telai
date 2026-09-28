@@ -4,20 +4,15 @@
   import AuthPage from "./features/auth/AuthPage.svelte";
   import { createAuthController } from "./features/auth/controller.js";
   import { createAuthStateStore } from "./features/auth/auth-state.js";
-  import NotificationsPage from "./features/notifications/NotificationsPage.svelte";
   import { createNotificationController } from "./features/notifications/controller.js";
   import { createNotificationStateStore } from "./features/notifications/notification-state.js";
-  import FriendsPage from "./features/social/FriendsPage.svelte";
-  import FollowingPage from "./features/social/FollowingPage.svelte";
   import { createSocialStateStore } from "./features/social/social-state.js";
-  import DirectMessagesPage from "./features/direct/DirectMessagesPage.svelte";
-  import BroadcastPage from "./features/broadcast/BroadcastPage.svelte";
   import { createBroadcastStateStore } from "./features/broadcast/broadcast-state.js";
   import LivePage from "./features/live/LivePage.svelte";
   import { createLiveStateStore } from "./features/live/live-state.js";
-  import HomePage from "./features/home/HomePage.svelte";
   import AppGroupsWorkspace from "./app/AppGroupsWorkspace.svelte";
   import AppSettingsWorkspace from "./app/AppSettingsWorkspace.svelte";
+  import AppRouteWorkspace from "./app/AppRouteWorkspace.svelte";
   import AppHeader from "./features/shell/AppHeader.svelte";
   import GlobalSidebar from "./features/shell/GlobalSidebar.svelte";
   import VoiceReconnectBanner from "./features/shell/VoiceReconnectBanner.svelte";
@@ -3939,86 +3934,102 @@
           onDismiss={clearVoiceReconnectSession}
         />
       {/if}
-      {#if view === "home"}
-        <HomePage
-          {homeLiveStreams}
-          {homeCommunityGroups}
-          onRequestBroadcastStart={requestBroadcastStart}
-          onCreateGroup={() => { showGroupDialog = true; }}
-          onOpenLive={() => selectView("live")}
-          onOpenGroups={() => selectView("groups")}
-          onOpenStream={openStreamViewer}
-          onOpenGroup={(group) => { setGroupState({ selectedGroupId: group.id }); loadGroup(group.id); setGroupsView(); }}
-        />
-      {:else if view === "notifications"}
-        <NotificationsPage
-          {notificationUnreadCount}
-          {hideReadNotifications}
-          {readNotificationCount}
-          {notificationsError}
-          {unreadDirectNotification}
-          {notificationsLoading}
-          {visibleNotifications}
-          {notifications}
-          {inviteActionId}
-          onHideReadChange={setHideReadNotifications}
-          onMarkAllRead={markAllNotificationsRead}
-          onOpenDirectNotification={openDirectNotification}
-          onMarkNotificationRead={markNotificationRead}
-          onRespondToInvite={respondToInvite}
-          onReviewNotification={reviewNotification}
-          onOpenStreamNotification={openStreamNotification}
-          onNavigateHome={() => selectView("home")}
-        />
-      {:else if view === "friends"}
-        <FriendsPage
-          {socialSearchOpen}
-          {socialRequestsOpen}
-          {socialSearchQuery}
-          {social}
-          {socialError}
-          {socialSearchBusy}
-          {socialSearchResults}
-          {socialActionId}
-          onStateChange={setSocialState}
-          onSearchUsers={searchSocialUsers}
-          onOpenDirectConversation={openDirectConversationWithUser}
-          onCancelFriendRequest={cancelFriendRequest}
-          onSendFriendRequest={sendFriendRequest}
-          onToggleFollowUser={toggleFollowUser}
-          onToggleBlockUser={toggleBlockUser}
-          onRespondToFriendRequest={respondToFriendRequest}
-          onRemoveFriend={removeFriend}
-          onNavigateHome={() => selectView("home")}
-        />
-      {:else if view === "following"}
-        <FollowingPage
-          {social}
-          {socialError}
-          {socialActionId}
-          onToggleFollowUser={toggleFollowUser}
-          onNavigateFriends={() => selectView("friends")}
-          onNavigateHome={() => selectView("home")}
-        />
-      {:else if view === "direct"}
-        <DirectMessagesPage
-          {user}
-          {directConversationError}
-          {directConversations}
-          {directConversationId}
-          {directConversationTarget}
-          {directConversationLoading}
-          {directMessages}
-          directMessageDraft={directMessageDraft}
-          on:directMessageDraft={(event) => setDirectState({ directMessageDraft: event.detail })}
-          {directConversationSending}
-          onOpenConversation={openDirectConversationById}
-          onSendMessage={sendDirectMessage}
-          onMessageKeydown={handleDirectMessageKeydown}
-          onNavigateHome={() => selectView("home")}
-        />
-      {:else if view === "broadcast"}
-        <BroadcastPage
+      {#if ["home", "notifications", "friends", "following", "direct", "broadcast"].includes(view)}
+        <AppRouteWorkspace
+          state={{
+            view,
+            homeLiveStreams,
+            homeCommunityGroups,
+            notificationUnreadCount,
+            hideReadNotifications,
+            readNotificationCount,
+            notificationsError,
+            unreadDirectNotification,
+            notificationsLoading,
+            visibleNotifications,
+            notifications,
+            inviteActionId,
+            socialSearchOpen,
+            socialRequestsOpen,
+            socialSearchQuery,
+            social,
+            socialError,
+            socialSearchBusy,
+            socialSearchResults,
+            socialActionId,
+            user,
+            directConversationError,
+            directConversations,
+            directConversationId,
+            directConversationTarget,
+            directConversationLoading,
+            directMessages,
+            directConversationSending,
+            broadcastState,
+            broadcastStreamId,
+            broadcastTitle,
+            broadcastSourceType,
+            publicBroadcastSourceLabel,
+            broadcastSelectionKind,
+            qualityProfiles,
+            broadcastError,
+            broadcastAudioWarning,
+            viewerCount,
+            broadcastChatMessages,
+            isDesktop,
+            broadcastDisplaySurface,
+            broadcastAudioSourceName,
+            cameraInputDevices,
+            audioInputDevices,
+            broadcastSourceSwitching,
+            broadcastMediaSwitching,
+            voiceDevicesBusy,
+            broadcastInvite,
+            pendingBroadcastContext
+          }}
+          actions={{
+            requestBroadcastStart,
+            openCreateGroup: () => { showGroupDialog = true; },
+            openLive: () => selectView("live"),
+            openGroups: () => selectView("groups"),
+            openStreamViewer,
+            openGroup: (group) => { setGroupState({ selectedGroupId: group.id }); loadGroup(group.id); setGroupsView(); },
+            setHideReadNotifications,
+            markAllNotificationsRead,
+            openDirectNotification,
+            markNotificationRead,
+            respondToInvite,
+            reviewNotification,
+            openStreamNotification,
+            openHome: () => selectView("home"),
+            setSocialState,
+            searchSocialUsers,
+            openDirectConversationWithUser,
+            cancelFriendRequest,
+            sendFriendRequest,
+            toggleFollowUser,
+            toggleBlockUser,
+            respondToFriendRequest,
+            removeFriend,
+            openFriends: () => selectView("friends"),
+            setDirectMessageDraft: (event) => setDirectState({ directMessageDraft: event.detail }),
+            openDirectConversationById,
+            sendDirectMessage,
+            handleDirectMessageKeydown,
+            stopBroadcast,
+            beginBroadcast,
+            sendBroadcastChatMessage,
+            handleBroadcastAudioModeChange,
+            handleBroadcastCameraChange,
+            handleBroadcastCameraToggle,
+            handleBroadcastCameraPositionChange,
+            handleBroadcastMicrophoneChange,
+            refreshBroadcastDevices,
+            switchBroadcastSource,
+            copyBroadcastInvite,
+            requestCameraBroadcastStart
+          }}
+          bind:directMessageDraft
           bind:selectedQuality
           bind:broadcastVideo
           bind:broadcastChatListElement
@@ -4029,40 +4040,6 @@
           bind:broadcastCameraPosition
           bind:selectedInputDeviceId
           bind:broadcastMicrophoneEnabled
-          {broadcastState}
-          {broadcastStreamId}
-          {broadcastTitle}
-          {broadcastSourceType}
-          {publicBroadcastSourceLabel}
-          {broadcastSelectionKind}
-          {qualityProfiles}
-          {broadcastError}
-          {broadcastAudioWarning}
-          {viewerCount}
-          {broadcastChatMessages}
-          {isDesktop}
-          {broadcastDisplaySurface}
-          {broadcastAudioSourceName}
-          {cameraInputDevices}
-          {audioInputDevices}
-          {broadcastSourceSwitching}
-          {broadcastMediaSwitching}
-          {voiceDevicesBusy}
-          {broadcastInvite}
-          {pendingBroadcastContext}
-          onStopBroadcast={stopBroadcast}
-          onNavigateHome={() => selectView("home")}
-          onBeginBroadcast={beginBroadcast}
-          onSendChat={sendBroadcastChatMessage}
-          onBroadcastAudioModeChange={handleBroadcastAudioModeChange}
-          onCameraChange={handleBroadcastCameraChange}
-          onCameraToggle={handleBroadcastCameraToggle}
-          onCameraPositionChange={handleBroadcastCameraPositionChange}
-          onMicrophoneChange={handleBroadcastMicrophoneChange}
-          onRefreshDevices={refreshBroadcastDevices}
-          onSwitchSource={switchBroadcastSource}
-          onCopyInvite={copyBroadcastInvite}
-          onRequestCameraStart={requestCameraBroadcastStart}
         />
       {:else if view === "groups"}
         <AppGroupsWorkspace
