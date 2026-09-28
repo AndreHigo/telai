@@ -95,6 +95,7 @@
   import { copyTextValue } from "./services/clipboard.js";
   import { globalNavSections, iconFor, notificationIconFor } from "./config/ui.js";
   import { createVoiceActivityController } from "./features/voice/activity-controller.js";
+  import { createVoiceActivityRuntime } from "./features/voice/activity-runtime.js";
   import { createVoiceParticipantStateController } from "./features/voice/participant-state.js";
   import { createVoiceSocketController } from "./features/voice/socket-controller.js";
   import { createVoiceLiveController } from "./features/voice/live-controller.js";
@@ -551,6 +552,7 @@
   $: if (settingsSection === "profile" && !ProfileSettingsExtras) void loadProfileSettingsExtras();
 
   $: if (settingsSection === "voice" && !VoiceSettingsPanel) void loadVoiceSettingsPanel();
+  let voiceActivityRuntime = null;
   const voiceActivityController = createVoiceActivityController({
     getState: () => ({
       voiceClientId,
@@ -565,13 +567,19 @@
     }),
     getAudioContext: () => getVoiceSoundContext(),
     reportClientError,
-    onSpeakingStateChange: (participantId, speaking) => markVoiceParticipantSpeaking(participantId, speaking),
-    onRtcSpeakingStateChange: (participantId, speaking) => markVoiceParticipantSpeaking(participantId, speaking, "rtc"),
+    onSpeakingStateChange: (participantId, speaking) => voiceActivityRuntime?.markVoiceParticipantSpeaking(participantId, speaking),
+    onRtcSpeakingStateChange: (participantId, speaking) => voiceActivityRuntime?.markVoiceParticipantSpeaking(participantId, speaking, "rtc"),
     onTrackEnded: (participantId, track) => reportClientError(
       "voice_activity_track_ended",
       new Error("A faixa do microfone/áudio terminou durante a sala de voz."),
       { participantId, isDesktop, trackReadyState: track?.readyState },
     ),
+  });
+  voiceActivityRuntime = createVoiceActivityRuntime({
+    activityController: voiceActivityController,
+    getState: () => ({ voiceClientId, voiceRoomId, voiceParticipants, voiceSpeakingSignalKnownParticipantIds, speakingVoiceParticipantIds }),
+    setState: (next) => { if ("voiceParticipants" in next) voiceParticipants = next.voiceParticipants; if ("speakingVoiceParticipantIds" in next) speakingVoiceParticipantIds = next.speakingVoiceParticipantIds; },
+    updateVoiceRoomSnapshot,
   });
   const VOICE_PEER_AUDIO_GRACE_MS = 4_000;
   const VOICE_PEER_CONNECTION_TIMEOUT_MS = 8_000;
@@ -2969,50 +2977,10 @@
     voiceSoundController.resumePendingNotificationSound();
   }
 
-  function syncVoiceParticipantSpeakingState(participantId, speaking) {
-    if (!participantId) return;
-    const nextSpeaking = Boolean(speaking);
-    const participant = voiceParticipants.get(participantId);
-    if (participant && participant.speaking !== nextSpeaking) {
-      voiceParticipants = new Map(voiceParticipants).set(participantId, { ...participant, speaking: nextSpeaking });
-    }
-    if (voiceRoomId) {
-      updateVoiceRoomSnapshot(voiceRoomId, (participants) => participants.map((item) => (
-        item.id === participantId && item.speaking !== nextSpeaking
-          ? { ...item, speaking: nextSpeaking }
-          : item
-      )));
-    }
-  }
-
-  function markVoiceParticipantSpeaking(participantId, speaking, source = "analyser") {
-    if (!participantId) return;
-    // A borda não deve usar os dados acumulados do getStats(), que podem
-    // chegar atrasados, nem o analisador do áudio reproduzido quando o
-    // servidor já fornece o estado autoritativo desse participante.
-    if (source === "rtc") return;
-    if (source === "analyser" && participantId !== voiceClientId && voiceSpeakingSignalKnownParticipantIds.has(participantId)) return;
-    const analyzer = voiceActivityController.getAnalyzer(participantId);
-    const nextSpeaking = source === "signal" ? Boolean(speaking) : analyzer ? Boolean(analyzer.speaking) : false;
-    const changed = speakingVoiceParticipantIds.has(participantId) !== nextSpeaking;
-    if (changed) {
-      const next = new Set(speakingVoiceParticipantIds);
-      if (nextSpeaking) next.add(participantId);
-      else next.delete(participantId);
-      speakingVoiceParticipantIds = next;
-    }
-    syncVoiceParticipantSpeakingState(participantId, nextSpeaking);
-  }
-
-  function isVoiceParticipantSpeaking(participant) {
-    return Boolean(participant?.id && (speakingVoiceParticipantIds.has(participant.id) || participant.speaking === true));
-  }
-
-  function clearVoiceActivityAnalyzer(participantId) {
-    voiceActivityController.clearAnalyzer(participantId);
-    markVoiceParticipantSpeaking(participantId, false, "cleanup");
-    markVoiceParticipantSpeaking(participantId, false, "rtc");
-  }
+  const syncVoiceParticipantSpeakingState = (...args) => voiceActivityRuntime.syncVoiceParticipantSpeakingState(...args);
+  const markVoiceParticipantSpeaking = (...args) => voiceActivityRuntime.markVoiceParticipantSpeaking(...args);
+  const isVoiceParticipantSpeaking = (...args) => voiceActivityRuntime.isVoiceParticipantSpeaking(...args);
+  const clearVoiceActivityAnalyzer = (...args) => voiceActivityRuntime.clearVoiceActivityAnalyzer(...args);
 
   function scheduleVoicePeerRecovery(...args) {
     return voicePeerRecoveryController.schedule(...args);
@@ -3022,21 +2990,10 @@
     return voicePeerRecoveryController.recover(...args);
   }
 
-  function ensureVoiceActivityTimer() {
-    voiceActivityController.ensureTimer();
-  }
-
-  function clearVoiceSpeakingPublishTimer() {
-    voiceActivityController.resetPublisher();
-  }
-
-  async function attachVoiceActivityStream(participantId, stream) {
-    return voiceActivityController.attachStream(participantId, stream);
-  }
-
-  function attachVoiceActivityDetector(participantId, audio) {
-    voiceActivityController.attachDetector(participantId, audio);
-  }
+  const ensureVoiceActivityTimer = (...args) => voiceActivityRuntime.ensureVoiceActivityTimer(...args);
+  const clearVoiceSpeakingPublishTimer = (...args) => voiceActivityRuntime.clearVoiceSpeakingPublishTimer(...args);
+  const attachVoiceActivityStream = (...args) => voiceActivityRuntime.attachVoiceActivityStream(...args);
+  const attachVoiceActivityDetector = (...args) => voiceActivityRuntime.attachVoiceActivityDetector(...args);
 
   function handleVoiceSoundEffectsChange(event) {
     updateSoundPreference("enabled", event.currentTarget.checked);
