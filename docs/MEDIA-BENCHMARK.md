@@ -70,6 +70,12 @@ e aproximadamente 106,35 kbps recebidos. O carregamento dos 5 viewers levou
 harness. Isso confirma que a medição funciona; não é uma meta de produção nem
 uma medição da VPS.
 
+No smoke test funcional de 28/09/2026, com dois viewers P2P, a captura real de
+câmera/tela/janela e a troca de fonte passaram; o viewer negociou Opus e VP8,
+registrou RTT de 1 ms, jitter de 0 ms, perda de 0 pacotes, 93,67 kbps no
+segundo sample e 885 ms para carregar os viewers. Esse número é uma regressão
+funcional local, não uma capacidade garantida para a VPS.
+
 Para repetir o smoke test relay em PowerShell:
 
 ```powershell

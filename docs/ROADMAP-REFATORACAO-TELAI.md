@@ -175,6 +175,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair sincronização, `replaceTrack` e renegociação do áudio local para `frontend/src/services/media`.
 - [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
   - [x] Centralizar o registro e o carregamento lazy das features visuais em `frontend/src/app/component-loader-registry.js`, mantendo as referências reativas e os contratos do shell no componente.
+  - [x] Extrair enumeração, remapeamento de `deviceId`, troca de microfone/saída e persistência de dispositivos para `frontend/src/services/media/voice-device-controller.js`, mantendo o pipeline WebRTC e as bindings visuais.
   - [x] Extrair o controlador de relay WebM para `frontend/src/features/broadcast/relay-controller.js`, mantendo o transporte lazy e o shell visual.
   - [x] Extrair preparação pública, revisão, visibilidade e início de câmera para `frontend/src/features/broadcast/setup-controller.js`, preservando os mesmos diálogos e rotas.
   - [x] Extrair captura, composição e inicialização da transmissão para `frontend/src/features/broadcast/start-controller.js`, mantendo os fluxos P2P/relay e o layout.

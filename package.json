@@ -57,6 +57,7 @@
     "test:rtc-quality": "node qa/test-rtc-quality.mjs",
     "test:voice-quality-controller": "node qa/test-voice-quality-controller.mjs",
     "test:voice-reconnect-storage": "node qa/test-voice-reconnect-storage.mjs",
+    "test:voice-device-controller": "node qa/test-voice-device-controller.mjs",
     "test:media-contract": "node qa/test-media-contract.mjs",
     "test:group-controller": "node qa/test-group-controller.mjs",
     "test:group-state": "node qa/test-group-state.mjs",

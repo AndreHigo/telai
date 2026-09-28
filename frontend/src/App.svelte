@@ -65,14 +65,13 @@
   import { createVoiceInputLifecycleController } from "./features/voice/input-lifecycle-controller.js";
   import { createVoiceSoundController, readSoundPreferences, SOUND_PREFERENCE_DEFAULTS } from "./features/voice/sound-controller.js";
   import { createVoiceShortcutController } from "./features/voice/shortcut-controller.js";
+  import { createVoiceDeviceController } from "./services/media/voice-device-controller.js";
   import { formatBroadcastCaptureError, formatBroadcastMissingAudio } from "./features/broadcast/capture-errors.js";
   import { createGroupEventGateway } from "./services/events.js";
   import { createGroupEventRuntime } from "./features/groups/event-runtime.js";
   import { streamViewerUrl } from "./features/live/stream-url.js";
   import {
-    audioDeviceDisplayLabel,
     isUnavailableVoiceInputError,
-    normalizeAudioDeviceLabel,
     normalizeAudioVolume,
     rawAudioDeviceLabel,
     readStoredVoiceDeviceId,
@@ -1257,6 +1256,71 @@
       voiceTestSpeakerStatus = next.speakerStatus;
     },
   });
+  const voiceDeviceController = createVoiceDeviceController({
+    getState: () => ({
+      user,
+      selectedInputDeviceId,
+      selectedInputDeviceLabel,
+      selectedOutputDeviceId,
+      allAudioInputDevices,
+      audioDevicesRequestRevision,
+      voiceInputSelectionRevision,
+      voiceState,
+      voiceTestRunning,
+      voiceLocalStream,
+      voiceMuted,
+      voiceMutedByCaptureFailure,
+      voiceServerMuted,
+      voiceError,
+      voiceClientId,
+      voiceRoomId,
+      voiceParticipants,
+      persistOutputPreference: (value) => api("/api/auth/preferences", { method: "PATCH", body: JSON.stringify({ preferredOutputDeviceId: value || null }) }).catch((error) => reportClientError("voice_output_device_server_persist_error", error)),
+      getRemoteAudio: () => voiceRemoteAudio,
+      isFallbackStream: (stream) => voiceInputFallbackStreams.has(stream),
+      deleteFallbackStream: (stream) => voiceInputFallbackStreams.delete(stream),
+    }),
+    setState: (next) => {
+      if ("selectedInputDeviceId" in next) selectedInputDeviceId = next.selectedInputDeviceId;
+      if ("selectedInputDeviceLabel" in next) selectedInputDeviceLabel = next.selectedInputDeviceLabel;
+      if ("selectedOutputDeviceId" in next) selectedOutputDeviceId = next.selectedOutputDeviceId;
+      if ("allAudioInputDevices" in next) allAudioInputDevices = next.allAudioInputDevices;
+      if ("audioInputDevices" in next) audioInputDevices = next.audioInputDevices;
+      if ("cameraInputDevices" in next) cameraInputDevices = next.cameraInputDevices;
+      if ("audioOutputDevices" in next) audioOutputDevices = next.audioOutputDevices;
+      if ("audioDevicesRequestRevision" in next) audioDevicesRequestRevision = next.audioDevicesRequestRevision;
+      if ("voiceInputSelectionRevision" in next) voiceInputSelectionRevision = next.voiceInputSelectionRevision;
+      if ("voiceDevicesBusy" in next) voiceDevicesBusy = next.voiceDevicesBusy;
+      if ("voiceDevicesError" in next) voiceDevicesError = next.voiceDevicesError;
+      if ("voiceLocalStream" in next) voiceLocalStream = next.voiceLocalStream;
+      if ("voiceMuted" in next) voiceMuted = next.voiceMuted;
+      if ("voiceMutedByCaptureFailure" in next) voiceMutedByCaptureFailure = next.voiceMutedByCaptureFailure;
+      if ("voiceParticipants" in next) voiceParticipants = next.voiceParticipants;
+      if ("voiceError" in next) voiceError = next.voiceError;
+    },
+    getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia(constraints),
+    enumerateDevices: () => navigator.mediaDevices.enumerateDevices(),
+    getVoiceAudioConstraints: () => voiceAudioConstraints(),
+    getSelectedVoiceAudioConstraints: () => selectedVoiceAudioConstraints(),
+    persistPreferredInputDeviceId,
+    clearUnavailableInputDevice,
+    reportClientError,
+    captureInputStream: (...args) => captureVoiceInputStream(...args),
+    stopInputStream: (...args) => stopVoiceInputStream(...args),
+    stopVoiceTest: () => stopVoiceTest(),
+    getRemoteAudio: () => voiceRemoteAudio,
+    playRemoteAudio: (...args) => playVoiceRemoteAudio(...args),
+    bindLocalTrack: (...args) => bindVoiceLocalTrack(...args),
+    syncLocalTrackToPeers: (...args) => syncVoiceLocalTrackToPeers(...args),
+    attachVoiceActivityStream: (...args) => attachVoiceActivityStream(...args),
+    clearVoiceActivityAnalyzer: (...args) => clearVoiceActivityAnalyzer(...args),
+    ensureVoiceActivityTimer: (...args) => ensureVoiceActivityTimer(...args),
+    upsertVoiceRoomParticipant: (...args) => upsertVoiceRoomParticipant(...args),
+    sendVoiceMuteState: (muted) => sendVoice({ type: "voice-mute-state", muted }),
+  });
+  async function loadAudioDevices(requestPermission = false) { return voiceDeviceController.loadAudioDevices(requestPermission); }
+  async function applyVoiceInputDevice(deviceId = selectedInputDeviceId) { return voiceDeviceController.applyVoiceInputDevice(deviceId); }
+  async function applyVoiceOutputDevice(deviceId = selectedOutputDeviceId) { return voiceDeviceController.applyVoiceOutputDevice(deviceId); }
   const voiceInputLifecycleController = createVoiceInputLifecycleController({
     getState: () => ({
       voiceState,
@@ -2451,113 +2515,6 @@
     return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
-  async function loadAudioDevices(requestPermission = false) {
-    if (!navigator.mediaDevices?.enumerateDevices) {
-      voiceDevicesError = "Este navegador não permite escolher dispositivos de áudio.";
-      return;
-    }
-    const requestRevision = ++audioDevicesRequestRevision;
-    const requestedInputDeviceId = selectedInputDeviceId;
-    voiceDevicesBusy = true;
-    voiceDevicesError = "";
-    let permissionStream;
-    try {
-      if (requestPermission) {
-        const permissionAudio = selectedVoiceAudioConstraints();
-        try {
-          permissionStream = await navigator.mediaDevices.getUserMedia({ audio: permissionAudio, video: false });
-        } catch (error) {
-          // Um deviceId pode mudar depois de reiniciar o Windows/Electron. Nesse
-          // caso, peça permissão sem fixar o ID apenas para conseguir enumerar
-          // os dispositivos atuais; a captura da sala continua estrita em
-          // captureVoiceInputStream e nunca faz fallback silencioso.
-          const canRefreshWithDefault = Boolean(selectedInputDeviceId)
-            && ["NotFoundError", "OverconstrainedError"].includes(error?.name);
-          if (!canRefreshWithDefault) throw error;
-          reportClientError("voice_device_permission_refresh", error, { requestedDeviceId: selectedInputDeviceId });
-          permissionStream = await navigator.mediaDevices.getUserMedia({ audio: voiceAudioConstraints(), video: false });
-        }
-      }
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      if (requestRevision !== audioDevicesRequestRevision) return;
-      allAudioInputDevices = devices
-        .filter((device) => device.kind === "audioinput")
-        .map((device, index) => ({
-          // MediaDeviceInfo expõe seus campos via getters do Web IDL. O
-          // spread (...device) não copia esses getters em navegadores reais,
-          // deixando deviceId como undefined e o <option> com value="".
-          deviceId: String(device.deviceId || ""),
-          kind: device.kind,
-          groupId: String(device.groupId || ""),
-          rawLabel: String(device.label || "").replace(/\s+/g, " ").trim(),
-          label: audioDeviceDisplayLabel(device, index, "input"),
-        }));
-      audioInputDevices = allAudioInputDevices;
-      cameraInputDevices = devices
-        .filter((device) => device.kind === "videoinput")
-        .map((device, index) => ({
-          deviceId: String(device.deviceId || ""),
-          kind: device.kind,
-          groupId: String(device.groupId || ""),
-          label: audioDeviceDisplayLabel(device, index, "camera"),
-        }));
-      audioOutputDevices = devices
-        .filter((device) => device.kind === "audiooutput")
-        .map((device, index) => ({
-          // Preserve the same identifiers for output devices (used by
-          // setSinkId); spreading MediaDeviceInfo loses them for the same
-          // reason as above.
-          deviceId: String(device.deviceId || ""),
-          kind: device.kind,
-          groupId: String(device.groupId || ""),
-          label: audioDeviceDisplayLabel(device, index, "output"),
-        }));
-      // O Windows/Electron pode entregar um novo deviceId depois de reiniciar
-      // o app. O rótulo do dispositivo é a segunda chave para recuperar a
-      // escolha sem voltar silenciosamente para o microfone padrão.
-      if (selectedInputDeviceId) {
-        const selectedDevice = allAudioInputDevices.find((device) => device.deviceId === selectedInputDeviceId);
-        const matchingDevice = selectedDevice || (selectedInputDeviceLabel
-          ? allAudioInputDevices.find((device) => normalizeAudioDeviceLabel(rawAudioDeviceLabel(device)) === normalizeAudioDeviceLabel(selectedInputDeviceLabel))
-          : null);
-        if (matchingDevice) {
-          selectedInputDeviceId = matchingDevice.deviceId;
-          const currentLabel = rawAudioDeviceLabel(matchingDevice);
-          if (currentLabel) selectedInputDeviceLabel = currentLabel;
-          try {
-            localStorage.setItem("mirante-voice-input", selectedInputDeviceId);
-            if (currentLabel) localStorage.setItem("mirante-voice-input-label", currentLabel);
-          } catch {}
-          // O ID pode ter mudado após uma atualização do Windows/driver.
-          // Atualize também a preferência remota para o próximo login não
-          // restaurar o identificador antigo.
-          if (selectedInputDeviceId !== requestedInputDeviceId) persistPreferredInputDeviceId(selectedInputDeviceId);
-        }
-      }
-      // Se o ID antigo não apareceu e não foi possível remapear pelo rótulo,
-      // descarte-o. A captura da sala usará o microfone padrão do sistema.
-      if (selectedInputDeviceId && !allAudioInputDevices.some((device) => device.deviceId === selectedInputDeviceId)) {
-        clearUnavailableInputDevice(selectedInputDeviceId);
-      }
-      // Se o Windows trocou o deviceId, confirme a nova captura com o ID
-      // remapeado. Sem essa segunda captura, a tela podia mostrar o aparelho
-      // correto enquanto a permissão ainda permanecia ligada ao ID antigo.
-      if (requestPermission && selectedInputDeviceId && selectedInputDeviceId !== requestedInputDeviceId) {
-        try {
-          const remappedPermissionStream = await navigator.mediaDevices.getUserMedia({ audio: selectedVoiceAudioConstraints(), video: false });
-          remappedPermissionStream?.getTracks?.().forEach((track) => track.stop());
-        } catch (error) {
-          reportClientError("voice_device_remapped_capture", error, { requestedDeviceId: selectedInputDeviceId });
-        }
-      }
-    } catch (error) {
-      voiceDevicesError = error.name === "NotAllowedError" ? "Permita o microfone para listar seus dispositivos." : "Não foi possível listar os dispositivos de áudio.";
-    } finally {
-      permissionStream?.getTracks().forEach((track) => track.stop());
-      if (requestRevision === audioDevicesRequestRevision) voiceDevicesBusy = false;
-    }
-  }
-
   function voiceAudioConstraints() {
     return createVoiceAudioConstraints(voiceInputProfile, voiceAdvancedOptions);
   }
@@ -2723,29 +2680,6 @@
   const startVoiceTest = () => voiceAudioTestController.start();
   const testVoiceSpeaker = () => voiceAudioTestController.testSpeaker();
 
-  async function applyVoiceOutputDevice(deviceId = selectedOutputDeviceId) {
-    selectedOutputDeviceId = deviceId || "";
-    if (selectedOutputDeviceId) localStorage.setItem("mirante-voice-output", selectedOutputDeviceId);
-    else localStorage.removeItem("mirante-voice-output");
-    if (user) api("/api/auth/preferences", { method: "PATCH", body: JSON.stringify({ preferredOutputDeviceId: selectedOutputDeviceId || null }) }).catch((error) => reportClientError("voice_output_device_server_persist_error", error));
-    voiceDevicesError = "";
-    for (const [participantId, audio] of voiceRemoteAudio) {
-      if (typeof audio.setSinkId !== "function") {
-        if (selectedOutputDeviceId) voiceDevicesError = "A saída de áudio personalizada não é compatível neste navegador.";
-        continue;
-      }
-      try { await audio.setSinkId(selectedOutputDeviceId || "default"); }
-      catch (error) {
-        reportClientError("voice_output_device_fallback", error, { deviceSelected: Boolean(selectedOutputDeviceId) });
-        selectedOutputDeviceId = "";
-        localStorage.removeItem("mirante-voice-output");
-        voiceDevicesError = "A saída escolhida não está disponível; voltamos para a saída padrão.";
-        await audio.setSinkId("default").catch(() => {});
-      }
-      void playVoiceRemoteAudio(participantId, audio).catch(() => {});
-    }
-  }
-
   function setVoiceOutputVolume(value) {
     voiceOutputVolume = normalizeAudioVolume(Number(value) / 100);
     try { localStorage.setItem("mirante-voice-output-volume", String(voiceOutputVolume)); } catch (error) { reportClientError("voice_output_volume_persist_error", error); }
@@ -2763,74 +2697,6 @@
         body: JSON.stringify({ voiceMicrophoneVolume, voiceOutputVolume }),
       }).catch((error) => reportClientError("voice_volume_server_persist_error", error));
     }, 350);
-  }
-
-  async function applyVoiceInputDevice(deviceId = selectedInputDeviceId) {
-    selectedInputDeviceId = deviceId || "";
-    const selectionRevision = ++voiceInputSelectionRevision;
-    const requestedDeviceId = selectedInputDeviceId;
-    const selectedDevice = allAudioInputDevices.find((device) => device.deviceId === selectedInputDeviceId);
-    selectedInputDeviceLabel = selectedDevice ? rawAudioDeviceLabel(selectedDevice) : selectedInputDeviceLabel;
-    try {
-      if (selectedInputDeviceId) {
-        localStorage.setItem("mirante-voice-input", selectedInputDeviceId);
-        if (selectedInputDeviceLabel) localStorage.setItem("mirante-voice-input-label", selectedInputDeviceLabel);
-      } else {
-        localStorage.removeItem("mirante-voice-input");
-        localStorage.removeItem("mirante-voice-input-label");
-        selectedInputDeviceLabel = "";
-      }
-    } catch (error) { reportClientError("voice_input_device_persist_error", error); }
-    persistPreferredInputDeviceId(selectedInputDeviceId);
-    voiceDevicesError = "";
-    if (voiceTestRunning) stopVoiceTest();
-    if (voiceState !== "connected") return;
-    try {
-      // Se a escolha deixou de existir, captureVoiceInputStream tenta uma vez
-      // o microfone padrão e limpa a preferência antiga automaticamente.
-      const nextStream = await captureVoiceInputStream({ expectedDeviceId: requestedDeviceId, selectionRevision });
-      const usedDefaultFallback = voiceInputFallbackStreams.has(nextStream);
-      voiceInputFallbackStreams.delete(nextStream);
-      if (selectionRevision !== voiceInputSelectionRevision || (requestedDeviceId !== selectedInputDeviceId && !usedDefaultFallback)) {
-        stopVoiceInputStream(nextStream);
-        return;
-      }
-      const nextTrack = nextStream.getAudioTracks()[0];
-      const previousStream = voiceLocalStream;
-      const shouldRestoreAfterCaptureFailure = voiceMutedByCaptureFailure || voiceError.startsWith("Você entrou sem microfone");
-      if (shouldRestoreAfterCaptureFailure) {
-        voiceMuted = false;
-        voiceMutedByCaptureFailure = false;
-      }
-      nextTrack.enabled = !(voiceMuted || voiceServerMuted);
-      voiceLocalStream = nextStream;
-      bindVoiceLocalTrack(nextTrack);
-      if (!await syncVoiceLocalTrackToPeers()) throw new Error("Não foi possível publicar o microfone escolhido para todos os participantes.");
-      stopVoiceInputStream(previousStream);
-      clearVoiceActivityAnalyzer(voiceClientId);
-      void attachVoiceActivityStream(voiceClientId, voiceLocalStream);
-      ensureVoiceActivityTimer();
-      if (shouldRestoreAfterCaptureFailure) {
-        const local = voiceParticipants.get(voiceClientId);
-        if (local) {
-          const updated = { ...local, muted: voiceMuted || voiceServerMuted, serverMuted: voiceServerMuted };
-          voiceParticipants = new Map(voiceParticipants).set(voiceClientId, updated);
-          upsertVoiceRoomParticipant(voiceRoomId, updated);
-        }
-        sendVoice({ type: "voice-mute-state", muted: voiceMuted });
-        voiceError = "";
-      }
-    } catch (error) {
-      if (error?.name === "SelectedDeviceCaptureSupersededError") return;
-      reportClientError("voice_input_device_apply_error", error, { deviceSelected: Boolean(selectedInputDeviceId) });
-      voiceDevicesError = error.name === "NotAllowedError"
-        ? "Permita o microfone para trocar de dispositivo."
-        : ["NotFoundError", "OverconstrainedError"].includes(error?.name)
-          ? "O microfone escolhido não está disponível. Atualize os dispositivos e tente novamente."
-          : error.name === "SelectedDeviceMismatchError"
-            ? "O navegador não entregou o microfone escolhido. A seleção foi preservada; atualize os dispositivos e tente novamente."
-          : "Não foi possível trocar o microfone.";
-    }
   }
 
   function handleAvatarChange(event) {
