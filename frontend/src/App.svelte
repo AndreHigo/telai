@@ -87,6 +87,7 @@
   import { createBroadcastPreviewController } from "./features/broadcast/preview-controller.js";
   import { createBroadcastAudioModeController } from "./features/broadcast/audio-mode-controller.js";
   import { createBroadcastSwitchController } from "./features/broadcast/switch-controller.js";
+  import { createAvatarController } from "./features/settings/avatar-controller.js";
   import { createAppComponentLoaders } from "./app/component-loader-registry.js";
   import { createWindowLifecycle } from "./app/window-lifecycle.js";
   import { copyTextValue } from "./services/clipboard.js";
@@ -2669,63 +2670,15 @@
     }, 350);
   }
 
-  function handleAvatarChange(event) {
-    const file = event.currentTarget.files?.[0];
-    if (!file) return;
-    setSettingsState({ avatarError: "" });
-    if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type)) {
-      setSettingsState({ avatarError: "Escolha uma imagem PNG, JPG, WEBP ou GIF." });
-      event.currentTarget.value = "";
-      return;
-    }
-    if (file.size > maxAvatarFileBytes) {
-      setSettingsState({ avatarError: "A foto precisa ter no máximo 5 MB." });
-      event.currentTarget.value = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => { setSettingsState({ settingsAvatarData: String(reader.result || "") }); };
-    reader.onerror = () => { setSettingsState({ avatarError: "Não foi possível ler essa foto." }); };
-    reader.readAsDataURL(file);
-  }
-
-  function clearAvatar() {
-    setSettingsState({ settingsAvatarData: "", avatarError: "" });
-    if (avatarFileInput) avatarFileInput.value = "";
-  }
-
-  function handleChannelAvatarChange(event) {
-    const file = event.currentTarget.files?.[0];
-    if (!file) return;
-    setSettingsState({ channelError: "" });
-    if (!/^image\/(?:png|jpeg|webp|gif)$/.test(file.type)) {
-      setSettingsState({ channelError: "Escolha uma imagem PNG, JPG, WEBP ou GIF para o canal." });
-      event.currentTarget.value = "";
-      return;
-    }
-    if (file.size > maxAvatarFileBytes) {
-      setSettingsState({ channelError: "A foto do canal precisa ter no máximo 5 MB." });
-      event.currentTarget.value = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => { setSettingsState({ channelAvatarData: String(reader.result || "") }); };
-    reader.onerror = () => { setSettingsState({ channelError: "Não foi possível ler essa foto do canal." }); };
-    reader.readAsDataURL(file);
-  }
-
-  function clearChannelAvatar() {
-    setSettingsState({ channelAvatarData: "", channelError: "" });
-    if (channelAvatarFileInput) channelAvatarFileInput.value = "";
-  }
-
-  function toggleChannelGame(game) {
-    setSettingsState({
-      channelGames: channelGames.includes(game)
-        ? channelGames.filter((item) => item !== game)
-        : [...channelGames, game].slice(0, 8),
-    });
-  }
+  const avatarController = createAvatarController({
+    getState: () => ({ maxAvatarFileBytes, avatarFileInput, channelAvatarFileInput, channelGames }),
+    setState: (next) => setSettingsState(next),
+  });
+  const handleAvatarChange = (...args) => avatarController.handleAvatarChange(...args);
+  const clearAvatar = (...args) => avatarController.clearAvatar(...args);
+  const handleChannelAvatarChange = (...args) => avatarController.handleChannelAvatarChange(...args);
+  const clearChannelAvatar = (...args) => avatarController.clearChannelAvatar(...args);
+  const toggleChannelGame = (...args) => avatarController.toggleChannelGame(...args);
 
   async function logout() {
     setSettingsState({ settingsError: "" });
