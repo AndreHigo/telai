@@ -42,6 +42,7 @@
     "test:broadcast-capture-errors": "node qa/test-broadcast-capture-errors.mjs",
     "test:broadcast-setup-controller": "node qa/test-broadcast-setup-controller.mjs",
     "test:broadcast-runtime-controller": "node qa/test-broadcast-runtime-controller.mjs",
+    "test:broadcast-source-controller": "node qa/test-broadcast-source-controller.mjs",
     "test:broadcast-lifecycle-controller": "node qa/test-broadcast-lifecycle-controller.mjs",
     "test:broadcast-track": "node qa/test-broadcast-track-controller.mjs",
     "test:broadcast-state": "node qa/test-broadcast-state.mjs",

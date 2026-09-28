@@ -83,6 +83,7 @@
   import { createMaintenanceController } from "./features/shell/maintenance-controller.js";
   import { createBroadcastRuntimeController } from "./features/broadcast/runtime-controller.js";
   import { createBroadcastLifecycleController } from "./features/broadcast/lifecycle-controller.js";
+  import { createBroadcastSourceController } from "./features/broadcast/source-controller.js";
   import { createAppComponentLoaders } from "./app/component-loader-registry.js";
   import { createWindowLifecycle } from "./app/window-lifecycle.js";
   import { copyTextValue } from "./services/clipboard.js";
@@ -3982,156 +3983,59 @@
     }
   }
 
-  async function rebuildBroadcastOutput({ cameraStream = broadcastCameraStream, microphoneStream = broadcastMicrophoneStream, sourceAudioTrack = broadcastSourceAudioTrack, cameraPosition = broadcastCameraPosition } = {}) {
-    if (broadcastState !== "live" || broadcastMediaSwitching) return false;
-    const previousStream = broadcastStream;
-    const previousComposition = broadcastVideoComposition;
-    const wasRelay = mediaMode === "relay" && await isRelayRecorderActive();
-    let nextStream = null;
-    broadcastMediaSwitching = true;
-    try {
-      nextStream = await buildBroadcastOutputStream({
-        displayStream: broadcastDisplayStream,
-        cameraStream,
-        sourceAudioTrack,
-        microphoneStream,
-        cameraPosition,
-        profile: qualityProfiles[selectedQuality],
-      });
-      // Quando a câmera é removida, a composição antiga não é descartada
-      // automaticamente porque a nova saída usa diretamente a tela.
-      if (!cameraStream && previousComposition) stopBroadcastVideoComposition();
-      if (wasRelay) await stopRelayRecorder();
-      await replaceBroadcastTracks(nextStream);
-      setBroadcastState({ broadcastStream: nextStream });
-      broadcastSourceAudioTrack = sourceAudioTrack;
-      await attachBroadcastPreview();
-      if (wasRelay) await startRelayRecorder();
-      const activeSourceTracks = new Set([
-        ...(broadcastDisplayStream?.getTracks?.() || []),
-        ...(broadcastCameraStream?.getTracks?.() || []),
-        ...(broadcastMicrophoneStream?.getTracks?.() || []),
-      ]);
-      if (previousStream && previousStream !== nextStream) previousStream.getTracks().forEach((track) => {
-        if (!activeSourceTracks.has(track)) track.stop();
-      });
-      return true;
-    } catch (error) {
-      if (wasRelay && !(await isRelayRecorderActive()) && broadcastStream) {
-        try { await startRelayRecorder(); } catch (relayError) { reportClientError("broadcast_relay_restart_error", relayError, { mediaMode }); }
+  const broadcastSourceController = createBroadcastSourceController({
+    getState: () => ({
+      activeDisplayProcessId,
+      broadcastCameraDeviceId,
+      broadcastCameraEnabled,
+      broadcastCameraPosition,
+      broadcastCameraStream,
+      broadcastDisplayStream,
+      broadcastMicrophoneEnabled,
+      broadcastMicrophoneStream,
+      broadcastMediaSwitching,
+      broadcastSourceAudioTrack,
+      broadcastSourceType,
+      broadcastState,
+      broadcastStream,
+      broadcastVideoComposition,
+      mediaMode,
+      selectedInputDeviceId,
+      selectedQuality,
+    }),
+    setState: (next) => {
+      if ("activeDisplayProcessId" in next) activeDisplayProcessId = next.activeDisplayProcessId;
+      if ("broadcastCameraStream" in next) broadcastCameraStream = next.broadcastCameraStream;
+      if ("broadcastMediaSwitching" in next) broadcastMediaSwitching = next.broadcastMediaSwitching;
+      if ("broadcastMicrophoneStream" in next) broadcastMicrophoneStream = next.broadcastMicrophoneStream;
+      if ("broadcastSourceAudioTrack" in next) broadcastSourceAudioTrack = next.broadcastSourceAudioTrack;
+      if ("selectedInputDeviceId" in next) selectedInputDeviceId = next.selectedInputDeviceId;
+      const broadcastPatch = {};
+      for (const key of ["broadcastError", "broadcastStream", "broadcastCameraDeviceId", "broadcastCameraEnabled", "broadcastCameraPosition", "broadcastMicrophoneEnabled"]) {
+        if (key in next) broadcastPatch[key] = next[key];
       }
-      nextStream?.getTracks?.().forEach((track) => track.stop());
-      setBroadcastState({ broadcastError: error.message || "Não foi possível atualizar os dispositivos da transmissão." });
-      reportClientError("broadcast_media_switch_error", error, { camera: Boolean(cameraStream), microphone: Boolean(microphoneStream) });
-      return false;
-    } finally {
-      broadcastMediaSwitching = false;
-    }
-  }
+      if (Object.keys(broadcastPatch).length) setBroadcastState(broadcastPatch);
+    },
+    buildOutputStream: (...args) => buildBroadcastOutputStream(...args),
+    replaceTracks: (...args) => replaceBroadcastTracks(...args),
+    attachPreview: (...args) => attachBroadcastPreview(...args),
+    captureCamera: (...args) => captureBroadcastCameraStream(...args),
+    captureMicrophone: (...args) => captureBroadcastMicrophoneStream(...args),
+    stopMicrophone: (stream) => stopVoiceInputStream(stream),
+    stopComposition: () => stopBroadcastVideoComposition(),
+    isRelayActive: (...args) => isRelayRecorderActive(...args),
+    stopRelay: (...args) => stopRelayRecorder(...args),
+    startRelay: (...args) => startRelayRecorder(...args),
+    qualityProfiles,
+    reportClientError,
+    setNotice: (value) => { notice = value; },
+  });
+  const rebuildBroadcastOutput = (...args) => broadcastSourceController.rebuildOutput(...args);
+  const handleBroadcastCameraChange = (...args) => broadcastSourceController.handleCameraChange(...args);
+  const handleBroadcastCameraToggle = (...args) => broadcastSourceController.handleCameraToggle(...args);
+  const handleBroadcastCameraPositionChange = (...args) => broadcastSourceController.handleCameraPositionChange(...args);
+  const handleBroadcastMicrophoneChange = (...args) => broadcastSourceController.handleMicrophoneChange(...args);
 
-  async function handleBroadcastCameraChange(event) {
-    const requestedDeviceId = String(event.currentTarget?.value || "");
-    const previousCameraDeviceId = broadcastCameraDeviceId;
-    const previousCameraEnabled = broadcastCameraEnabled;
-    setBroadcastState({ broadcastCameraDeviceId: requestedDeviceId, ...(!requestedDeviceId && broadcastSourceType === "screen" ? { broadcastCameraEnabled: false } : {}) });
-    if (broadcastState !== "live") return;
-    if (broadcastSourceType === "camera" && !requestedDeviceId) {
-      setBroadcastState({ broadcastError: "A transmissão por câmera precisa manter uma câmera selecionada." });
-      return;
-    }
-    if (broadcastSourceType === "screen" && !broadcastCameraEnabled && requestedDeviceId) {
-      notice = "Câmera selecionada. Ative “Incluir minha câmera” para adicioná-la à transmissão.";
-      return;
-    }
-    const previousCameraStream = broadcastCameraStream;
-    let nextCameraStream = null;
-    try {
-      if (requestedDeviceId) nextCameraStream = await captureBroadcastCameraStream(qualityProfiles[selectedQuality]);
-      const applied = await rebuildBroadcastOutput({ cameraStream: nextCameraStream });
-      if (!applied) {
-        if (nextCameraStream) nextCameraStream.getTracks().forEach((track) => track.stop());
-        setBroadcastState({ broadcastCameraEnabled: previousCameraEnabled });
-        return;
-      }
-      broadcastCameraStream = nextCameraStream;
-      previousCameraStream?.getTracks?.().forEach((track) => track.stop());
-      notice = requestedDeviceId ? "Câmera trocada sem interromper a live." : "Câmera removida sem interromper a live.";
-    } catch (error) {
-      nextCameraStream?.getTracks?.().forEach((track) => track.stop());
-      setBroadcastState({ broadcastCameraDeviceId: previousCameraDeviceId, broadcastCameraEnabled: previousCameraEnabled, broadcastError: error.message || "Não foi possível trocar a câmera." });
-      reportClientError("broadcast_camera_switch_error", error, { deviceId: requestedDeviceId });
-    }
-  }
-
-  async function handleBroadcastCameraToggle(event) {
-    const requestedEnabled = Boolean(event.currentTarget?.checked);
-    const previousEnabled = broadcastCameraEnabled;
-    const previousCameraStream = broadcastCameraStream;
-    setBroadcastState({ broadcastCameraEnabled: requestedEnabled });
-    if (broadcastState !== "live") return;
-    let nextCameraStream = null;
-    try {
-      if (requestedEnabled) nextCameraStream = await captureBroadcastCameraStream(qualityProfiles[selectedQuality]);
-      const applied = await rebuildBroadcastOutput({ cameraStream: nextCameraStream });
-      if (!applied) {
-        setBroadcastState({ broadcastCameraEnabled: previousEnabled });
-        nextCameraStream?.getTracks?.().forEach((track) => track.stop());
-        return;
-      }
-      broadcastCameraStream = nextCameraStream;
-      previousCameraStream?.getTracks?.().forEach((track) => track.stop());
-      notice = requestedEnabled ? "Câmera incluída na transmissão." : "Câmera removida da transmissão.";
-    } catch (error) {
-      setBroadcastState({ broadcastCameraEnabled: previousEnabled });
-      nextCameraStream?.getTracks?.().forEach((track) => track.stop());
-      setBroadcastState({ broadcastError: error.message || "Não foi possível atualizar a câmera." });
-      reportClientError("broadcast_camera_toggle_error", error, { enabled: requestedEnabled, deviceId: broadcastCameraDeviceId });
-    }
-  }
-
-  async function handleBroadcastCameraPositionChange(event) {
-    const positions = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
-    const requestedPosition = String(event.currentTarget?.value || "bottom-right");
-    if (!positions.has(requestedPosition)) return;
-    const previousPosition = broadcastCameraPosition;
-    setBroadcastState({ broadcastCameraPosition: requestedPosition });
-    if (broadcastState !== "live" || broadcastSourceType !== "screen" || !broadcastCameraStream) return;
-    const applied = await rebuildBroadcastOutput({ cameraPosition: requestedPosition });
-    if (!applied) {
-      setBroadcastState({ broadcastCameraPosition: previousPosition });
-      return;
-    }
-    notice = "Posição da câmera atualizada sem interromper a live.";
-  }
-
-  async function handleBroadcastMicrophoneChange(event) {
-    if (event.currentTarget?.classList?.contains("broadcast-microphone-enabled")) {
-      setBroadcastState({ broadcastMicrophoneEnabled: Boolean(event.currentTarget.checked) });
-    } else {
-      selectedInputDeviceId = String(event.currentTarget?.value || "");
-    }
-    if (broadcastState !== "live") return;
-    const previousMicrophoneStream = broadcastMicrophoneStream;
-    let nextMicrophoneStream = null;
-    try {
-      if (broadcastMicrophoneEnabled) nextMicrophoneStream = await captureBroadcastMicrophoneStream();
-      const applied = await rebuildBroadcastOutput({ microphoneStream: nextMicrophoneStream });
-      if (!applied) {
-        if (nextMicrophoneStream) stopVoiceInputStream(nextMicrophoneStream);
-        return;
-      }
-      broadcastMicrophoneStream = nextMicrophoneStream;
-      if (previousMicrophoneStream && previousMicrophoneStream !== nextMicrophoneStream) stopVoiceInputStream(previousMicrophoneStream);
-      notice = broadcastMicrophoneEnabled
-        ? "Microfone trocado sem interromper a live."
-        : "Microfone desativado sem interromper a live.";
-    } catch (error) {
-      nextMicrophoneStream && stopVoiceInputStream(nextMicrophoneStream);
-      broadcastMicrophoneStream = previousMicrophoneStream;
-      setBroadcastState({ broadcastMicrophoneEnabled: Boolean(previousMicrophoneStream), broadcastError: error.message || "Não foi possível trocar o microfone." });
-      reportClientError("broadcast_microphone_switch_error", error, { requestedDeviceId: selectedInputDeviceId });
-    }
-  }
 
   async function handleBroadcastAudioModeChange(event) {
     const previousAudioMode = audioMode;
