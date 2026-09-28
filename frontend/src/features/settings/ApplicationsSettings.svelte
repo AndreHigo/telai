@@ -24,6 +24,7 @@
   let commandName = "";
   let commandDescription = "";
   let commandOptions = "";
+  let commandEnabled = true;
   let editingCommandId = "";
   let installGroupId = "";
   const installationPermissionOptions = [
@@ -164,6 +165,7 @@
     commandName = command.name || "";
     commandDescription = command.description || "";
     commandOptions = command.options?.length ? JSON.stringify(command.options, null, 2) : "";
+    commandEnabled = command.enabled !== false;
     error = "";
     notice = "";
   }
@@ -173,6 +175,7 @@
     commandName = "";
     commandDescription = "";
     commandOptions = "";
+    commandEnabled = true;
   }
 
   async function createCommand() {
@@ -187,7 +190,7 @@
         : `/api/applications/${encodeURIComponent(selectedApplicationId)}/commands`;
       const result = await api(endpoint, {
         method: editing ? "PATCH" : "POST",
-        body: JSON.stringify({ name: commandName.trim(), description: commandDescription.trim(), options: parseOptions() }),
+        body: JSON.stringify({ name: commandName.trim(), description: commandDescription.trim(), options: parseOptions(), enabled: commandEnabled }),
       });
       commands = editing
         ? commands.map((item) => item.id === editingCommandId ? result.command : item).sort((left, right) => left.name.localeCompare(right.name))
@@ -378,6 +381,7 @@
               <label class="modal-field">Nome<input class="settings-input" bind:value={commandName} maxlength="32" pattern="[A-Za-z0-9_-]+" required placeholder="status" /></label>
               <label class="modal-field">Descrição<input class="settings-input" bind:value={commandDescription} maxlength="100" required placeholder="Mostra o status do serviço" /></label>
               <label class="modal-field">Opções JSON <textarea class="settings-input" bind:value={commandOptions} rows="3" placeholder="Lista JSON opcional de opções"></textarea></label>
+              <label class="application-permission-toggle"><input type="checkbox" bind:checked={commandEnabled} disabled={busy} /><span>Comando ativo no catálogo e nas interações</span></label>
               <div class="inline-settings-form">
                 <button class="primary" type="submit" disabled={busy || !commandName.trim() || !commandDescription.trim()}>{editingCommandId ? "Salvar alterações" : "Registrar comando"}</button>
                 {#if editingCommandId}<button class="outline" type="button" disabled={busy} on:click={cancelEditCommand}>Cancelar edição</button>{/if}
@@ -386,7 +390,7 @@
             <div class="application-token-list">
               {#each commands as command}
                 <div class="application-row">
-                  <span><strong>/{command.name}</strong><small>{command.description} · {command.options?.length || 0} opção(ões)</small></span>
+                  <span><strong>/{command.name}</strong><small>{command.description} · {command.options?.length || 0} opção(ões) · {command.enabled === false ? "Inativo" : "Ativo"}</small></span>
                   <div class="inline-settings-form"><button class="outline" type="button" disabled={busy} on:click={() => beginEditCommand(command)}>Editar</button><button class="outline" type="button" disabled={busy} on:click={() => deleteCommand(command)}>Remover</button></div>
                 </div>
               {/each}

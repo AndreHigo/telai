@@ -40,6 +40,7 @@ export function ensureCompatibilityColumns(database) {
   ensureColumn(database, "application_group_installations", "allow_commands", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(database, "application_group_installations", "allow_messages", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(database, "application_group_installations", "allow_interactions", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(database, "application_commands", "enabled", "INTEGER NOT NULL DEFAULT 1");
   database.exec(`
     CREATE TABLE IF NOT EXISTS group_room_reads (
       group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -98,6 +99,7 @@ export function ensureCompatibilityColumns(database) {
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       options_json TEXT NOT NULL DEFAULT '[]',
+      enabled INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE(application_id, name)

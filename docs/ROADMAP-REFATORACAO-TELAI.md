@@ -327,7 +327,7 @@ enviada ao GitHub nem publicada em produção.
    - [x] Permitir atualizar nome e descrição da aplicação, sincronizando a identidade do bot em SQLite/PostgreSQL.
    - [x] Aplicar a permissão de interações no catálogo e no polling de bots para não expor nem capturar comandos desativados.
    - [ ] Ampliar a superfície de permissões, comandos e eventos com controles avançados.
-     - [x] Permitir editar comandos e a identidade da aplicação pelo painel existente, sem criar uma tela paralela.
+     - [x] Permitir editar comandos, ativar/desativar comandos e a identidade da aplicação pelo painel existente, sem criar uma tela paralela.
      - [ ] Adicionar eventos assináveis e permissões granulares adicionais somente após definir retenção, entrega e limites operacionais.
 - [x] Comandos, componentes e modais.
   - [x] Registrar comandos por aplicação com validação de nome, descrição e opções em SQLite/PostgreSQL.

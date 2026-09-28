@@ -153,11 +153,12 @@ export function createApplicationOwnerRoutes({
           const name = body.name === undefined ? undefined : normalizeCommandName(body.name);
           const description = body.description === undefined ? undefined : normalizeText(body.description, 100);
           const options = normalizeCommandOptions(body.options);
-          if ((body.name !== undefined && !name) || (body.description !== undefined && !description) || (options !== undefined && !options)) {
+          const enabled = body.enabled === undefined ? undefined : body.enabled;
+          if ((body.name !== undefined && !name) || (body.description !== undefined && !description) || (options !== undefined && !options) || (enabled !== undefined && typeof enabled !== "boolean")) {
             json(response, 400, { error: "Comando, descrição e opções precisam seguir o contrato da aplicação." });
             return true;
           }
-          const command = await applicationRepository.updateCommand({ applicationId, commandId: childId, name, description, options });
+          const command = await applicationRepository.updateCommand({ applicationId, commandId: childId, name, description, options, enabled });
           if (!command) {
             json(response, 404, { error: "Comando não encontrado." });
             return true;

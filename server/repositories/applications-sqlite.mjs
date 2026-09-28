@@ -74,11 +74,11 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     `).all(applicationId).map(publicToken);
   }
 
-  function listCommands(applicationId) {
+  function listCommands(applicationId, { activeOnly = false } = {}) {
     return database.prepare(`
       SELECT id, application_id AS applicationId, name, description,
-        options_json AS optionsJson, created_at AS createdAt, updated_at AS updatedAt
-      FROM application_commands WHERE application_id = ? ORDER BY name COLLATE NOCASE
+        options_json AS optionsJson, enabled, created_at AS createdAt, updated_at AS updatedAt
+      FROM application_commands WHERE application_id = ? ${activeOnly ? "AND enabled = 1" : ""} ORDER BY name COLLATE NOCASE
     `).all(applicationId).map(publicCommand);
   }
 
@@ -90,35 +90,37 @@ export function createApplicationRepository(database, { createId = randomUUID } 
         application_commands.id AS commandId, application_commands.name AS commandName,
         application_commands.description AS commandDescription,
         application_commands.options_json AS commandOptionsJson,
+        application_commands.enabled AS commandEnabled,
         application_commands.created_at AS commandCreatedAt,
         application_commands.updated_at AS commandUpdatedAt
       FROM application_group_installations
       JOIN applications ON applications.id = application_group_installations.application_id
       JOIN users ON users.id = applications.bot_user_id
       JOIN application_commands ON application_commands.application_id = applications.id
-      WHERE application_group_installations.group_id = ? AND application_group_installations.allow_commands = 1 AND application_group_installations.allow_interactions = 1
+      WHERE application_group_installations.group_id = ? AND application_group_installations.allow_commands = 1 AND application_group_installations.allow_interactions = 1 AND application_commands.enabled = 1
       ORDER BY applications.name COLLATE NOCASE, application_commands.name COLLATE NOCASE
     `).all(groupId);
     return groupInstalledCommands(rows);
   }
 
-  function createCommand({ applicationId, name, description = "", options = [], createdAt = new Date().toISOString() }) {
+  function createCommand({ applicationId, name, description = "", options = [], enabled = true, createdAt = new Date().toISOString() }) {
     const id = createId();
     const optionsJson = JSON.stringify(options);
-    database.prepare("INSERT INTO application_commands (id, application_id, name, description, options_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .run(id, applicationId, name, description, optionsJson, createdAt, createdAt);
-    return publicCommand({ id, applicationId, name, description, optionsJson, createdAt, updatedAt: createdAt });
+    database.prepare("INSERT INTO application_commands (id, application_id, name, description, options_json, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(id, applicationId, name, description, optionsJson, enabled ? 1 : 0, createdAt, createdAt);
+    return publicCommand({ id, applicationId, name, description, optionsJson, enabled: enabled ? 1 : 0, createdAt, updatedAt: createdAt });
   }
 
-  function updateCommand({ applicationId, commandId, name, description, options, updatedAt = new Date().toISOString() }) {
-    const current = database.prepare("SELECT id, application_id AS applicationId, name, description, options_json AS optionsJson, created_at AS createdAt, updated_at AS updatedAt FROM application_commands WHERE application_id = ? AND id = ?").get(applicationId, commandId);
+  function updateCommand({ applicationId, commandId, name, description, options, enabled, updatedAt = new Date().toISOString() }) {
+    const current = database.prepare("SELECT id, application_id AS applicationId, name, description, options_json AS optionsJson, enabled, created_at AS createdAt, updated_at AS updatedAt FROM application_commands WHERE application_id = ? AND id = ?").get(applicationId, commandId);
     if (!current) return null;
     const nextName = name ?? current.name;
     const nextDescription = description ?? current.description;
     const nextOptions = options ?? parseCommandOptions(current.optionsJson);
-    database.prepare("UPDATE application_commands SET name = ?, description = ?, options_json = ?, updated_at = ? WHERE application_id = ? AND id = ?")
-      .run(nextName, nextDescription, JSON.stringify(nextOptions), updatedAt, applicationId, commandId);
-    return publicCommand({ ...current, name: nextName, description: nextDescription, optionsJson: JSON.stringify(nextOptions), updatedAt });
+    const nextEnabled = enabled ?? Boolean(current.enabled ?? 1);
+    database.prepare("UPDATE application_commands SET name = ?, description = ?, options_json = ?, enabled = ?, updated_at = ? WHERE application_id = ? AND id = ?")
+      .run(nextName, nextDescription, JSON.stringify(nextOptions), nextEnabled ? 1 : 0, updatedAt, applicationId, commandId);
+    return publicCommand({ ...current, name: nextName, description: nextDescription, optionsJson: JSON.stringify(nextOptions), enabled: nextEnabled ? 1 : 0, updatedAt });
   }
 
   function deleteCommand(applicationId, commandId) {
@@ -129,10 +131,10 @@ export function createApplicationRepository(database, { createId = randomUUID } 
     return publicCommand(database.prepare(`
       SELECT application_commands.id, application_commands.application_id AS applicationId,
         application_commands.name, application_commands.description,
-        application_commands.options_json AS optionsJson
+        application_commands.options_json AS optionsJson, application_commands.enabled
       FROM application_commands
       JOIN application_group_installations ON application_group_installations.application_id = application_commands.application_id
-      WHERE application_commands.application_id = ? AND application_group_installations.group_id = ? AND application_group_installations.allow_commands = 1 AND application_group_installations.allow_interactions = 1 AND application_commands.name = ?
+      WHERE application_commands.application_id = ? AND application_group_installations.group_id = ? AND application_group_installations.allow_commands = 1 AND application_group_installations.allow_interactions = 1 AND application_commands.enabled = 1 AND application_commands.name = ?
     `).get(applicationId, groupId, name));
   }
 

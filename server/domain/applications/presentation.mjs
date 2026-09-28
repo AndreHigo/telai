@@ -70,6 +70,7 @@ export function publicCommand(row) {
     name: row.name,
     description: row.description,
     options: parseCommandOptions(row.optionsJson),
+    enabled: Boolean(row.enabled ?? 1),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -82,6 +83,7 @@ export function publicInstalledCommand(row) {
     name: row.commandName,
     description: row.commandDescription,
     options: parseCommandOptions(row.commandOptionsJson),
+    enabled: Boolean(row.commandEnabled ?? 1),
     createdAt: row.commandCreatedAt || null,
     updatedAt: row.commandUpdatedAt || null,
   };

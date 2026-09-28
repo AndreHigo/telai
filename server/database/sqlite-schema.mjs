@@ -357,6 +357,7 @@ export const SQLITE_SCHEMA = `
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     options_json TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(application_id, name)

@@ -81,8 +81,8 @@ export function createPostgresApplicationRepository(database, { createId = rando
     return result.rows.map(publicToken);
   }
 
-  async function listCommands(applicationId) {
-    const result = await database.query('SELECT id, application_id AS "applicationId", name, description, options_json AS "optionsJson", created_at AS "createdAt", updated_at AS "updatedAt" FROM application_commands WHERE application_id = $1 ORDER BY LOWER(name)', [applicationId]);
+  async function listCommands(applicationId, { activeOnly = false } = {}) {
+    const result = await database.query(`SELECT id, application_id AS "applicationId", name, description, options_json AS "optionsJson", enabled, created_at AS "createdAt", updated_at AS "updatedAt" FROM application_commands WHERE application_id = $1 ${activeOnly ? "AND enabled = 1" : ""} ORDER BY LOWER(name)`, [applicationId]);
     return result.rows.map(publicCommand);
   }
 
@@ -94,34 +94,36 @@ export function createPostgresApplicationRepository(database, { createId = rando
         application_commands.id AS "commandId", application_commands.name AS "commandName",
         application_commands.description AS "commandDescription",
         application_commands.options_json AS "commandOptionsJson",
+        application_commands.enabled AS "commandEnabled",
         application_commands.created_at AS "commandCreatedAt",
         application_commands.updated_at AS "commandUpdatedAt"
       FROM application_group_installations
       JOIN applications ON applications.id = application_group_installations.application_id
       JOIN users ON users.id = applications.bot_user_id
       JOIN application_commands ON application_commands.application_id = applications.id
-      WHERE application_group_installations.group_id = $1 AND application_group_installations.allow_commands = TRUE AND application_group_installations.allow_interactions = TRUE
+      WHERE application_group_installations.group_id = $1 AND application_group_installations.allow_commands = TRUE AND application_group_installations.allow_interactions = TRUE AND application_commands.enabled = 1
       ORDER BY LOWER(applications.name), LOWER(application_commands.name)
     `, [groupId]);
     return groupInstalledCommands(result.rows);
   }
 
-  async function createCommand({ applicationId, name, description = "", options = [], createdAt = new Date().toISOString() }) {
+  async function createCommand({ applicationId, name, description = "", options = [], enabled = true, createdAt = new Date().toISOString() }) {
     const id = createId();
     const optionsJson = JSON.stringify(options);
-    await database.query("INSERT INTO application_commands (id, application_id, name, description, options_json, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $6)", [id, applicationId, name, description, optionsJson, createdAt]);
-    return publicCommand({ id, applicationId, name, description, optionsJson, createdAt, updatedAt: createdAt });
+    await database.query("INSERT INTO application_commands (id, application_id, name, description, options_json, enabled, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $7)", [id, applicationId, name, description, optionsJson, enabled ? 1 : 0, createdAt]);
+    return publicCommand({ id, applicationId, name, description, optionsJson, enabled: enabled ? 1 : 0, createdAt, updatedAt: createdAt });
   }
 
-  async function updateCommand({ applicationId, commandId, name, description, options, updatedAt = new Date().toISOString() }) {
-    const result = await database.query('SELECT id, application_id AS "applicationId", name, description, options_json AS "optionsJson", created_at AS "createdAt", updated_at AS "updatedAt" FROM application_commands WHERE application_id = $1 AND id = $2', [applicationId, commandId]);
+  async function updateCommand({ applicationId, commandId, name, description, options, enabled, updatedAt = new Date().toISOString() }) {
+    const result = await database.query('SELECT id, application_id AS "applicationId", name, description, options_json AS "optionsJson", enabled, created_at AS "createdAt", updated_at AS "updatedAt" FROM application_commands WHERE application_id = $1 AND id = $2', [applicationId, commandId]);
     const current = result.rows[0];
     if (!current) return null;
     const nextName = name ?? current.name;
     const nextDescription = description ?? current.description;
     const nextOptions = options ?? parseCommandOptions(current.optionsJson);
-    await database.query("UPDATE application_commands SET name = $1, description = $2, options_json = $3, updated_at = $4 WHERE application_id = $5 AND id = $6", [nextName, nextDescription, JSON.stringify(nextOptions), updatedAt, applicationId, commandId]);
-    return publicCommand({ ...current, name: nextName, description: nextDescription, optionsJson: JSON.stringify(nextOptions), updatedAt });
+    const nextEnabled = enabled ?? Boolean(current.enabled ?? 1);
+    await database.query("UPDATE application_commands SET name = $1, description = $2, options_json = $3, enabled = $4, updated_at = $5 WHERE application_id = $6 AND id = $7", [nextName, nextDescription, JSON.stringify(nextOptions), nextEnabled ? 1 : 0, updatedAt, applicationId, commandId]);
+    return publicCommand({ ...current, name: nextName, description: nextDescription, optionsJson: JSON.stringify(nextOptions), enabled: nextEnabled ? 1 : 0, updatedAt });
   }
 
   async function deleteCommand(applicationId, commandId) {
@@ -133,10 +135,10 @@ export function createPostgresApplicationRepository(database, { createId = rando
     const result = await database.query(`
       SELECT application_commands.id, application_commands.application_id AS "applicationId",
         application_commands.name, application_commands.description,
-        application_commands.options_json AS "optionsJson"
+        application_commands.options_json AS "optionsJson", application_commands.enabled
       FROM application_commands
       JOIN application_group_installations ON application_group_installations.application_id = application_commands.application_id
-      WHERE application_commands.application_id = $1 AND application_group_installations.group_id = $2 AND application_group_installations.allow_commands = TRUE AND application_group_installations.allow_interactions = TRUE AND application_commands.name = $3
+      WHERE application_commands.application_id = $1 AND application_group_installations.group_id = $2 AND application_group_installations.allow_commands = TRUE AND application_group_installations.allow_interactions = TRUE AND application_commands.enabled = 1 AND application_commands.name = $3
     `, [applicationId, groupId, name]);
     return publicCommand(result.rows[0]);
   }

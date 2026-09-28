@@ -234,7 +234,7 @@ export function createApplicationBotRoutes({
       json(response, 200, {
         application: { id: identity.applicationId, name: identity.applicationName },
         bot: { id: identity.botUserId, username: identity.botUsername, displayName: identity.botDisplayName },
-        commands: await applicationRepository.listCommands(identity.applicationId),
+        commands: await applicationRepository.listCommands(identity.applicationId, { activeOnly: true }),
       });
       return true;
     }

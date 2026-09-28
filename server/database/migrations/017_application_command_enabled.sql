@@ -1,0 +1,2 @@
+ALTER TABLE application_commands
+  ADD COLUMN IF NOT EXISTS enabled INTEGER NOT NULL DEFAULT 1;
