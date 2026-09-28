@@ -90,6 +90,34 @@ WebRTC/SFU pode continuar existindo para o palco interativo, mas não deve obrig
 VPS do Telai a enviar milhares de cópias individuais quando uma CDN pode distribuir
 segmentos HTTP.
 
+### 3.4 O modelo de palco e compartilhamento de tela
+
+O Discord separa, na prática, uma chamada pequena de um evento com audiência. O
+modo Go Live/Screen Share comum é voltado para grupos menores e a documentação de
+suporte informa limite de 50 espectadores simultâneos. Já Stage Channels possuem um
+modelo de palco, com participantes autorizados e audiência predominantemente passiva;
+os limites variam conforme o tipo de mídia e o nível do servidor. ([Go Live e
+Screen Share](https://support.discord.com/hc/en-us/articles/360040816151-Go-Live-and-
+Screen-Share), [Stage Channels FAQ](https://support.discord.com/hc/en-us/articles/
+1500005513722-Stage-Channels-FAQ))
+
+O Telai deve aproveitar o conceito, sem copiar a interface: criar um modo **Evento**
+com transmissor, palco, espectadores, chat e moderação separados. A primeira versão
+deve ter um único transmissor de tela por vez, até cinco participantes de palco e
+controles explícitos para publicar câmera, microfone ou tela. A audiência não deve
+abrir uma conexão de publicação; apenas assina o evento.
+
+Regra de escolha recomendada:
+
+| Tipo de uso | Transporte | Limite inicial de projeto |
+|---|---|---|
+| Chamada privada | P2P + TURN | poucos participantes |
+| Sala interativa | SFU | dezenas de participantes e audiência controlada |
+| Evento com palco | SFU para o palco + HLS/LL-HLS para audiência | centenas a milhares |
+
+Isso preserva a leveza do Telai e evita tratar compartilhamento de tela como uma
+simples chamada P2P quando o objetivo for alcançar 500, 1.000 ou 2.000 espectadores.
+
 ## 4. O que estudar
 
 ### 4.1 Protocolos e transporte
@@ -392,5 +420,5 @@ separar corretamente os domínios:
 - PostgreSQL para persistência.
 - Observabilidade e testes para decidir quando escalar.
 
-O próximo passo técnico recomendado é implementar o contrato `MediaProvider` e um
-protótipo local de SFU, sem trocar a interface visual nem remover o P2P atual.
+Próximo passo: implementar o contrato `MediaProvider` e um protótipo local de SFU,
+preservando a interface visual e o P2P atual.
