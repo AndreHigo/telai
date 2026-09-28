@@ -10,7 +10,6 @@ export function createVoiceReconnectController({
   joinVoiceRoom,
   leaveVoiceRoom,
   writeReconnectSession,
-  clearReconnectSession,
   reportClientError,
   setTimeoutFn = globalThis.setTimeout,
   clearTimeoutFn = globalThis.clearTimeout,

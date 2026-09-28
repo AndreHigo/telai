@@ -92,6 +92,7 @@
   import { createVoiceSocketController } from "./features/voice/socket-controller.js";
   import { createVoiceLiveController } from "./features/voice/live-controller.js";
   import { createVoiceReconnectController } from "./features/voice/reconnect-controller.js";
+  import { createVoiceMessageController } from "./features/voice/message-controller.js";
   import { BROADCAST_QUALITY_PROFILES as qualityProfiles, hasTurnServer } from "../../shared/media-contract.mjs";
   import { HugeiconsIcon } from "@hugeicons/svelte";
   import { PlayIcon } from "@hugeicons/core-free-icons";
@@ -3474,148 +3475,72 @@
     return voiceSocketController.send(message);
   }
 
-  async function handleVoiceSocketMessage(event, socket) {
-
-        if (voiceSocket !== socket) return;
-        if (typeof event.data !== "string") return;
-        try {
-          const message = JSON.parse(event.data);
-          if (!acceptGatewayMessage(socket, message)) return;
-          if (message.type === "voice-joined") {
-            voiceClientId = message.clientId;
-            const localHasTrack = Boolean(voiceLocalStream?.getAudioTracks?.().find((track) => track.readyState === "live"));
-            const localMuted = voiceMuted || !localHasTrack;
-            const localParticipant = { id: voiceClientId, userId: user?.id || null, displayName: user?.displayName || "Você", username: user?.username || "você", avatarData: user?.avatarData || null, isLocal: true, muted: localMuted, serverMuted: false, deafened: false };
-            voiceParticipants = new Map(uniqueVoiceParticipants([localParticipant, ...(message.participants || [])]).map((participant) => [participant.id, participant]));
-            voiceState = "connected";
-            voiceMuted = localMuted;
-            voiceServerMuted = false;
-            voiceDeafened = false;
-            for (const participant of message.participants || []) {
-              if (participant?.id) {
-                voiceSpeakingSignalKnownParticipantIds = new Set(voiceSpeakingSignalKnownParticipantIds).add(participant.id);
-              }
-              if (participant.speaking) {
-                markVoiceParticipantSpeaking(participant.id, true, "signal");
-              }
-            }
-            writeVoiceReconnectSession({ groupId: selectedGroupId, voiceRoomId: message.voiceRoomId, groupName: selectedGroup?.name, roomName: selectedRoom?.name }, { show: false });
-            attachVoiceActivityStream(voiceClientId, voiceLocalStream);
-            replaceVoiceRoomSnapshot(message.voiceRoomId, [localParticipant, ...(message.participants || [])]);
-            playVoiceSound("enter");
-            for (const participant of message.participants || []) createVoicePeer(participant.id, voicePeerShouldInitiate(participant.id));
-            void syncVoiceLocalTrackToPeers();
-            if (!localHasTrack) sendVoice({ type: "voice-mute-state", muted: true });
-          } else if (message.type === "voice-moved") {
-            for (const participantId of voicePeerConnections.keys()) closeVoicePeer(participantId);
-            removeVoiceRoomParticipant(message.previousRoomId, message.clientId, user?.id || null);
-            voiceRoomId = message.voiceRoomId;
-            voiceClientId = message.clientId;
-            setGroupState({ selectedRoomId: message.voiceRoomId });
-            voiceServerMuted = Boolean(message.serverMuted);
-            const movedTrack = voiceLocalStream?.getAudioTracks?.()[0];
-            if (movedTrack) movedTrack.enabled = !(voiceMuted || voiceServerMuted);
-            voiceParticipants = new Map(uniqueVoiceParticipants([{ id: voiceClientId, userId: user?.id || null, displayName: user?.displayName || "Você", username: user?.username || "você", isLocal: true, muted: voiceMuted || voiceServerMuted, serverMuted: voiceServerMuted, deafened: voiceDeafened }, ...(message.participants || [])]).map((participant) => [participant.id, participant]));
-            voiceState = "connected";
-            voiceError = "";
-            for (const participant of message.participants || []) {
-              if (participant?.id) {
-                voiceSpeakingSignalKnownParticipantIds = new Set(voiceSpeakingSignalKnownParticipantIds).add(participant.id);
-              }
-              if (participant.speaking) {
-                markVoiceParticipantSpeaking(participant.id, true, "signal");
-              }
-            }
-            writeVoiceReconnectSession({ groupId: selectedGroupId, voiceRoomId: message.voiceRoomId, groupName: selectedGroup?.name, roomName: selectedRoom?.name }, { show: false });
-            attachVoiceActivityStream(voiceClientId, voiceLocalStream);
-            replaceVoiceRoomSnapshot(message.voiceRoomId, [...voiceParticipants.values()]);
-            playVoiceSound("enter");
-            for (const participant of message.participants || []) createVoicePeer(participant.id, voicePeerShouldInitiate(participant.id));
-            void syncVoiceLocalTrackToPeers();
-          } else if (message.type === "voice-user-joined") {
-            voiceParticipants = new Map(uniqueVoiceParticipants([...voiceParticipants.values(), message.participant]).map((participant) => [participant.id, participant]));
-            upsertVoiceRoomParticipant(voiceRoomId, message.participant);
-            if (message.participant?.id) {
-              voiceSpeakingSignalKnownParticipantIds = new Set(voiceSpeakingSignalKnownParticipantIds).add(message.participant.id);
-              const pendingSignals = voicePendingSignals.get(message.participant.id) || [];
-              voicePendingSignals.delete(message.participant.id);
-              for (const pendingSignal of pendingSignals) enqueueVoiceSignal(pendingSignal);
-              createVoicePeer(message.participant.id, voicePeerShouldInitiate(message.participant.id));
-              void syncVoiceLocalTrackToPeers();
-            }
-            playVoiceSound("enter");
-          } else if (message.type === "voice-user-left") {
-            playVoiceSound("leave");
-            const participantIdsToClose = new Set([message.participantId]);
-            if (message.userId) {
-              for (const participant of voiceParticipants.values()) {
-                if (participant.userId === message.userId) participantIdsToClose.add(participant.id);
-              }
-            }
-            const next = [...voiceParticipants.values()].filter((participant) => participant.id !== message.participantId && (!message.userId || participant.userId !== message.userId));
-            voiceParticipants = new Map(next.map((participant) => [participant.id, participant]));
-            for (const participantId of participantIdsToClose) {
-              voiceSpeakingSignalKnownParticipantIds.delete(participantId);
-              closeVoicePeer(participantId);
-            }
-            removeVoiceRoomParticipant(voiceRoomId, message.participantId, message.userId || null);
-          } else if (message.type === "voice-user-muted") {
-            const participant = voiceParticipants.get(message.participantId);
-            if (participant) {
-              const updated = { ...participant, muted: Boolean(message.muted), serverMuted: Boolean(message.serverMuted) };
-              voiceParticipants = new Map(voiceParticipants).set(message.participantId, updated);
-              upsertVoiceRoomParticipant(voiceRoomId, updated);
-            }
-          } else if (message.type === "voice-user-speaking") {
-            const participantId = String(message.participantId || "");
-            if (participantId) {
-              voiceSpeakingSignalKnownParticipantIds = new Set(voiceSpeakingSignalKnownParticipantIds).add(participantId);
-              if (participantId !== voiceClientId) clearVoiceActivityAnalyzer(participantId);
-              markVoiceParticipantSpeaking(participantId, Boolean(message.speaking), "signal");
-            }
-          } else if (message.type === "voice-user-deafened") {
-            const participant = voiceParticipants.get(message.participantId);
-            if (participant) {
-              const updated = { ...participant, deafened: Boolean(message.deafened) };
-              voiceParticipants = new Map(voiceParticipants).set(message.participantId, updated);
-              upsertVoiceRoomParticipant(voiceRoomId, updated);
-            }
-          } else if (message.type === "voice-force-mute") {
-            const track = voiceLocalStream?.getAudioTracks()[0];
-            const previousMuted = voiceMuted || voiceServerMuted;
-            voiceServerMuted = Boolean(message.muted);
-            if (track) track.enabled = !(voiceMuted || voiceServerMuted);
-            const effectiveMuted = voiceMuted || voiceServerMuted;
-            const local = voiceParticipants.get(voiceClientId);
-            if (local) {
-              const updated = { ...local, muted: effectiveMuted, serverMuted: voiceServerMuted };
-              voiceParticipants = new Map(voiceParticipants).set(voiceClientId, updated);
-              upsertVoiceRoomParticipant(voiceRoomId, updated);
-            }
-            sendVoice({ type: "voice-mute-state", muted: voiceMuted });
-            if (effectiveMuted !== previousMuted) playVoiceSound(effectiveMuted ? "mute" : "unmute");
-          } else if (message.type === "voice-disconnected") {
-            voiceError = message.message || "Você foi desconectado da sala de voz.";
-            clearVoiceReconnectSession();
-            leaveVoiceRoom({ silent: true });
-            if (message.reason === "replaced") void refreshGroupOverview();
-          } else if (message.type === "voice-signal") {
-            enqueueVoiceSignal(message);
-          } else if (message.type === "voice-signal-error") {
-            const participantId = String(message.target || "").trim();
-            voiceError = message.message || "A sinalização do áudio está sendo recuperada.";
-            if (participantId) scheduleVoicePeerRecovery(participantId, 800, true);
-          } else if (message.type === "voice-error" || message.type === "error") {
-            voiceError = message.message || "Não foi possível entrar na sala de voz.";
-            // Erros de moderação (mover, desconectar ou silenciar) não devem
-            // derrubar quem continua autorizado a permanecer na sala.
-            if (message.type === "error" || !message.action) leaveVoiceRoom();
-          }
-        } catch (caught) {
-          reportClientError("voice_message_error", caught, { roomId: voiceRoomId });
-          voiceError = "A sinalização da sala de voz retornou uma mensagem inválida.";
-        }
+  function setVoiceRuntimeState(next) {
+    if ("voiceClientId" in next) voiceClientId = next.voiceClientId;
+    if ("voiceLocalStream" in next) voiceLocalStream = next.voiceLocalStream;
+    if ("voiceMuted" in next) voiceMuted = next.voiceMuted;
+    if ("voiceServerMuted" in next) voiceServerMuted = next.voiceServerMuted;
+    if ("voiceDeafened" in next) voiceDeafened = next.voiceDeafened;
+    if ("voiceParticipants" in next) voiceParticipants = next.voiceParticipants;
+    if ("voiceState" in next) voiceState = next.voiceState;
+    if ("voiceError" in next) voiceError = next.voiceError;
+    if ("voiceRoomId" in next) voiceRoomId = next.voiceRoomId;
+    if ("voiceSpeakingSignalKnownParticipantIds" in next) voiceSpeakingSignalKnownParticipantIds = next.voiceSpeakingSignalKnownParticipantIds;
   }
+
+  const voiceMessageController = createVoiceMessageController({
+    getState: () => ({
+      voiceClientId,
+      voiceLocalStream,
+      voiceMuted,
+      voiceServerMuted,
+      voiceDeafened,
+      voiceParticipants,
+      voiceState,
+      voiceError,
+      voiceRoomId,
+      voiceSpeakingSignalKnownParticipantIds,
+      voicePeerConnections,
+      voicePendingSignals,
+      user,
+      selectedGroupId,
+      selectedGroup,
+      selectedRoom,
+    }),
+    setState: setVoiceRuntimeState,
+    uniqueParticipants: (...args) => uniqueVoiceParticipants(...args),
+    writeReconnectSession: (...args) => writeVoiceReconnectSession(...args),
+    attachVoiceActivityStream: (...args) => attachVoiceActivityStream(...args),
+    replaceRoomSnapshot: (...args) => replaceVoiceRoomSnapshot(...args),
+    upsertRoomParticipant: (...args) => upsertVoiceRoomParticipant(...args),
+    removeRoomParticipant: (...args) => removeVoiceRoomParticipant(...args),
+    markParticipantSpeaking: (...args) => markVoiceParticipantSpeaking(...args),
+    clearVoiceActivityAnalyzer: (...args) => clearVoiceActivityAnalyzer(...args),
+    createPeer: (...args) => createVoicePeer(...args),
+    shouldInitiatePeer: (...args) => voicePeerShouldInitiate(...args),
+    closePeer: (...args) => closeVoicePeer(...args),
+    syncLocalTrackToPeers: (...args) => syncVoiceLocalTrackToPeers(...args),
+    enqueueSignal: (...args) => enqueueVoiceSignal(...args),
+    sendVoice,
+    leaveVoiceRoom: (...args) => leaveVoiceRoom(...args),
+    refreshGroupOverview: (...args) => refreshGroupOverview(...args),
+    schedulePeerRecovery: (...args) => scheduleVoicePeerRecovery(...args),
+    playVoiceSound: (...args) => playVoiceSound(...args),
+    setGroupState,
+  });
+
+  async function handleVoiceSocketMessage(event, socket) {
+    if (voiceSocket !== socket || typeof event.data !== "string") return;
+    try {
+      const message = JSON.parse(event.data);
+      if (!acceptGatewayMessage(socket, message)) return;
+      await voiceMessageController.handle(message);
+    } catch (caught) {
+      reportClientError("voice_message_error", caught, { roomId: voiceRoomId });
+      voiceError = "A sinalização da sala de voz retornou uma mensagem inválida.";
+    }
+  }
+
 
   function handleVoiceSocketClosed(event, socket) {
     if (voiceSocket !== socket) return;

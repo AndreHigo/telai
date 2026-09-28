@@ -53,6 +53,7 @@
     "test:voice-live-controller": "node qa/test-voice-live-controller.mjs",
     "test:voice-socket-controller": "node qa/test-voice-socket-controller.mjs",
     "test:voice-reconnect-controller": "node qa/test-voice-reconnect-controller.mjs",
+    "test:voice-message-controller": "node qa/test-voice-message-controller.mjs",
     "test:voice-settings-controller": "node qa/test-voice-settings-controller.mjs",
     "test:voice-sound-controller": "node qa/test-voice-sound-controller.mjs",
     "test:voice-audio-test-controller": "node qa/test-voice-audio-test-controller.mjs",
