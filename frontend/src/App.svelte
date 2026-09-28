@@ -29,7 +29,7 @@
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
   import { createAccountController } from "./features/shell/account-controller.js";
-  import { createContextMenuController } from "./features/shell/context-menu-controller.js";
+  import { createVoiceContextMenuRuntime } from "./features/voice/context-menu-runtime.js";
   import { createNavigationStateStore } from "./features/shell/navigation-state.js";
   import { createViewerStateStore } from "./features/shell/viewer-state.js";
   import { createSettingsNavigationController } from "./features/settings/navigation-controller.js";
@@ -3050,138 +3050,63 @@
     updateSoundPreference("volume", Math.min(1, Math.max(0, Number(event.currentTarget.value) / 100)));
   }
 
-  function handleVoiceDragStart(event, participant) {
-    if (!canMoveVoiceMembers) {
-      event.preventDefault();
-      return;
-    }
-    draggedVoiceParticipantId = participant.id;
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", participant.id);
-  }
-
-  function handleVoiceDragEnd() {
-    draggedVoiceParticipantId = "";
-    voiceDropRoomId = "";
-  }
-
-  function openUserContextMenu(event, userLike, room = null) {
-    event.preventDefault();
-    event.stopPropagation();
-    const width = 248;
-    const height = 426;
-    const participant = {
-      ...userLike,
-      id: userLike?.id || userLike?.userId,
-      userId: userLike?.userId || userLike?.id,
-    };
-    voiceContextMenu = {
-      x: Math.min(event.clientX, Math.max(8, window.innerWidth - width - 8)),
-      y: Math.min(event.clientY, Math.max(8, window.innerHeight - height - 8)),
-      roomId: room?.id || null,
-      participant,
-    };
-    void tick().then(() => document.querySelector(".voice-context-menu")?.focus());
-  }
-
-  function openVoiceContextMenu(event, room, participant) {
-    openUserContextMenu(event, participant, room);
-  }
-
-  function closeVoiceContextMenu() {
-    voiceContextMenu = null;
-  }
-
-  function handleVoiceContextMenuKeydown(event) {
-    if (event.key === "Escape") closeVoiceContextMenu();
-  }
-
-  const contextMenuController = createContextMenuController({
-    getVoiceRoomId: () => voiceRoomId,
-    getActiveVoiceRoom: () => activeVoiceRoom,
-    getSelectedRoom: () => selectedRoom,
-    getVoiceParticipants: () => voiceParticipants,
-    getVoiceRooms: () => voiceRooms,
-    getTextRooms: () => textRooms,
-    getGroupMembers: () => groupMembers,
+  const voiceContextMenuRuntime = createVoiceContextMenuRuntime({
+    getState: () => ({
+      voiceRoomId,
+      activeVoiceRoom,
+      selectedRoom,
+      voiceParticipants,
+      voiceRooms,
+      textRooms,
+      groupMembers,
+      messageDraft,
+      canMoveVoiceMembers,
+      voiceContextMenu,
+      profilePreview,
+      draggedVoiceParticipantId,
+      voiceDropRoomId,
+    }),
+    setState: (next) => {
+      if ("voiceContextMenu" in next) voiceContextMenu = next.voiceContextMenu;
+      if ("profilePreview" in next) profilePreview = next.profilePreview;
+      if ("draggedVoiceParticipantId" in next) draggedVoiceParticipantId = next.draggedVoiceParticipantId;
+      if ("voiceDropRoomId" in next) voiceDropRoomId = next.voiceDropRoomId;
+    },
+    setGroupState,
+    setMessageState,
     visibleVoiceParticipants,
     voiceParticipantDisplayName,
-    openVoiceContextMenu,
     openRoomContextMenu,
-    openUserContextMenu,
+    setVoiceVolumePreference: setVoiceParticipantVolumePreference,
+    isVoiceParticipantLocallyMutedPreference,
+    toggleVoiceParticipantLocalMutePreference,
+    toggleVoiceMute: (...args) => toggleVoiceMute(...args),
+    leaveVoiceRoom: (...args) => leaveVoiceRoom(...args),
+    sendVoice,
+    tick,
   });
-  const handleGlobalVoiceContextMenu = contextMenuController.handleVoiceContextMenu;
-  const handleGlobalRoomContextMenu = contextMenuController.handleRoomContextMenu;
-  const handleGlobalUserClick = contextMenuController.handleUserClick;
-
-  function showVoiceProfile(participant) {
-    profilePreview = participant;
-    closeVoiceContextMenu();
-  }
-
-  async function mentionVoiceParticipant(participant) {
-    const textRoom = textRooms[0];
-    if (!textRoom) return;
-    setGroupState({ selectedRoomId: textRoom.id });
-    setMessageState({ messageDraft: `${messageDraft.trim()}${messageDraft.trim() ? " " : ""}@${participant.username || participant.displayName || "usuario"} ` });
-    closeVoiceContextMenu();
-    await tick();
-    document.querySelector(".message-composer textarea")?.focus();
-  }
-
-  const setVoiceVolume = (participantId, value) => setVoiceParticipantVolumePreference(participantId, value);
-  const isVoiceParticipantLocallyMuted = (participantId) => isVoiceParticipantLocallyMutedPreference(participantId);
-  function toggleVoiceParticipantLocalMute(participantId) {
-    if (toggleVoiceParticipantLocalMutePreference(participantId)) closeVoiceContextMenu();
-  }
-
-  function toggleContextParticipantServerMute() {
-    const context = voiceContextMenu;
-    if (!context) return;
-    const participant = context.participant;
-    if (participant.isLocal) {
-      toggleVoiceMute();
-    } else if (canMoveVoiceMembers && context.roomId === voiceRoomId) {
-      sendVoice({ type: "voice-mute", participantId: participant.id, muted: !participant.serverMuted });
-    }
-    closeVoiceContextMenu();
-  }
-
-  function disconnectContextParticipant() {
-    const context = voiceContextMenu;
-    if (!context) return;
-    if (context.participant.isLocal) leaveVoiceRoom();
-    else if (canMoveVoiceMembers && context.roomId === voiceRoomId) sendVoice({ type: "voice-disconnect", participantId: context.participant.id });
-    closeVoiceContextMenu();
-  }
-
-  function moveContextParticipant(targetRoomId) {
-    const context = voiceContextMenu;
-    if (!context || !canMoveVoiceMembers || context.roomId !== voiceRoomId || targetRoomId === context.roomId) return;
-    sendVoice({ type: "voice-move", participantId: context.participant.id, targetRoomId });
-    closeVoiceContextMenu();
-  }
-
-  function handleVoiceDragOver(event, room) {
-    if (!canMoveVoiceMembers || !draggedVoiceParticipantId) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    voiceDropRoomId = room.id;
-  }
-
-  function handleVoiceDragLeave(event, room) {
-    if (event.currentTarget === event.target && voiceDropRoomId === room.id) voiceDropRoomId = "";
-  }
-
-  function handleVoiceDrop(event, room) {
-    if (!canMoveVoiceMembers) return;
-    event.preventDefault();
-    const participantId = event.dataTransfer.getData("text/plain") || draggedVoiceParticipantId;
-    draggedVoiceParticipantId = "";
-    voiceDropRoomId = "";
-    if (!participantId || room.id === voiceRoomId) return;
-    sendVoice({ type: "voice-move", participantId, targetRoomId: room.id });
-  }
+  const {
+    openUserContextMenu,
+    openVoiceContextMenu,
+    closeVoiceContextMenu,
+    handleVoiceContextMenuKeydown,
+    handleGlobalVoiceContextMenu,
+    handleGlobalRoomContextMenu,
+    handleGlobalUserClick,
+    showVoiceProfile,
+    mentionVoiceParticipant,
+    setVoiceVolume,
+    isVoiceParticipantLocallyMuted,
+    toggleVoiceParticipantLocalMute,
+    toggleContextParticipantServerMute,
+    disconnectContextParticipant,
+    moveContextParticipant,
+    handleVoiceDragStart,
+    handleVoiceDragEnd,
+    handleVoiceDragOver,
+    handleVoiceDragLeave,
+    handleVoiceDrop,
+  } = voiceContextMenuRuntime;
 
   function clearRecoveredVoiceError() {
     const transientErrors = new Set([

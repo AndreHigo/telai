@@ -57,6 +57,7 @@
     "test:voice-reconnect-controller": "node qa/test-voice-reconnect-controller.mjs",
     "test:voice-message-controller": "node qa/test-voice-message-controller.mjs",
     "test:voice-room-controller": "node qa/test-voice-room-controller.mjs",
+    "test:voice-context-menu-runtime": "node qa/test-voice-context-menu-runtime.mjs",
     "test:voice-settings-controller": "node qa/test-voice-settings-controller.mjs",
     "test:voice-sound-controller": "node qa/test-voice-sound-controller.mjs",
     "test:voice-audio-test-controller": "node qa/test-voice-audio-test-controller.mjs",
