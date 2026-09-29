@@ -34,7 +34,8 @@ etapa.
 - O checkout possui um banco SQLite local ignorado pelo Git, com o schema de aplicação presente; a importação local validada encontrou 14 registros distribuídos entre usuários, grupos, salas, consentimentos, sessão, membros, cargos, auditoria e leituras.
 - Nenhum ambiente de produção foi apontado para PostgreSQL.
 - Nenhum banco SQLite foi apagado ou alterado por esta preparação.
-- A prévia local PostgreSQL desta branch usa o banco isolado `telai_refactor`, criado a partir do SQLite de desenvolvimento; o banco local anterior, que continha fixtures de QA, foi preservado separado.
+- A prévia local PostgreSQL desta branch usa o banco isolado `telai_refactor_migrated`, criado a partir do SQLite de desenvolvimento; o banco local anterior `telai_refactor`, que continha fixtures de QA, foi preservado separado.
+- O banco migrado foi validado com migrations 001–018, importação idempotente e a suíte PostgreSQL local completa; a API local responde com `databaseDriver: "postgres"` e o fluxo de login/grupos foi confirmado.
 
 ## Ordem obrigatória
 
