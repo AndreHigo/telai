@@ -173,7 +173,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Extrair o diagnóstico e telemetria de erros do cliente para `frontend/src/services/client-diagnostics.js` sem alterar o layout.
 - [x] Extrair captura, fallback e seleção do microfone para `frontend/src/services/media`.
 - [x] Extrair sincronização, `replaceTrack` e renegociação do áudio local para `frontend/src/services/media`.
-- [ ] Dividir `App.svelte` em stores e features sem alterar o layout.
+- [x] Dividir `App.svelte` em stores e features sem alterar o layout; o shell permanece como orquestrador visual e os estados, controllers, páginas e diálogos especializados estão extraídos em módulos próprios.
   - [x] Centralizar o registro e o carregamento lazy das features visuais em `frontend/src/app/component-loader-registry.js`, mantendo as referências reativas e os contratos do shell no componente.
   - [x] Extrair enumeração, remapeamento de `deviceId`, troca de microfone/saída e persistência de dispositivos para `frontend/src/services/media/voice-device-controller.js`, mantendo o pipeline WebRTC e as bindings visuais.
   - [x] Extrair o controlador de relay WebM para `frontend/src/features/broadcast/relay-controller.js`, mantendo o transporte lazy e o shell visual.
