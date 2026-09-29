@@ -9,6 +9,7 @@ const files = {
   main: fs.readFileSync(path.join(root, "electron", "main.cjs"), "utf8"),
   preload: fs.readFileSync(path.join(root, "electron", "preload.cjs"), "utf8"),
   app: fs.readFileSync(path.join(root, "frontend", "src", "App.svelte"), "utf8"),
+  lifecycle: fs.readFileSync(path.join(root, "frontend", "src", "app", "lifecycle-controller.js"), "utf8"),
   desktop: fs.readFileSync(path.join(root, "frontend", "src", "features", "shell", "desktop-controller.js"), "utf8"),
   profile: fs.readFileSync(path.join(root, "frontend", "src", "features", "settings", "ProfileSettingsExtras.svelte"), "utf8"),
   design: fs.readFileSync(path.join(root, "electron", "tray-icon-design.cjs"), "utf8"),
@@ -28,7 +29,7 @@ const assertions = [
   ["ícone Telai transparente por estado", files.main.includes('createFromPath(iconPath)') && files.design.includes('const mark = safeState === "sharing"') && files.design.includes('safeState === "deafened"') && files.main.includes('const dynamicIcon = trayIconForStatus({})')],
   ["estado logado fora de sala", files.app.includes("connected: Boolean(user)") && files.main.includes('if (status.connected && !status.live && !status.voice)')],
   ["diagnóstico de atualização", files.main.includes('"tray_status_updated"') && files.main.includes('"tray_status_update_failed"')],
-  ["limpeza do listener", files.app.includes("desktopTrayUnsubscribe?.()")],
+  ["limpeza do listener", files.lifecycle.includes("desktopTrayUnsubscribe?.()")],
   ["preferência de aceleração gráfica", files.main.includes("app.disableHardwareAcceleration()") && files.main.includes('app-get-hardware-acceleration') && files.preload.includes('setHardwareAcceleration(mode)') && files.desktop.includes("setHardwareAcceleration") && files.profile.includes("Aceleração gráfica")],
 ];
 
