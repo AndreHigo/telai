@@ -7,6 +7,7 @@
   import GroupChannelRail from "../features/groups/GroupChannelRail.svelte";
   import GroupWorkspaceHeader from "../features/groups/GroupWorkspaceHeader.svelte";
   import GroupChatHeader from "../features/groups/GroupChatHeader.svelte";
+  import WorkspaceLoading from "./WorkspaceLoading.svelte";
 
   export let state = {};
   export let actions = {};
@@ -115,7 +116,7 @@
           onSearchMessages={actions.openGroupMessageSearch}
         />
         {#if state.groupLoading}
-          <div class="workspace-loading"><span></span><span></span><span></span></div>
+          <WorkspaceLoading label="Carregando sala" />
         {:else if state.selectedRoom?.kind === "voice"}
           {#if state.GroupVoiceWorkspace}
             <svelte:component
@@ -138,7 +139,7 @@
               onLeaveVoiceRoom={actions.leaveVoiceRoom}
             />
           {:else}
-            <div class="workspace-loading"><span></span><span></span><span></span></div>
+            <WorkspaceLoading label="Carregando sala de voz" />
           {/if}
         {:else if state.GroupTextChatWorkspace}
           <svelte:component
@@ -172,7 +173,7 @@
             onStartApplicationInteraction={actions.startApplicationInteraction}
           />
         {:else}
-          <div class="workspace-loading"><span></span><span></span><span></span></div>
+          <WorkspaceLoading label="Carregando conversa" />
         {/if}
       </section>
       <GroupMemberRail

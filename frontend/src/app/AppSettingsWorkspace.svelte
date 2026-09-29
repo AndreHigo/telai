@@ -1,4 +1,6 @@
 <script>
+  import WorkspaceLoading from "./WorkspaceLoading.svelte";
+
   export let state = {};
   export let actions = {};
   export let settingsPageElement = null;
@@ -184,5 +186,5 @@
     onModerationComplete={actions.refreshGroupAfterModeration}
   />
 {:else}
-  <div class="workspace-loading"><span></span><span></span><span></span></div>
+  <WorkspaceLoading label="Carregando configurações" />
 {/if}

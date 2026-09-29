@@ -6,6 +6,7 @@
   import DirectMessagesPage from "../features/direct/DirectMessagesPage.svelte";
   import BroadcastPage from "../features/broadcast/BroadcastPage.svelte";
   import LivePage from "../features/live/LivePage.svelte";
+  import WorkspaceLoading from "./WorkspaceLoading.svelte";
 
   export let state = {};
   export let actions = {};
@@ -158,7 +159,7 @@
       onToggleStream={actions.toggleStream}
     />
   {:else}
-    <div class="workspace-loading"><span></span><span></span><span></span></div>
+    <WorkspaceLoading label="Carregando transmissão" />
   {/if}
 {:else}
   <LivePage

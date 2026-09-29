@@ -7,7 +7,7 @@
 </script>
 
 {#if state.loading}
-  <div class="grid min-h-screen place-items-center"><div class="text-sm text-slate-400">Abrindo seu espaço…</div></div>
+  <div class="grid min-h-screen place-items-center" role="status" aria-label="Abrindo seu espaço"><div class="text-sm text-slate-400">Abrindo seu espaço…</div></div>
 {:else if state.isViewer || state.view === "viewer"}
   <div class:light={!state.isDark} class="mirante-shell viewer-shell" style={state.visualStyle}>
     <Viewer
