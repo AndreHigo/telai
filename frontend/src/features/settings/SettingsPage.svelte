@@ -13,6 +13,7 @@
   import NotificationPreferencesSettings from "./NotificationPreferencesSettings.svelte";
   import ApplicationsSettings from "./ApplicationsSettings.svelte";
   import AccountPrivacy from "../../AccountPrivacy.svelte";
+  import WorkspaceLoading from "../../app/WorkspaceLoading.svelte";
 
   const dispatch = createEventDispatcher();
 
@@ -268,7 +269,7 @@
       onSetHardwareAcceleration={onSetHardwareAcceleration}
     />
   {:else}
-    <div class="workspace-loading"><span></span><span></span><span></span></div>
+    <WorkspaceLoading label="Carregando preferências" />
   {/if}
 
   {#if settingsTab === "user" && settingsSection === "profile"}<AccountPrivacy {user} />{/if}
@@ -330,7 +331,7 @@
         {shortcutLabel}
       />
     {:else}
-      <div class="workspace-loading"><span></span><span></span><span></span></div>
+      <WorkspaceLoading label="Carregando configurações de voz" />
     {/if}
   {/if}
 

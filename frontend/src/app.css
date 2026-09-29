@@ -4,6 +4,7 @@
   font-family: Aptos, "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   color: #eef2ff;
   background: #070b16;
+  color-scheme: dark;
   --telai-page-title-size: clamp(26px, 2.4vw, 32px);
   --telai-section-title-size: 20px;
   --telai-body-size: 13px;
@@ -39,6 +40,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .desktop-titlebar { position: fixed; z-index: 40; top: 0; left: env(titlebar-area-x, 0px); width: env(titlebar-area-width, 100%); height: 36px; border-bottom: 1px solid #263b5e; background: #101a2d; box-shadow: 0 1px 0 rgba(255,255,255,.025); pointer-events: auto; -webkit-app-region: drag; }
 .mirante-shell.light .desktop-titlebar { border-color: #cbd6e7; background: #eef2f8; box-shadow: 0 1px 0 rgba(20,32,58,.06); }
 .mirante-shell.light { background: #f7f8fc; color: #132038; }
+.mirante-shell.light { color-scheme: light; }
 .mirante-shell.light .glass,
 .mirante-shell.light .panel,
 .mirante-shell.light .card { background: rgba(255,255,255,.84); border-color: #d8deeb; }
@@ -4559,6 +4561,8 @@ html, body, #app { min-width: 0; max-width: 100%; }
 .mirante-shell.light .home-view .home-community-card:hover,
 .mirante-shell.light .home-view .home-community-card:focus-visible { background: #f4f6ff; box-shadow: inset 0 0 0 1px #7884df, 0 12px 24px rgba(44, 62, 102, .1); }
 .mirante-shell.light .home-view .home-community-copy small { color: #617492; }
+.mirante-shell.light .home-view .home-community-join { color: #5365c9; }
+.mirante-shell.light .home-view .home-community-join b { color: #4055aa; }
 .mirante-shell.light .home-view .home-feed-empty { background: #f5f8fc; box-shadow: inset 0 0 0 1px #d7dfeb; }
 
 /* O workspace de grupos mantém a navegação global ao lado do servidor, sem
@@ -7869,6 +7873,21 @@ html, body, #app { min-width: 0; max-width: 100%; }
   .mirante-shell.settings-shell .settings-page > :not(.settings-category-nav) {
     width: auto;
     margin-left: 248px;
+  }
+}
+
+/* Respeita a preferência do sistema em todas as rotas, inclusive nos
+   componentes adicionados depois dos primeiros blocos de estilo. A
+   animação de conteúdo continua funcional para quem não optou por reduzi-la. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0s !important;
   }
 }
 
