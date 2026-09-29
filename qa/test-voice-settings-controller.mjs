@@ -58,11 +58,13 @@ assert.equal(reapplyCount, 3);
 
 controller.updateVoiceSensitivityAuto({ currentTarget: { checked: false } });
 controller.updateVoiceSensitivity({ currentTarget: { value: "75" } });
+controller.updateVoiceSensitivity({ target: { value: "68" } });
 controller.toggleVoiceAdvanced({ currentTarget: { checked: true } });
 assert.equal(state.voiceSensitivityAuto, false);
-assert.equal(state.voiceSensitivity, 0.75);
+assert.equal(state.voiceSensitivity, 0.68);
+assert.equal(storage.get("mirante-voice-sensitivity"), "68");
 assert.equal(state.voiceAdvancedOpen, true);
-assert.equal(calibrationCount, 2);
+assert.equal(calibrationCount, 3);
 
 const beforeUnknown = JSON.stringify(state.voiceAdvancedOptions);
 controller.updateVoiceAdvancedOption("unknown", { currentTarget: { checked: true } });

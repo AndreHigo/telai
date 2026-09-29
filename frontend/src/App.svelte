@@ -12,6 +12,7 @@
   import AppRouteWorkspace from "./app/AppRouteWorkspace.svelte";
   import AppMainShell from "./app/AppMainShell.svelte";
   import AppEntryWorkspace from "./app/AppEntryWorkspace.svelte";
+  import WorkspaceLoading from "./app/WorkspaceLoading.svelte";
   import AppOverlays from "./app/AppOverlays.svelte";
   import { createViewportController } from "./features/shell/viewport-controller.js";
   import { createRouteController } from "./features/shell/route-controller.js";
@@ -4330,7 +4331,7 @@
           bind:selectedRoomPermissionId
         />
       {:else}
-        <div class="workspace-loading"><span></span><span></span><span></span></div>
+        <WorkspaceLoading label="Carregando espaço" />
       {/if}
     </AppMainShell>
   </AppEntryWorkspace>

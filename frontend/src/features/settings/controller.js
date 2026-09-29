@@ -81,7 +81,12 @@ export function createSettingsController({
   }
 
   function updateVoiceSensitivity(event) {
-    const voiceSensitivity = Math.min(1, Math.max(0, Number(event?.currentTarget?.value) / 100));
+    const rawValue = event?.currentTarget?.value ?? event?.target?.value;
+    const parsedValue = Number(rawValue);
+    const currentValue = Number(state()?.voiceSensitivity);
+    const voiceSensitivity = Number.isFinite(parsedValue)
+      ? Math.min(1, Math.max(0, parsedValue / 100))
+      : Number.isFinite(currentValue) ? Math.min(1, Math.max(0, currentValue)) : 0.5;
     setState({ voiceSensitivity });
     persistLocalPreference("mirante-voice-sensitivity", Math.round(voiceSensitivity * 100));
     resetVoiceActivityCalibration();
