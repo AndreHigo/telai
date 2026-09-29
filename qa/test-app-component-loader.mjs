@@ -9,6 +9,13 @@ const loaders = createAppComponentLoaders({
 });
 
 const expected = [
+  "loadHomePage",
+  "loadNotificationsPage",
+  "loadFriendsPage",
+  "loadFollowingPage",
+  "loadDirectMessagesPage",
+  "loadBroadcastPage",
+  "loadLivePage",
   "loadGroupTextWorkspace",
   "loadGroupVoiceWorkspace",
   "loadGroupMessageSearchDialog",

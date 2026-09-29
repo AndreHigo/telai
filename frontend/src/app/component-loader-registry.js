@@ -20,6 +20,13 @@ export function createAppComponentLoaders({ setComponent, reportClientError } = 
   const register = (name, importer, errorKind) => createComponentLoader({ name, importer, setComponent, reportClientError, errorKind });
 
   return {
+    loadHomePage: register("HomePage", () => import("../features/home/HomePage.svelte"), "home_page_load_error"),
+    loadNotificationsPage: register("NotificationsPage", () => import("../features/notifications/NotificationsPage.svelte"), "notifications_page_load_error"),
+    loadFriendsPage: register("FriendsPage", () => import("../features/social/FriendsPage.svelte"), "friends_page_load_error"),
+    loadFollowingPage: register("FollowingPage", () => import("../features/social/FollowingPage.svelte"), "following_page_load_error"),
+    loadDirectMessagesPage: register("DirectMessagesPage", () => import("../features/direct/DirectMessagesPage.svelte"), "direct_messages_page_load_error"),
+    loadBroadcastPage: register("BroadcastPage", () => import("../features/broadcast/BroadcastPage.svelte"), "broadcast_page_load_error"),
+    loadLivePage: register("LivePage", () => import("../features/live/LivePage.svelte"), "live_page_load_error"),
     loadGroupTextWorkspace: register("GroupTextChatWorkspace", () => import("../features/groups/GroupTextChatWorkspace.svelte"), "text_workspace_load_error"),
     loadGroupVoiceWorkspace: register("GroupVoiceWorkspace", () => import("../features/groups/GroupVoiceWorkspace.svelte"), "voice_workspace_load_error"),
     loadGroupMessageSearchDialog: register("GroupMessageSearchDialog", () => import("../features/groups/GroupMessageSearchDialog.svelte"), "group_message_search_dialog_load_error"),

@@ -1,11 +1,4 @@
 <script>
-  import HomePage from "../features/home/HomePage.svelte";
-  import NotificationsPage from "../features/notifications/NotificationsPage.svelte";
-  import FriendsPage from "../features/social/FriendsPage.svelte";
-  import FollowingPage from "../features/social/FollowingPage.svelte";
-  import DirectMessagesPage from "../features/direct/DirectMessagesPage.svelte";
-  import BroadcastPage from "../features/broadcast/BroadcastPage.svelte";
-  import LivePage from "../features/live/LivePage.svelte";
   import WorkspaceLoading from "./WorkspaceLoading.svelte";
 
   export let state = {};
@@ -24,7 +17,7 @@
 </script>
 
 {#if state.view === "home"}
-  <HomePage
+  {#if state.HomePage}<svelte:component this={state.HomePage}
     homeLiveStreams={state.homeLiveStreams}
     homeCommunityGroups={state.homeCommunityGroups}
     onRequestBroadcastStart={actions.requestBroadcastStart}
@@ -33,9 +26,9 @@
     onOpenGroups={actions.openGroups}
     onOpenStream={actions.openStreamViewer}
     onOpenGroup={actions.openGroup}
-  />
+  />{:else}<WorkspaceLoading label="Carregando início" />{/if}
 {:else if state.view === "notifications"}
-  <NotificationsPage
+  {#if state.NotificationsPage}<svelte:component this={state.NotificationsPage}
     notificationUnreadCount={state.notificationUnreadCount}
     hideReadNotifications={state.hideReadNotifications}
     readNotificationCount={state.readNotificationCount}
@@ -53,9 +46,9 @@
     onReviewNotification={actions.reviewNotification}
     onOpenStreamNotification={actions.openStreamNotification}
     onNavigateHome={actions.openHome}
-  />
+  />{:else}<WorkspaceLoading label="Carregando notificações" />{/if}
 {:else if state.view === "friends"}
-  <FriendsPage
+  {#if state.FriendsPage}<svelte:component this={state.FriendsPage}
     socialSearchOpen={state.socialSearchOpen}
     socialRequestsOpen={state.socialRequestsOpen}
     socialSearchQuery={state.socialSearchQuery}
@@ -74,18 +67,18 @@
     onRespondToFriendRequest={actions.respondToFriendRequest}
     onRemoveFriend={actions.removeFriend}
     onNavigateHome={actions.openHome}
-  />
+  />{:else}<WorkspaceLoading label="Carregando amigos" />{/if}
 {:else if state.view === "following"}
-  <FollowingPage
+  {#if state.FollowingPage}<svelte:component this={state.FollowingPage}
     social={state.social}
     socialError={state.socialError}
     socialActionId={state.socialActionId}
     onToggleFollowUser={actions.toggleFollowUser}
     onNavigateFriends={actions.openFriends}
     onNavigateHome={actions.openHome}
-  />
+  />{:else}<WorkspaceLoading label="Carregando seguindo" />{/if}
 {:else if state.view === "direct"}
-  <DirectMessagesPage
+  {#if state.DirectMessagesPage}<svelte:component this={state.DirectMessagesPage}
     user={state.user}
     directConversationError={state.directConversationError}
     directConversations={state.directConversations}
@@ -100,9 +93,9 @@
     onSendMessage={actions.sendDirectMessage}
     onMessageKeydown={actions.handleDirectMessageKeydown}
     onNavigateHome={actions.openHome}
-  />
+  />{:else}<WorkspaceLoading label="Carregando mensagens" />{/if}
 {:else if state.view === "broadcast"}
-  <BroadcastPage
+  {#if state.BroadcastPage}<svelte:component this={state.BroadcastPage}
     bind:selectedQuality
     bind:broadcastVideo
     bind:broadcastChatListElement
@@ -147,7 +140,7 @@
     onSwitchSource={actions.switchBroadcastSource}
     onCopyInvite={actions.copyBroadcastInvite}
     onRequestCameraStart={actions.requestCameraBroadcastStart}
-  />
+  />{:else}<WorkspaceLoading label="Carregando transmissão" />{/if}
 {:else if state.view === "multistream"}
   {#if state.MultistreamPage}
     <svelte:component
@@ -162,7 +155,7 @@
     <WorkspaceLoading label="Carregando transmissão" />
   {/if}
 {:else}
-  <LivePage
+  {#if state.LivePage}<svelte:component this={state.LivePage}
     streams={state.streams}
     selectedStreams={state.selectedStreams}
     followingOnly={state.followingOnly}
@@ -174,5 +167,5 @@
     onToggleStream={actions.toggleStream}
     onOpenStreamViewer={actions.openStreamViewer}
     onToggleFollowStream={actions.toggleFollowStream}
-  />
+  />{:else}<WorkspaceLoading label="Carregando ao vivo" />{/if}
 {/if}

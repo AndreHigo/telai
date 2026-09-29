@@ -320,6 +320,13 @@
   let MultistreamPage = null;
   let ContextMenus = null;
   let GroupDialogs = null;
+  let HomePage = null;
+  let NotificationsPage = null;
+  let FriendsPage = null;
+  let FollowingPage = null;
+  let DirectMessagesPage = null;
+  let BroadcastPage = null;
+  let LivePage = null;
   let BroadcastDialogs = null;
   let ProfileSettingsExtras = null;
   let VoiceSettingsPanel = null;
@@ -467,6 +474,13 @@
       if (name === "MultistreamPage") MultistreamPage = component;
       if (name === "ContextMenus") ContextMenus = component;
       if (name === "GroupDialogs") GroupDialogs = component;
+      if (name === "HomePage") HomePage = component;
+      if (name === "NotificationsPage") NotificationsPage = component;
+      if (name === "FriendsPage") FriendsPage = component;
+      if (name === "FollowingPage") FollowingPage = component;
+      if (name === "DirectMessagesPage") DirectMessagesPage = component;
+      if (name === "BroadcastPage") BroadcastPage = component;
+      if (name === "LivePage") LivePage = component;
       if (name === "BroadcastDialogs") BroadcastDialogs = component;
       if (name === "ProfileSettingsExtras") ProfileSettingsExtras = component;
       if (name === "VoiceSettingsPanel") VoiceSettingsPanel = component;
@@ -474,6 +488,13 @@
     reportClientError,
   });
   const {
+    loadHomePage,
+    loadNotificationsPage,
+    loadFriendsPage,
+    loadFollowingPage,
+    loadDirectMessagesPage,
+    loadBroadcastPage,
+    loadLivePage,
     loadGroupTextWorkspace,
     loadGroupVoiceWorkspace,
     loadGroupMessageSearchDialog,
@@ -491,6 +512,14 @@
 
   $: if (selectedRoom && selectedRoom.kind !== "voice" && !GroupTextChatWorkspace) void loadGroupTextWorkspace();
   $: if (selectedRoom?.kind === "voice" && !GroupVoiceWorkspace) void loadGroupVoiceWorkspace();
+
+  $: if (view === "home" && !HomePage) void loadHomePage();
+  $: if (view === "notifications" && !NotificationsPage) void loadNotificationsPage();
+  $: if (view === "friends" && !FriendsPage) void loadFriendsPage();
+  $: if (view === "following" && !FollowingPage) void loadFollowingPage();
+  $: if (view === "direct" && !DirectMessagesPage) void loadDirectMessagesPage();
+  $: if (view === "broadcast" && !BroadcastPage) void loadBroadcastPage();
+  $: if (view === "live" && !LivePage) void loadLivePage();
 
   $: if (showGroupMessageSearch && !GroupMessageSearchDialog) void loadGroupMessageSearchDialog();
 
@@ -3988,6 +4017,13 @@
             broadcastInvite,
             pendingBroadcastContext,
             MultistreamPage,
+            HomePage,
+            NotificationsPage,
+            FriendsPage,
+            FollowingPage,
+            DirectMessagesPage,
+            BroadcastPage,
+            LivePage,
             streams,
             selectedStreams,
             followingOnly
