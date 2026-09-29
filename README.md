@@ -62,6 +62,8 @@ pnpm run build:frontend
 pnpm start
 ```
 
+Para desenvolvimento com recarregamento automático, use `pnpm run dev:frontend` a partir da raiz do checkout. Não abra `node_modules/vite/bin/vite.js` diretamente pelo Explorer: esse arquivo precisa ser executado pelo Node.js, não pelo Windows Script Host.
+
 Abra `http://localhost:8787`. Toda a interface web e desktop usa o shell Svelte, compilado para `public/svelte`. O painel, grupos, voz, captura, player e chat compartilham as mesmas rotas e componentes; não existe uma interface paralela antiga.
 
 ## Aplicativo Windows
