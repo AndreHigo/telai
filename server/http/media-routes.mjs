@@ -1,4 +1,6 @@
-export function createMediaRoutes({ iceConfiguration, mediaMode, databaseDriver, requireLogin, publicOriginForRequest }) {
+import { publicSfuConfig } from "../media/sfu-config.mjs";
+
+export function createMediaRoutes({ iceConfiguration, mediaMode, sfu, databaseDriver, requireLogin, publicOriginForRequest }) {
   return async function handleMediaRoutes(request, response, requestUrl) {
     if (requestUrl.pathname === "/ice-config") {
       iceConfiguration().then((config) => {
@@ -8,7 +10,7 @@ export function createMediaRoutes({ iceConfiguration, mediaMode, databaseDriver,
     }
 
     if (requestUrl.pathname === "/healthz") {
-      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify({ ok: true, mediaMode, databaseDriver, requireLogin }));
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify({ ok: true, mediaMode, sfu: publicSfuConfig(sfu), databaseDriver, requireLogin }));
       return true;
     }
 
@@ -16,6 +18,7 @@ export function createMediaRoutes({ iceConfiguration, mediaMode, databaseDriver,
       response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }).end(JSON.stringify({
         publicBaseUrl: publicOriginForRequest(request),
         mediaMode,
+        sfu: publicSfuConfig(sfu),
         requireLogin,
         internalAuth: true,
       }));

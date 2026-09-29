@@ -72,6 +72,7 @@ const {
   defaultPort,
   defaultHost,
   mediaMode,
+  sfu,
   requireLogin,
   hostReconnectGraceMs,
   streamOrphanGraceMs,
@@ -582,7 +583,7 @@ const handleStreamRoutes = createStreamRoutes({
   createNotification,
 });
 const iceConfiguration = createIceConfiguration({ randomUUID, createHmac });
-const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, databaseDriver, requireLogin, publicOriginForRequest });
+const handleMediaRoutes = createMediaRoutes({ iceConfiguration, mediaMode, sfu, databaseDriver, requireLogin, publicOriginForRequest });
 const {
   allowRtcSignal,
   allowVoiceSpeakingUpdate,

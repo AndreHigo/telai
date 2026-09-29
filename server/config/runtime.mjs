@@ -1,5 +1,6 @@
 import path from "node:path";
 import { normalizeMediaMode } from "../../shared/media-contract.mjs";
+import { createSfuConfig } from "../media/sfu-config.mjs";
 
 const DEFAULT_LOG_LEVELS = Object.freeze({ error: 0, warn: 1, info: 2, debug: 3 });
 
@@ -9,6 +10,7 @@ export function createRuntimeConfig({ rootDir, packageVersion = "0.0.0", env = p
   const defaultPort = Number(env.PORT || 8787);
   const defaultHost = env.HOST || "127.0.0.1";
   const mediaMode = normalizeMediaMode(env.MEDIA_MODE);
+  const sfu = createSfuConfig({ env });
   const requireLogin = env.REQUIRE_LOGIN !== "false";
   const hostReconnectGraceMs = Math.max(15_000, Number(env.HOST_RECONNECT_GRACE_MS || 45_000));
   const streamOrphanGraceMs = Math.max(60_000, Number(env.MIRANTE_STREAM_ORPHAN_GRACE_MS || 120_000));
@@ -44,6 +46,7 @@ export function createRuntimeConfig({ rootDir, packageVersion = "0.0.0", env = p
     defaultPort,
     defaultHost,
     mediaMode,
+    sfu,
     requireLogin,
     hostReconnectGraceMs,
     streamOrphanGraceMs,

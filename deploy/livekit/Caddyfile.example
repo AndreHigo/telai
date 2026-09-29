@@ -1,0 +1,4 @@
+# HTTP/WebSocket signaling endpoint. WebRTC media UDP ports bypass Caddy.
+rtc.telai.tv.br {
+    reverse_proxy 127.0.0.1:7880
+}

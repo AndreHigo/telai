@@ -43,22 +43,26 @@ Referências oficiais: [visão geral do mediasoup](https://mediasoup.org/documen
 
 ## Decisão provisória
 
-Não adicionar LiveKit, mediasoup, Redis ou um novo serviço ao runtime agora.
-Para a VPS leve e o estágio atual do Telai, a sequência segura é:
+Não ativar LiveKit, mediasoup, Redis ou um novo serviço no runtime agora. A
+branch já contém uma preparação opt-in para um LiveKit self-hosted, sem
+alterar o P2P padrão. Para a VPS leve e o estágio atual do Telai, a sequência
+segura é:
 
 1. manter P2P para salas pequenas;
 2. concluir a medição do servidor em uma máquina independente, incluindo TURN
    forçado e voz com 2, 5 e 10 participantes;
-3. criar um protótipo isolado de uma sala mediasoup com o mesmo contrato de
-   mídia, sem alterar o shell visual;
+3. criar um protótipo isolado de uma sala SFU com o mesmo contrato de mídia,
+   começando pelo LiveKit preparado em `deploy/livekit/`, sem alterar o shell
+   visual;
 4. comparar o protótipo com o baseline P2P por CPU, memória, bitrate, RTT,
    primeiro frame, recuperação e custo operacional;
 5. só então decidir se o SFU deve substituir o P2P para salas grandes.
 
-O primeiro candidato para integração é mediasoup, por se encaixar no backend
-Node.js e não impor um protocolo de sinalização ou uma UI. LiveKit continua
-como alternativa se o custo de manter a camada SFU própria superar o custo
-operacional de um serviço separado.
+O primeiro candidato para o protótipo operacional é LiveKit, porque reduz o
+trabalho de protocolo e já possui uma implantação self-hosted documentada.
+Mediasoup continua como alternativa quando o controle baixo nível e a
+integração direta com o backend Node.js justificarem o custo adicional de
+implementar transporte, produtores, consumidores e observabilidade.
 
 ## Gate para implementação
 

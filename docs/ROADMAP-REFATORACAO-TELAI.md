@@ -296,6 +296,7 @@ enviada ao GitHub nem publicada em produção.
 - [x] Criar contrato de mídia independente do restante do backend.
   - [x] Centralizar modos P2P/relay e perfis de qualidade em `shared/media-contract.mjs`, consumido pelo cliente e backend sem alterar o layout.
   - [x] Extrair criação de peers de voz, timeout, faixa remota e callbacks de recuperação para `frontend/src/features/voice/peer-controller.js`, preservando captura e comportamento visual.
+- [x] Preparar configuração opt-in de SFU self-hosted, diagnóstico seguro e templates de deploy sem ativar o transporte antes do benchmark real.
 - [ ] Avaliar SFU (LiveKit ou mediasoup) com teste de carga real.
   - [x] Registrar a comparação arquitetural e o gate de decisão em `docs/SFU-DECISION.md`; o teste de carga em servidor independente continua pendente.
 - [x] Registrar baseline funcional P2P e critérios de benchmark em `docs/MEDIA-BENCHMARK.md` sem trocar a arquitetura atual.

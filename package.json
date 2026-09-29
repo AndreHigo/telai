@@ -114,6 +114,7 @@
     "test:observability-runtime": "node qa/test-observability-runtime.mjs",
     "test:observability-snapshot": "node qa/test-observability-snapshot.mjs",
     "test:request-context": "node qa/test-request-context.mjs",
+    "test:sfu-config": "node qa/test-sfu-config.mjs",
     "db:migrate:postgres": "node qa/migrate-postgres.mjs",
     "db:import:postgres": "node qa/import-sqlite-to-postgres.mjs",
     "db:test:postgres-import": "node qa/test-postgres-import.mjs",

@@ -1,0 +1,13 @@
+# Copy this file to livekit.yaml on the media VPS and replace the placeholders.
+port: 7880
+log_level: info
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: true
+
+# Keep the key and secret only on the Telai API and this SFU host.
+keys:
+  replace-with-livekit-api-key: replace-with-long-random-secret
